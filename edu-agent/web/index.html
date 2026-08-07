@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>PiLore · AI 编程教育</title>
+	<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+	<div class="app">
+		<header class="topbar">
+			<div class="brand">
+				<div class="logo">π</div>
+				<div>
+					<h1>PiLore</h1>
+					<p class="subtitle">AI 编程教育助手</p>
+				</div>
+			</div>
+			<div class="topbar-right">
+				<span id="demo-badge" class="demo-badge hidden">演示模式</span>
+				<span id="persona-badge" class="persona-badge hidden"></span>
+				<span id="model-info" class="model-info"></span>
+			</div>
+		</header>
+
+		<main class="layout">
+			<section class="chat">
+				<div id="messages" class="messages">
+					<div class="welcome card">
+						<h2>开始学习</h2>
+						<p>向 PiLore 提问，它会自动选择合适的教学方法；也可以用 @ 直接指定老师。</p>
+						<div class="suggestions">
+							<button class="suggestion">写一个打印斐波那契数列前 10 项的 Python 程序并运行给我看</button>
+							<button class="suggestion">@feynman 什么是闭包？太抽象了，打个比方</button>
+							<button class="suggestion">@oris 我想学 Django，但连 HTTP 都不太懂，该从哪开始？</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="composer card">
+					<div class="teacher-chips">
+						<span class="chips-label">指定老师：</span>
+						<button class="chip" data-mention="@feynman">Feynman</button>
+						<button class="chip" data-mention="@socrates">Socrates</button>
+						<button class="chip" data-mention="@oris">Oris</button>						<button class="chip chip-reset hidden" id="reset-persona">↩ 切回 PiLore</button>					</div>
+					<div class="input-row">
+						<textarea id="input" rows="2" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+						<div class="buttons">
+							<button id="send" class="btn-primary">发送</button>
+							<button id="abort" class="btn-danger hidden">停止</button>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<aside class="workspace card">
+				<h2>工作区</h2>
+				<ul id="file-list" class="file-list">
+					<li class="empty">暂无文件</li>
+				</ul>
+				<pre id="file-view" class="file-view hidden"></pre>
+			</aside>
+		</main>
+	</div>
+	<script src="/app.js"></script>
+</body>
+</html>

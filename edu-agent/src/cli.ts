@@ -73,25 +73,32 @@ function main(): void {
 			console.log("(agent 正在处理上一条消息，输入 /abort 可中断)");
 			return;
 		}
-		// @老师 前缀：直接指定教学方法，转为【指定教学方法】前缀注入
+		// @老师 前缀：直接指定教学方法，转为【指定教学方法】前缀注入；@pilore 切回自动路由
 		let message = text;
 		if (text.startsWith("@")) {
 			const mention = text.match(/^@([a-zA-Z][a-zA-Z0-9_-]*)\s+([\s\S]+)$/);
 			const available = PERSONAS.map((p) => `@${p.key}`).join(" / ");
 			if (!mention) {
-				console.log(`用法: @feynman 你的问题（可用: ${available}）`);
+				console.log(`用法: @feynman 你的问题（可用: ${available} / @pilore）`);
 				ask();
 				return;
 			}
-			const persona = getPersona(mention[1].toLowerCase());
-			if (!persona) {
-				console.log(`没有这位老师: @${mention[1]}（可用: ${available}）`);
-				ask();
-				return;
+			const key = mention[1].toLowerCase();
+			if (key === "pilore") {
+				currentPersona = undefined;
+				console.log("[老师] 已切回 PiLore 自动路由");
+				message = mention[2];
+			} else {
+				const persona = getPersona(key);
+				if (!persona) {
+					console.log(`没有这位老师: @${mention[1]}（可用: ${available} / @pilore）`);
+					ask();
+					return;
+				}
+				currentPersona = persona;
+				console.log(personaBanner(persona, "用户指定"));
+				message = `【指定教学方法：${persona.name}】${mention[2]}`;
 			}
-			currentPersona = persona;
-			console.log(personaBanner(persona, "用户指定"));
-			message = `【指定教学方法：${persona.name}】${mention[2]}`;
 		}
 		busy = true;
 		void (async () => {

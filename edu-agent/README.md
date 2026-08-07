@@ -18,9 +18,13 @@ npm run demo
 
 # 2. 有 API key：
 cp .env.example .env   # 填入 DEEPSEEK_API_KEY（首选）或 MOONSHOT_API_KEY
-npm run chat           # CLI 对话，试试：
-#   写一个打印斐波那契数列前 10 项的 Python 程序并运行给我看
-#   观察 agent 依次调用 write_file → run_code，再基于沙箱输出讲解
+
+# 3. Web 界面（主要测试面，浏览器打开提示的地址，默认 8100 端口）：
+npm run web            # 真实模型
+npm run web:demo       # 无需 API key（fauxProvider 脚本化 + 进程内 mock 执行服务）
+
+# CLI（遗留测试面，仍可用）：
+npm run chat
 #
 # EXEC_API_BASE 默认指向真实执行后端 http://192.168.172.134:1313。
 # 离线环境可改用本地 mock：npm run mock + EXEC_API_BASE=http://localhost:1313
@@ -43,14 +47,20 @@ edu-agent/
 ├─ src/
 │  ├─ vfs.ts          # 内存虚拟文件系统（Map<path, content>，路径规范化、list）
 │  ├─ exec-client.ts  # codapi 风格执行后端 HTTP 客户端（POST /v1/exec）
-│  ├─ tools.ts        # 三个 AgentTool：write_file / read_file / run_code
-│  ├─ agent.ts        # Agent 组装工厂 createAgent()：systemPrompt + model + tools + streamFn
-│  ├─ render.ts       # 事件流 → 终端渲染（流式文本 / 工具调用 / 工具结果）
-│  └─ cli.ts          # REPL 驱动：用户输入 → agent.prompt() → 实时渲染事件流
+│  ├─ personas.ts     # 加载 agent-design/*.md（Feynman/Socrates/Oris 教学 prompt）+ @老师 解析
+│  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_persona
+│  ├─ agent.ts        # Agent 组装工厂 createAgent()：路由式 systemPrompt + model + tools
+│  ├─ session.ts      # 会话组件层：传输无关的 EduEvent 协议（Web / CLI / 其它项目共用）
+│  ├─ render.ts       # 事件流 → 终端渲染（CLI 适配层用）
+│  ├─ cli.ts          # CLI 适配层（遗留测试面）
+│  ├─ server.ts       # Web 适配层：HTTP + SSE + 静态服务
+│  └─ index.ts        # 组件公开导出（迁移到其它项目的入口）
+├─ web/               # Fluent 风格前端（index.html / style.css / app.js）
 ├─ mock/
-│  └─ exec-server.ts  # mock 代码执行服务（node:http，1313 端口，不真正执行代码）
+│  └─ exec-server.ts  # mock 代码执行服务（node:http，不真正执行代码）
 └─ scripts/
-   ├─ demo.ts         # 无 API key 演示：fauxProvider 脚本化 write_file → run_code → 总结
+   ├─ demo.ts         # 无 API key 终端演示
+   ├─ web-demo.ts     # 无 API key Web 演示入口
    └─ list-models.ts  # 打印 provider 可用模型列表
 ```
 
@@ -69,6 +79,43 @@ edu-agent/
 - [`@earendil-works/pi-ai`](https://www.npmjs.com/package/@earendil-works/pi-ai)：统一 LLM API（models 集合、provider、流式事件协议）
 - [`@earendil-works/pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core)：agent loop / 工具调度 / 事件流
 - 不引入 `@earendil-works/pi-coding-agent`：其内置工具面向本地 fs / 进程，与本项目"内存 VFS + 远程沙箱"的模型不符
+
+## Web 界面
+
+Fluent（微软）风格单页应用，零前端依赖，由 `src/server.ts` 通过 SSE 推送 `EduEvent` 流式渲染：
+
+- 流式回答 + markdown/代码块渲染、工具调用卡片（`write_file` / `run_code` 状态与输出）
+- 顶栏与消息内显示当前「老师」（模型自动路由经 `adopt_persona` 声明，或用户 `@` 指定）
+- `@feynman` / `@socrates` / `@oris` 直接指定教学方法（输入框上方也有快捷 chips）；`@pilore` 或老师激活时出现的「↩ 切回 PiLore」按钮可手动切回自动路由
+- 每条回复右下角显示本次回答的老师徽标（紫色 = 指定/自动路由到的老师，灰色 = PiLore 自动）
+- 右侧「工作区」侧栏实时展示 VFS 文件并可查看内容
+
+HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消费）：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /` | 静态页面（web/） |
+| `GET /api/state` | `{ busy, persona, model, demo }` |
+| `GET /api/files` | `{ files: [{ path, content }] }` |
+| `POST /api/chat` | `{ message }` → SSE 流，每帧 `data: <EduEvent JSON>`，以 `done` 结束 |
+| `POST /api/persona` | `{ persona: "feynman"/"socrates"/"oris" }` 设置老师；`{ persona: null }` 切回自动路由 |
+| `POST /api/abort` | 中止当前运行 |
+
+## 组件接口（迁移到其它项目）
+
+核心是可移植的会话层 `src/session.ts`，不依赖任何传输层，事件协议为纯 JSON：
+
+```ts
+import { createEduSession } from "./src/index.js"; // 组件公开入口
+
+const session = createEduSession(); // 可传 models/providerId/modelId/systemPrompt（测试可注入 fauxProvider）
+await session.prompt("什么是闭包？", (event) => {
+	// event: text_delta / tool_start / tool_end / persona / error / done ...
+});
+session.abort(); session.listFiles(); session.readFile("main.py");
+```
+
+`src/server.ts` 与 `src/cli.ts` 都只是它的两个适配器——把 `EduEvent` 换成 WebSocket 或嵌入其它 UI 框架即可复用。`adopt_persona` 是内部工具，会话层将其折叠为 `persona` 事件对外暴露，外部消费者无需感知 pi-agent-core。
 
 ## 环境变量
 

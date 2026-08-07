@@ -7,6 +7,8 @@
   "scripts": {
     "mock": "tsx mock/exec-server.ts",
     "chat": "tsx src/cli.ts",
+    "web": "tsx src/server.ts",
+    "web:demo": "tsx scripts/web-demo.ts",
     "demo": "tsx scripts/demo.ts",
     "list-models": "tsx scripts/list-models.ts",
     "typecheck": "tsc --noEmit"
