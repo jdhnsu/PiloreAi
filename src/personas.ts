@@ -8,8 +8,8 @@ export interface Persona {
 	prompt: string;
 }
 
-// agent-design/ 在 edu-agent 上一级，用 import.meta.url 定位以免受 cwd 影响
-const DESIGN_DIR = new URL("../../agent-design/", import.meta.url);
+// agent-design/ 在 src 上一级，用 import.meta.url 定位以免受 cwd 影响
+const DESIGN_DIR = new URL("../agent-design/", import.meta.url);
 
 function loadBody(file: string): string {
 	const raw = readFileSync(new URL(file, DESIGN_DIR), "utf8");

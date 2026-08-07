@@ -43,25 +43,26 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 ## 架构分层
 
 ```
-edu-agent/
 ├─ src/
 │  ├─ vfs.ts          # 内存虚拟文件系统（Map<path, content>，路径规范化、list）
 │  ├─ exec-client.ts  # codapi 风格执行后端 HTTP 客户端（POST /v1/exec）
 │  ├─ personas.ts     # 加载 agent-design/*.md（Feynman/Socrates/Oris 教学 prompt）+ @老师 解析
-│  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_persona
+│  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_personaa
 │  ├─ agent.ts        # Agent 组装工厂 createAgent()：路由式 systemPrompt + model + tools
 │  ├─ session.ts      # 会话组件层：传输无关的 EduEvent 协议（Web / CLI / 其它项目共用）
 │  ├─ render.ts       # 事件流 → 终端渲染（CLI 适配层用）
 │  ├─ cli.ts          # CLI 适配层（遗留测试面）
 │  ├─ server.ts       # Web 适配层：HTTP + SSE + 静态服务
 │  └─ index.ts        # 组件公开导出（迁移到其它项目的入口）
+├─ agent-design/      # Feynman / Socrates / Oris 老师设计文档（*.md）
 ├─ web/               # Fluent 风格前端（index.html / style.css / app.js）
 ├─ mock/
 │  └─ exec-server.ts  # mock 代码执行服务（node:http，不真正执行代码）
-└─ scripts/
-   ├─ demo.ts         # 无 API key 终端演示
-   ├─ web-demo.ts     # 无 API key Web 演示入口
-   └─ list-models.ts  # 打印 provider 可用模型列表
+├─ scripts/
+│  ├─ demo.ts         # 无 API key 终端演示
+│  ├─ web-demo.ts     # 无 API key Web 演示入口
+│  └─ list-models.ts  # 打印 provider 可用模型列表
+└─ package.json       # 依赖与脚本入口
 ```
 
 数据流（一次对话）：
