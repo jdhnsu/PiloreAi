@@ -1,10 +1,33 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { execCode } from "./exec-client.js";
+import { getPersona } from "./personas.js";
 import type { VirtualFS } from "./vfs.js";
 
 /** 三个 AgentTool：write_file / read_file / run_code，全部作用于内存 VFS 与远程沙箱。 */
 export function createTools(vfs: VirtualFS): AgentTool<any>[] {
+	// 声明教学方法，让 CLI 能显示当前"老师"；不操作 VFS
+	const adoptParams = Type.Object({
+		persona: Type.Union([Type.Literal("feynman"), Type.Literal("socrates"), Type.Literal("oris")], {
+			description: "要采用的教学方法",
+		}),
+	});
+	const adoptPersona: AgentTool<typeof adoptParams> = {
+		name: "adopt_persona",
+		label: "切换老师",
+		description:
+			"声明本轮要采用的教学方法。首次需要教学方法或切换方法时必须先调用，再以该方法风格回答；简单事实问答和同一方法的连续对话不要调用。",
+		parameters: adoptParams,
+		execute: async (_toolCallId, params) => {
+			const persona = getPersona(params.persona);
+			if (!persona) throw new Error(`未知教学方法: ${params.persona}`);
+			return {
+				content: [{ type: "text", text: `已采用 ${persona.name} 教学方法，请以该方法的风格和流程继续回答` }],
+				details: { persona: persona.key },
+			};
+		},
+	};
+
 	const writeParams = Type.Object({
 		path: Type.String({ description: "文件相对路径，例如 main.py" }),
 		content: Type.String({ description: "文件完整内容" }),
@@ -69,5 +92,5 @@ export function createTools(vfs: VirtualFS): AgentTool<any>[] {
 		},
 	};
 
-	return [writeFile, readFile, runCode];
+	return [adoptPersona, writeFile, readFile, runCode];
 }

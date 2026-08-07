@@ -1,4 +1,17 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
+import { getPersona, type Persona } from "./personas.js";
+
+const MAGENTA = "\x1b[35m";
+const RESET = "\x1b[0m";
+
+export function personaBanner(persona: Persona, note?: string): string {
+	return `${MAGENTA}[老师] ${persona.name}${note ? `（${note}）` : ""}${RESET}`;
+}
+
+export interface ConsoleRendererOptions {
+	/** adopt_persona 生效后回调，CLI 用它维护"当前老师"状态 */
+	onPersonaChange?: (persona: Persona) => void;
+}
 
 function summarizeArgs(args: unknown): string {
 	if (!args || typeof args !== "object") return "";
@@ -12,8 +25,9 @@ function summarizeArgs(args: unknown): string {
 }
 
 /** 订阅 agent 事件并把流式文本、工具调用/结果渲染到终端。返回取消订阅函数。 */
-export function attachConsoleRenderer(agent: Agent): () => void {
+export function attachConsoleRenderer(agent: Agent, options: ConsoleRendererOptions = {}): () => void {
 	let streamingText = false;
+	let currentPersonaKey: string | undefined;
 	const endTextBlock = () => {
 		if (streamingText) {
 			streamingText = false;
@@ -39,9 +53,19 @@ export function attachConsoleRenderer(agent: Agent): () => void {
 				break;
 			case "tool_execution_start":
 				endTextBlock();
+				if (event.toolName === "adopt_persona") break; // 内部工具，只在结果处显示老师横幅
 				process.stdout.write(`\n[工具] ${event.toolName} ${summarizeArgs(event.args)}\n`);
 				break;
 			case "tool_execution_end": {
+				if (event.toolName === "adopt_persona") {
+					const persona = getPersona(String(event.result?.details?.persona ?? ""));
+					if (persona && persona.key !== currentPersonaKey) {
+						currentPersonaKey = persona.key;
+						process.stdout.write(`\n${personaBanner(persona)}\n`);
+						options.onPersonaChange?.(persona);
+					}
+					break;
+				}
 				const texts: string[] = (event.result?.content ?? [])
 					.filter((block: { type: string }) => block.type === "text")
 					.map((block: { text: string }) => block.text);
