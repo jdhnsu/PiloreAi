@@ -22,42 +22,334 @@ function esc(text) {
 	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/* 极简 markdown：代码块/行内代码/加粗/标题/列表，先转义再套标签 */
+/* ---------- Markdown 渲染：代码块(带高亮)/表格/引用/标题/列表，先转义再套标签 ---------- */
+
+const CJK_RE = /[\u2e80-\u9fff\uf900-\ufaff\uff01-\uffee]/;
+
 function renderMarkdown(src) {
-	const parts = src.split("```");
+	const lines = src.split("\n");
 	let html = "";
-	for (let i = 0; i < parts.length; i++) {
-		if (i % 2 === 1) {
-			const nl = parts[i].indexOf("\n");
-			const code = (nl >= 0 ? parts[i].slice(nl + 1) : parts[i]).replace(/\n$/, "");
-			html += `<pre><code>${esc(code)}</code></pre>`;
-		} else {
-			html += renderLines(parts[i]);
+	let i = 0;
+	while (i < lines.length) {
+		const line = lines[i];
+
+		// 围栏代码块 ```lang（流式中未闭合则一直吃到末尾）
+		const fence = line.match(/^```(.*)$/);
+		if (fence) {
+			const lang = fence[1].trim();
+			const buf = [];
+			i++;
+			while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+				buf.push(lines[i]);
+				i++;
+			}
+			i++;
+			html += codeBlockHtml(buf.join("\n"), lang);
+			continue;
 		}
+
+		// 表格：表头行 + |---|---| 分隔行
+		if (line.includes("|") && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+			const aligns = parseAligns(lines[i + 1]);
+			const rows = [splitRow(line)];
+			i += 2;
+			while (i < lines.length && lines[i].includes("|") && lines[i].trim() !== "") {
+				rows.push(splitRow(lines[i]));
+				i++;
+			}
+			html += tableHtml(rows, aligns);
+			continue;
+		}
+
+		// 引用块 >（剥一层前缀后递归，支持嵌套内容）
+		if (/^\s*>/.test(line)) {
+			const buf = [];
+			while (i < lines.length && /^\s*>/.test(lines[i])) {
+				buf.push(lines[i].replace(/^\s*> ?/, ""));
+				i++;
+			}
+			html += `<blockquote>${renderMarkdown(buf.join("\n"))}</blockquote>`;
+			continue;
+		}
+
+		// 标题（聊天卡片内统一压到 h1-h3 尺寸）
+		const h = line.match(/^(#{1,6})\s+(.*)$/);
+		if (h) {
+			const lvl = Math.min(h[1].length, 3);
+			html += `<h${lvl}>${renderInline(esc(h[2]))}</h${lvl}>`;
+			i++;
+			continue;
+		}
+
+		if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+			html += "<hr>";
+			i++;
+			continue;
+		}
+
+		// 列表（同一块内不混排有序/无序）
+		if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
+			const ordered = /^\s*\d/.test(line);
+			const items = [];
+			while (i < lines.length) {
+				const m = lines[i].match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
+				if (!m || /^\s*\d/.test(lines[i]) !== ordered) break;
+				items.push(m[1]);
+				i++;
+			}
+			const tag = ordered ? "ol" : "ul";
+			html += `<${tag}>${items.map((t) => `<li>${renderInline(esc(t))}</li>`).join("")}</${tag}>`;
+			continue;
+		}
+
+		if (line.trim() === "") {
+			i++;
+			continue;
+		}
+
+		// 段落：合并连续普通行（中文相邻处不加空格）
+		const buf = [line];
+		i++;
+		while (i < lines.length && isPlainLine(lines[i])) {
+			buf.push(lines[i]);
+			i++;
+		}
+		html += `<p>${renderInline(esc(joinCjk(buf)))}</p>`;
 	}
 	return html;
 }
 
-function renderLines(text) {
-	const out = [];
-	for (const raw of text.split("\n")) {
-		let line = esc(raw);
-		line = line.replace(/`([^`]+)`/g, "<code>$1</code>");
-		line = line.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
-		const h = line.match(/^(#{1,3})\s+(.*)$/);
-		if (h) {
-			out.push(`<h${h[1].length}>${h[2]}</h${h[1].length}>`);
-		} else if (/^\s*[-*]\s+/.test(line)) {
-			out.push(`<li>${line.replace(/^\s*[-*]\s+/, "")}</li>`);
-		} else if (/^\s*\d+[.)]\s+/.test(line)) {
-			out.push(`<li>${line.replace(/^\s*\d+[.)]\s+/, "")}</li>`);
-		} else if (line.trim() === "") {
-			out.push("");
-		} else {
-			out.push(`<p>${line}</p>`);
+function isPlainLine(line) {
+	if (line.trim() === "") return false;
+	return !(
+		/^```/.test(line) ||
+		/^#{1,6}\s/.test(line) ||
+		/^\s*>/.test(line) ||
+		/^\s*(?:[-*+]|\d+[.)])\s+/.test(line) ||
+		/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)
+	);
+}
+
+function joinCjk(lines) {
+	let s = lines[0];
+	for (let k = 1; k < lines.length; k++) {
+		const glue = CJK_RE.test(lines[k - 1].slice(-1)) || CJK_RE.test(lines[k][0]) ? "" : " ";
+		s += glue + lines[k];
+	}
+	return s;
+}
+
+/* 行内语法：`code`、**加粗**、*斜体*、[链接](url)；行内代码先占位，避免内部被再处理 */
+function renderInline(escaped) {
+	const codes = [];
+	let s = escaped.replace(/`([^`]+)`/g, (_, c) => {
+		codes.push(`<code>${c}</code>`);
+		return `\u0000${codes.length - 1}\u0000`;
+	});
+	s = s
+		.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+		.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<i>$2</i>")
+		.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+	return s.replace(/\u0000(\d+)\u0000/g, (_, n) => codes[Number(n)]);
+}
+
+/* ---------- 表格 ---------- */
+
+function splitRow(row) {
+	let t = row.trim();
+	if (t.startsWith("|")) t = t.slice(1);
+	if (t.endsWith("|")) t = t.slice(0, -1);
+	// 行内代码里的 | 不参与切分
+	const codes = [];
+	t = t.replace(/`[^`]+`/g, (m) => {
+		codes.push(m);
+		return `\u0000${codes.length - 1}\u0000`;
+	});
+	return t
+		.split(/(?<!\\)\|/)
+		.map((c) => c.trim().replace(/\\\|/g, "|").replace(/\u0000(\d+)\u0000/g, (_, n) => codes[Number(n)]));
+}
+
+function isTableSep(line) {
+	const cells = splitRow(line);
+	return cells.length > 0 && cells.every((c) => /^\s*:?-+:?\s*$/.test(c));
+}
+
+function parseAligns(sep) {
+	return splitRow(sep).map((c) => {
+		const t = c.trim();
+		const left = t.startsWith(":");
+		const right = t.endsWith(":");
+		if (left && right) return "center";
+		return right ? "right" : "";
+	});
+}
+
+function tableHtml(rows, aligns) {
+	const alignAttr = (j) => (aligns[j] ? ` style="text-align:${aligns[j]}"` : "");
+	let html = '<div class="table-wrap"><table><thead><tr>';
+	rows[0].forEach((c, j) => {
+		html += `<th${alignAttr(j)}>${renderInline(esc(c))}</th>`;
+	});
+	html += "</tr></thead><tbody>";
+	for (let r = 1; r < rows.length; r++) {
+		html += "<tr>";
+		rows[0].forEach((_, j) => {
+			html += `<td${alignAttr(j)}>${renderInline(esc(rows[r][j] ?? ""))}</td>`;
+		});
+		html += "</tr>";
+	}
+	return html + "</tbody></table></div>";
+}
+
+/* ---------- 轻量语法高亮（本地实现，无第三方依赖） ---------- */
+
+function kwRe(words, flags = "") {
+	return new RegExp(`\\b(?:${words})\\b`, "y" + flags);
+}
+
+const HL_NUM = /\b(?:0[xXbBoO][\da-fA-F_]+|\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/y;
+
+const HL_WORDS = {
+	js: "abstract|arguments|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|instanceof|interface|let|new|of|private|protected|public|return|set|static|switch|this|throw|try|type|typeof|var|void|while|with|yield",
+	jsConst: "true|false|null|undefined|NaN|Infinity|globalThis|console|window|document|Math|JSON|Promise|Object|Array|String|Number|Boolean|Map|Set|RegExp|Error|Symbol",
+	py: "and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield",
+	pyConst: "True|False|None|self|cls|print|len|range|str|int|float|list|dict|set|tuple|bool|open|type|isinstance|enumerate|zip|map|filter|sorted|sum|min|max|abs|input|super",
+	c: "auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|inline|int|long|register|return|short|signed|sizeof|static|struct|switch|typedef|union|unsigned|void|volatile|while|bool|true|false|nil|string|func|chan|defer|go|map|package|range|select|trait|impl|mut|pub|use|mod|match|loop|fn|crate|dyn|box",
+	java: "abstract|assert|boolean|byte|case|catch|char|class|continue|default|do|double|else|enum|extends|final|finally|float|for|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|super|switch|synchronized|this|throw|throws|transient|try|void|volatile|while|record|var|sealed|permits|null",
+	sql: "select|from|where|insert|into|values|update|set|delete|create|table|drop|alter|add|join|left|right|inner|outer|full|on|group|by|order|having|limit|offset|distinct|as|and|or|not|null|primary|key|foreign|references|index|view|union|all|exists|in|between|like|is|case|when|then|else|end|asc|desc|with",
+};
+
+const HL = {
+	python: {
+		alias: ["py"],
+		rules: [
+			{ t: "com", r: /#[^\n]*/y },
+			{ t: "str", r: /(?:[rbfRBF]{1,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/y },
+			{ t: "kw", r: kwRe(HL_WORDS.py) },
+			{ t: "const", r: kwRe(HL_WORDS.pyConst) },
+			{ t: "fn", r: /[A-Za-z_]\w*(?=\s*\()/y },
+			{ t: "num", r: HL_NUM },
+		],
+	},
+	javascript: {
+		alias: ["js", "jsx", "ts", "tsx", "typescript", "node"],
+		rules: [
+			{ t: "com", r: /\/\/[^\n]*|\/\*[\s\S]*?\*\//y },
+			{ t: "str", r: /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[\s\S])*?`/y },
+			{ t: "kw", r: kwRe(HL_WORDS.js) },
+			{ t: "const", r: kwRe(HL_WORDS.jsConst) },
+			{ t: "fn", r: /[A-Za-z_$][\w$]*(?=\s*\()/y },
+			{ t: "num", r: HL_NUM },
+		],
+	},
+	json: {
+		rules: [
+			{ t: "key", r: /"(?:\\.|[^"\\])*"(?=\s*:)/y },
+			{ t: "str", r: /"(?:\\.|[^"\\])*"/y },
+			{ t: "kw", r: /\b(?:true|false|null)\b/y },
+			{ t: "num", r: /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y },
+		],
+	},
+	bash: {
+		alias: ["sh", "shell", "zsh", "console", "terminal", "cmd"],
+		rules: [
+			{ t: "com", r: /#[^\n]*/y },
+			{ t: "str", r: /"(?:\\.|[^"\\])*"|'[^']*'/y },
+			{ t: "kw", r: kwRe("if|then|else|elif|fi|for|while|do|done|case|esac|function|in|echo|cd|ls|cat|grep|sudo|export|source|pip|npm|npx|node|python|git|curl|mkdir|rm|cp|mv") },
+			{ t: "var", r: /\$\w+|\$\{[^}]*\}/y },
+			{ t: "num", r: HL_NUM },
+		],
+	},
+	html: {
+		alias: ["xml", "svg"],
+		rules: [
+			{ t: "com", r: /<!--[\s\S]*?-->/y },
+			{ t: "str", r: /"[^"]*"|'[^']*'/y },
+			{ t: "tag", r: /<\/?[a-zA-Z][\w:-]*|\/?>/y },
+			{ t: "attr", r: /[a-zA-Z_:][\w:-]*(?==)/y },
+		],
+	},
+	css: {
+		rules: [
+			{ t: "com", r: /\/\*[\s\S]*?\*\//y },
+			{ t: "str", r: /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/y },
+			{ t: "const", r: /#[0-9a-fA-F]{3,8}\b/y },
+			{ t: "attr", r: /[a-zA-Z-]+(?=\s*:)/y },
+			{ t: "num", r: /\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg|fr)?\b/y },
+		],
+	},
+	sql: {
+		rules: [
+			{ t: "com", r: /--[^\n]*|\/\*[\s\S]*?\*\//y },
+			{ t: "str", r: /'(?:''|[^'\n])*'/y },
+			{ t: "kw", r: kwRe(HL_WORDS.sql, "i") },
+			{ t: "num", r: HL_NUM },
+		],
+	},
+	clike: {
+		alias: ["c", "cpp", "c++", "java", "cs", "csharp", "go", "rust", "kotlin", "swift", "php"],
+		rules: [
+			{ t: "com", r: /\/\/[^\n]*|\/\*[\s\S]*?\*\//y },
+			{ t: "str", r: /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/y },
+			{ t: "kw", r: kwRe([HL_WORDS.c, HL_WORDS.java].join("|")) },
+			{ t: "fn", r: /[A-Za-z_]\w*(?=\s*\()/y },
+			{ t: "num", r: HL_NUM },
+		],
+	},
+};
+
+// 未知语言兜底：至少高亮注释/字符串/数字
+const HL_GENERIC = [
+	{ t: "com", r: /#[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\//y },
+	{ t: "str", r: /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[\s\S])*?`/y },
+	{ t: "num", r: HL_NUM },
+];
+
+function resolveRules(lang) {
+	const key = (lang ?? "").toLowerCase();
+	for (const [name, def] of Object.entries(HL)) {
+		if (name === key || def.alias?.includes(key)) return def.rules;
+	}
+	return HL_GENERIC;
+}
+
+/* 规则定义为 sticky；扫描需要向前查找，这里惰性转成等价的 global 版本 */
+function scanRe(rule) {
+	return (rule.g ??= new RegExp(rule.r.source, rule.r.flags.replace("y", "g")));
+}
+
+/* 从左到右扫描：优先位置最靠前的规则，同位置按规则顺序（优先级） */
+function highlightCode(code, lang) {
+	const rules = resolveRules(lang);
+	let out = "";
+	let i = 0;
+	while (i < code.length) {
+		let next = code.length;
+		for (const rule of rules) {
+			const re = scanRe(rule);
+			re.lastIndex = i;
+			const m = re.exec(code);
+			if (!m) continue;
+			if (m.index === i) {
+				out += `<span class="tok-${rule.t}">${esc(m[0])}</span>`;
+				i += m[0].length || 1;
+				next = -1;
+				break;
+			}
+			if (m.index < next) next = m.index;
+		}
+		if (next >= 0) {
+			out += esc(code.slice(i, next));
+			i = next;
 		}
 	}
-	return out.join("");
+	return out;
+}
+
+function codeBlockHtml(code, lang) {
+	const head = lang ? `<div class="code-head">${esc(lang)}</div>` : "";
+	return `<div class="code-block">${head}<pre><code>${highlightCode(code, lang)}</code></pre></div>`;
 }
 
 function argsSummary(args) {

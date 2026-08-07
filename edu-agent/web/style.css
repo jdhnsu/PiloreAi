@@ -148,6 +148,14 @@ body {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+	min-width: 0;
+}
+
+/* flex 子项默认 min-width:auto，会被代码块/表格/长链接撑破，这里强制可收缩 */
+.chat,
+.msg-assistant,
+.msg-assistant > * {
+	min-width: 0;
 }
 
 /* ===== 欢迎卡片 ===== */
@@ -210,6 +218,7 @@ body {
 
 .msg-text {
 	word-break: break-word;
+	overflow-wrap: anywhere;
 }
 
 .msg-text h1,
@@ -246,12 +255,134 @@ body {
 	padding: 10px 12px;
 	overflow-x: auto;
 	margin: 8px 0;
+	max-width: 100%;
 }
 
 .msg-text pre code {
 	background: none;
 	border: none;
 	padding: 0;
+}
+
+.msg-text a {
+	color: var(--accent);
+}
+
+.msg-text hr {
+	border: none;
+	border-top: 1px solid var(--border);
+	margin: 10px 0;
+}
+
+/* ===== 引用块 ===== */
+.msg-text blockquote {
+	margin: 8px 0;
+	padding: 6px 14px;
+	border-left: 3px solid var(--accent);
+	background: #f6f9fc;
+	border-radius: 0 6px 6px 0;
+	color: var(--text-secondary);
+}
+
+/* ===== 表格 ===== */
+.msg-text .table-wrap {
+	margin: 8px 0;
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+
+.msg-text table {
+	border-collapse: collapse;
+	font-size: 13px;
+	min-width: 100%;
+}
+
+.msg-text th,
+.msg-text td {
+	padding: 6px 12px;
+	border-bottom: 1px solid var(--border);
+	text-align: left;
+}
+
+.msg-text th:not(:last-child),
+.msg-text td:not(:last-child) {
+	border-right: 1px solid var(--border);
+}
+
+.msg-text th {
+	background: #f5f5f5;
+	font-weight: 600;
+}
+
+.msg-text tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* ===== 代码块（带语言标签 + 语法高亮） ===== */
+.msg-text .code-block {
+	margin: 8px 0;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.msg-text .code-head {
+	padding: 4px 12px;
+	font-size: 11px;
+	font-family: "Cascadia Code", Consolas, monospace;
+	color: var(--text-secondary);
+	background: #efefef;
+	border-bottom: 1px solid var(--border);
+}
+
+.msg-text .code-block pre {
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	background: #fafafa;
+}
+
+/* 高亮 token（VS Code Light 配色） */
+.msg-text .tok-kw {
+	color: #0033b3;
+}
+
+.msg-text .tok-str {
+	color: #a31515;
+}
+
+.msg-text .tok-com {
+	color: #107c10;
+	font-style: italic;
+}
+
+.msg-text .tok-num {
+	color: #098658;
+}
+
+.msg-text .tok-fn {
+	color: #795e26;
+}
+
+.msg-text .tok-const {
+	color: #0070c1;
+}
+
+.msg-text .tok-key {
+	color: #0451a5;
+}
+
+.msg-text .tok-tag {
+	color: #800000;
+}
+
+.msg-text .tok-attr {
+	color: #e50000;
+}
+
+.msg-text .tok-var {
+	color: #001080;
 }
 
 /* ===== 工具卡片 ===== */
