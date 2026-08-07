@@ -343,45 +343,45 @@ body {
 	background: #fafafa;
 }
 
-/* 高亮 token（VS Code Light 配色） */
-.msg-text .tok-kw {
+/* 高亮 token（VS Code Light 配色），聊天气泡与文件查看器共用 */
+:is(.msg-text, .file-view) .tok-kw {
 	color: #0033b3;
 }
 
-.msg-text .tok-str {
+:is(.msg-text, .file-view) .tok-str {
 	color: #a31515;
 }
 
-.msg-text .tok-com {
+:is(.msg-text, .file-view) .tok-com {
 	color: #107c10;
 	font-style: italic;
 }
 
-.msg-text .tok-num {
+:is(.msg-text, .file-view) .tok-num {
 	color: #098658;
 }
 
-.msg-text .tok-fn {
+:is(.msg-text, .file-view) .tok-fn {
 	color: #795e26;
 }
 
-.msg-text .tok-const {
+:is(.msg-text, .file-view) .tok-const {
 	color: #0070c1;
 }
 
-.msg-text .tok-key {
+:is(.msg-text, .file-view) .tok-key {
 	color: #0451a5;
 }
 
-.msg-text .tok-tag {
+:is(.msg-text, .file-view) .tok-tag {
 	color: #800000;
 }
 
-.msg-text .tok-attr {
+:is(.msg-text, .file-view) .tok-attr {
 	color: #e50000;
 }
 
-.msg-text .tok-var {
+:is(.msg-text, .file-view) .tok-var {
 	color: #001080;
 }
 
@@ -566,6 +566,9 @@ textarea {
 	font-size: 14px;
 	line-height: 1.5;
 	outline: none;
+	min-height: 42px;
+	max-height: 40vh;
+	overflow-y: auto;
 }
 
 textarea:focus {
@@ -664,16 +667,59 @@ button {
 
 .file-view {
 	margin-top: 12px;
-	background: #f7f7f7;
 	border: 1px solid var(--border);
 	border-radius: 6px;
-	padding: 10px;
+	overflow: hidden;
+}
+
+.file-view-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 5px 10px;
+	background: #efefef;
+	border-bottom: 1px solid var(--border);
+}
+
+.file-view-name {
 	font-family: "Cascadia Code", Consolas, monospace;
 	font-size: 12px;
-	white-space: pre-wrap;
-	word-break: break-all;
-	max-height: 45vh;
-	overflow-y: auto;
+	color: var(--text-secondary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.copy-btn {
+	flex-shrink: 0;
+	border: 1px solid var(--border);
+	background: #fff;
+	border-radius: 4px;
+	font-size: 12px;
+	padding: 2px 10px;
+	color: var(--text-secondary);
+	transition: all 0.15s;
+}
+
+.copy-btn:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+/* 不设 max-height，整个文件完整展示，由工作区侧栏整体滚动 */
+.file-view-body {
+	margin: 0;
+	padding: 10px 12px;
+	background: #fafafa;
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 12px;
+	white-space: pre;
+	overflow-x: auto;
+}
+
+.file-view-body code {
+	font-family: inherit;
 }
 
 /* ===== 滚动条（Fluent 细滚动条） ===== */

@@ -58,7 +58,13 @@
 				<ul id="file-list" class="file-list">
 					<li class="empty">暂无文件</li>
 				</ul>
-				<pre id="file-view" class="file-view hidden"></pre>
+				<div id="file-view" class="file-view hidden">
+					<div class="file-view-head">
+						<span id="file-view-name" class="file-view-name"></span>
+						<button id="copy-file" class="copy-btn" type="button">复制</button>
+					</div>
+					<pre class="file-view-body"><code id="file-view-code"></code></pre>
+				</div>
 			</aside>
 		</main>
 	</div>

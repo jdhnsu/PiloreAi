@@ -10,10 +10,14 @@ const demoBadge = $("#demo-badge");
 const modelInfo = $("#model-info");
 const fileList = $("#file-list");
 const fileView = $("#file-view");
+const fileViewName = $("#file-view-name");
+const fileViewCode = $("#file-view-code");
+const copyBtn = $("#copy-file");
 const resetChip = $("#reset-persona");
 
 let busy = false;
 let currentPersona = null; // 当前老师名；null = PiLore 自动路由
+let currentFile = null; // 工作区当前查看的文件 { path, content }
 
 const TOOL_GLYPHS = { write_file: "✎", read_file: "≡", run_code: "▶" };
 const TOOL_LABELS = { write_file: "写入", read_file: "读取", run_code: "运行", adopt_persona: "切换老师" };
@@ -505,6 +509,7 @@ async function send(text) {
 	const message = (text ?? inputEl.value).trim();
 	if (!message || busy) return;
 	inputEl.value = "";
+	autoGrow();
 
 	const userEl = document.createElement("div");
 	userEl.className = "msg-user";
@@ -554,6 +559,55 @@ async function send(text) {
 	}
 }
 
+/* 扩展名 → 高亮语言（复用聊天气泡里的 highlightCode） */
+const EXT_LANG = {
+	py: "python",
+	js: "javascript",
+	mjs: "javascript",
+	cjs: "javascript",
+	jsx: "javascript",
+	ts: "javascript",
+	tsx: "javascript",
+	json: "json",
+	html: "html",
+	htm: "html",
+	xml: "html",
+	css: "css",
+	sql: "sql",
+	sh: "bash",
+	bash: "bash",
+};
+
+function langOfPath(p) {
+	const ext = p.split(".").pop()?.toLowerCase() ?? "";
+	return EXT_LANG[ext] ?? "";
+}
+
+function showFile(f) {
+	currentFile = f;
+	fileViewName.textContent = f.path;
+	fileViewCode.innerHTML = highlightCode(f.content, langOfPath(f.path));
+	fileView.classList.remove("hidden");
+}
+
+async function copyText(text) {
+	try {
+		await navigator.clipboard.writeText(text);
+		return true;
+	} catch {
+		// 非安全上下文（http 远程访问）的兜底
+		const ta = document.createElement("textarea");
+		ta.value = text;
+		ta.style.position = "fixed";
+		ta.style.opacity = "0";
+		document.body.appendChild(ta);
+		ta.select();
+		const ok = document.execCommand("copy");
+		ta.remove();
+		return ok;
+	}
+}
+
 async function refreshFiles() {
 	try {
 		const resp = await fetch("/api/files");
@@ -562,19 +616,26 @@ async function refreshFiles() {
 		if (!files.length) {
 			fileList.innerHTML = '<li class="empty">暂无文件</li>';
 			fileView.classList.add("hidden");
+			currentFile = null;
 			return;
 		}
 		for (const f of files) {
 			const li = document.createElement("li");
 			li.className = "file-item";
 			li.textContent = f.path;
+			if (f.path === currentFile?.path) li.classList.add("active");
 			li.onclick = () => {
-				fileList.querySelectorAll(".file-item").forEach((el) => el.classList.remove("active"));
-				li.classList.add("active");
-				fileView.textContent = f.content;
-				fileView.classList.remove("hidden");
+				fileList.querySelectorAll(".file-item").forEach((el) => el.classList.toggle("active", el === li));
+				showFile(f);
 			};
 			fileList.appendChild(li);
+		}
+		// 文件可能被 run_code/write_file 更新，同步刷新正在查看的内容
+		const selected = files.find((f) => f.path === currentFile?.path);
+		if (selected) showFile(selected);
+		else if (currentFile) {
+			currentFile = null;
+			fileView.classList.add("hidden");
 		}
 	} catch {
 		/* 侧栏刷新失败不影响对话 */
@@ -596,6 +657,20 @@ async function loadState() {
 
 sendBtn.onclick = () => send();
 abortBtn.onclick = () => fetch("/api/abort", { method: "POST" });
+
+copyBtn.onclick = async () => {
+	if (!currentFile) return;
+	const ok = await copyText(currentFile.content);
+	copyBtn.textContent = ok ? "已复制 ✓" : "复制失败";
+	setTimeout(() => (copyBtn.textContent = "复制"), 1500);
+};
+
+/* 输入框随内容自动增高，超过视口 40% 后内部滚动，支持长文输入 */
+function autoGrow() {
+	inputEl.style.height = "auto";
+	inputEl.style.height = `${Math.min(inputEl.scrollHeight, window.innerHeight * 0.4)}px`;
+}
+inputEl.addEventListener("input", autoGrow);
 
 inputEl.addEventListener("keydown", (e) => {
 	if (e.key === "Enter" && !e.shiftKey) {
