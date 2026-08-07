@@ -1,0 +1,24 @@
+{
+  "name": "pilore-edu-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PiLore — AI 编码教育 agent 核心组件（LLM → 工具调用 → 远程沙箱执行 → 讲解输出）",
+  "scripts": {
+    "mock": "tsx mock/exec-server.ts",
+    "chat": "tsx src/cli.ts",
+    "demo": "tsx scripts/demo.ts",
+    "list-models": "tsx scripts/list-models.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.84.1",
+    "@earendil-works/pi-ai": "^0.84.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.10",
+    "typescript": "^7.0.2"
+  }
+}
