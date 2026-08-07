@@ -8,17 +8,24 @@ import type { VirtualFS } from "./vfs.js";
 export function createTools(vfs: VirtualFS): AgentTool<any>[] {
 	// 声明教学方法，让 CLI 能显示当前"老师"；不操作 VFS
 	const adoptParams = Type.Object({
-		persona: Type.Union([Type.Literal("feynman"), Type.Literal("socrates"), Type.Literal("oris")], {
-			description: "要采用的教学方法",
-		}),
+		persona: Type.Union(
+			[Type.Literal("feynman"), Type.Literal("socrates"), Type.Literal("oris"), Type.Literal("auto")],
+			{ description: "要采用的教学方法；auto = 交还 PiLore 自动路由" },
+		),
 	});
 	const adoptPersona: AgentTool<typeof adoptParams> = {
 		name: "adopt_persona",
 		label: "切换老师",
 		description:
-			"声明本轮要采用的教学方法。首次需要教学方法或切换方法时必须先调用，再以该方法风格回答；简单事实问答和同一方法的连续对话不要调用。",
+			"声明本轮要采用的教学方法。首次需要教学方法或切换方法时必须先调用，再以该方法风格回答；persona=auto 表示当前教学阶段结束，交还 PiLore 自动路由。简单事实问答、用户 @ 指定、同一方法的连续对话不要调用。",
 		parameters: adoptParams,
 		execute: async (_toolCallId, params) => {
+			if (params.persona === "auto") {
+				return {
+					content: [{ type: "text", text: "已交还 PiLore 自动路由，请根据学习者接下来的问题重新判断教学方法或直接回答" }],
+					details: { persona: "auto" },
+				};
+			}
 			const persona = getPersona(params.persona);
 			if (!persona) throw new Error(`未知教学方法: ${params.persona}`);
 			return {

@@ -57,7 +57,16 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 				break;
 			case "tool_execution_end": {
 				if (event.toolName === "adopt_persona") {
-					const persona = getPersona(String(event.result?.details?.persona ?? ""));
+					const key = String(event.result?.details?.persona ?? "");
+					// auto = 模型判断教学阶段结束，交还 PiLore 自动路由
+					if (key === "auto") {
+						if (currentPersona) {
+							currentPersona = undefined;
+							emit({ type: "persona", persona: null, name: null, source: "model" });
+						}
+						break;
+					}
+					const persona = getPersona(key);
 					if (persona) {
 						currentPersona = persona;
 						emit({ type: "persona", persona: persona.key, name: persona.name, source: "model" });

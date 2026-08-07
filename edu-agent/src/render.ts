@@ -9,8 +9,8 @@ export function personaBanner(persona: Persona, note?: string): string {
 }
 
 export interface ConsoleRendererOptions {
-	/** adopt_persona 生效后回调，CLI 用它维护"当前老师"状态 */
-	onPersonaChange?: (persona: Persona) => void;
+	/** adopt_persona 生效后回调，CLI 用它维护"当前老师"状态；undefined = 交还自动路由 */
+	onPersonaChange?: (persona: Persona | undefined) => void;
 }
 
 function summarizeArgs(args: unknown): string {
@@ -58,7 +58,16 @@ export function attachConsoleRenderer(agent: Agent, options: ConsoleRendererOpti
 				break;
 			case "tool_execution_end": {
 				if (event.toolName === "adopt_persona") {
-					const persona = getPersona(String(event.result?.details?.persona ?? ""));
+					const key = String(event.result?.details?.persona ?? "");
+					if (key === "auto") {
+						if (currentPersonaKey !== undefined) {
+							currentPersonaKey = undefined;
+							process.stdout.write("\n[老师] 已交还 PiLore 自动路由\n");
+							options.onPersonaChange?.(undefined);
+						}
+						break;
+					}
+					const persona = getPersona(key);
 					if (persona && persona.key !== currentPersonaKey) {
 						currentPersonaKey = persona.key;
 						process.stdout.write(`\n${personaBanner(persona)}\n`);
