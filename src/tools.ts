@@ -74,13 +74,14 @@ export function createTools(vfs: VirtualFS): AgentTool<any>[] {
 
 	const runParams = Type.Object({
 		sandbox: Type.String({ description: "沙箱类型，如 python" }),
-		command: Type.String({ default: "run", description: "执行命令，默认 run" }),
+		// 无默认值：沙箱不会自动找文件，必须由模型显式给出如 python fib.py
+		command: Type.String({ description: "执行命令，必须显式指定要运行的文件，如 python fib.py" }),
 	});
 	const runCode: AgentTool<typeof runParams> = {
 		name: "run_code",
 		label: "运行代码",
 		description:
-			"在远程沙箱运行当前工作区的全部代码文件，返回 stdout/stderr。任何代码改动后都必须运行验证，不要凭空猜输出。",
+			"在远程沙箱运行代码，返回 stdout/stderr。沙箱默认不会找文件，一定要在 command 里指定文件名再跑（如 python fib.py）。任何代码改动后都必须运行验证，不要凭空猜输出。",
 		parameters: runParams,
 		execute: async (_toolCallId, params) => {
 			const files = vfs.toRecord();
