@@ -1,12 +1,26 @@
-# PiLore — AI 编码教育 Agent（核心组件）
+<div align="center">
 
-AI 辅助编程教育工具的核心 agent 组件。本阶段只包含命令行可验证的最小闭环：
+<img src="assets/2d/pilore.png" alt="PiLore icon" width="112">
 
-```
+# PiLore
+
+**AI 编码教育 Agent（核心组件）**
+
 LLM → 工具调用（write_file / read_file / run_code）→ 远程沙箱执行 → 基于真实输出的讲解
-```
 
-不做 UI，不做多用户。学生工作区是内存虚拟文件系统（VFS），代码执行发生在远程沙箱，本地不执行任何学习者代码。
+<img src="assets/as1/robot_9.png" alt="PiLore 吉祥物" width="240">
+
+</div>
+
+PiLore 是一个 AI 辅助编程教育工具的核心 agent 组件，本阶段只包含命令行可验证的最小闭环。学生工作区是内存虚拟文件系统（VFS），代码执行发生在远程沙箱，本地不执行任何学习者代码。
+
+**亮点**
+
+- 内存 VFS + 远程沙箱：学习者代码绝不落地、绝不在本地执行
+- 多「老师」教学人格：Feynman / Socrates / Oris，模型自动路由或 `@` 手动指定
+- 传输无关的事件协议：`EduEvent` 纯 JSON 流，Web / CLI / 其它项目共用同一会话层
+- Fluent（微软）风格 Web 界面：流式回答、工具调用卡片、实时工作区侧栏
+- 可替换执行后端：兼容 codapi 风格 `POST /v1/exec` 协议，改一个环境变量即可切换
 
 ## 快速开始
 
