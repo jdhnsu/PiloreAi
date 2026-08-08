@@ -395,7 +395,7 @@ function setPersonaBadge(name) {
 		personaBadge.classList.add("hidden");
 		return;
 	}
-	personaBadge.textContent = `老师 · ${name}`;
+	personaBadge.textContent = name;
 	personaBadge.classList.remove("hidden");
 }
 
@@ -733,11 +733,21 @@ document.addEventListener("keydown", (e) => {
 	else if (e.key === "ArrowRight") stepModal(1);
 });
 
+/* 展示名去重：deepseek/deepseek-v4-flash → v4-flash，完整串放 title 悬浮查看 */
+function shortModel(m) {
+	if (!m) return "";
+	const [provider, ...rest] = m.split("/");
+	const id = rest.join("/") || m;
+	const stripped = id.startsWith(provider + "-") ? id.slice(provider.length + 1) : id;
+	return stripped.includes("-") ? stripped : id;
+}
+
 async function loadState() {
 	try {
 		const resp = await fetch("/api/state");
 		const state = await resp.json();
-		modelInfo.textContent = state.model ?? "";
+		modelInfo.title = state.model ?? "";
+		modelInfo.textContent = shortModel(state.model);
 		applyPersona(state.persona?.name ?? null);
 		if (state.demo) demoBadge.classList.remove("hidden");
 	} catch {
@@ -807,5 +817,45 @@ resetChip.onclick = async () => {
 		/* 忽略 */
 	}
 };
+
+/* ---------- 工作区面板：折叠 + 拖拽调宽，偏好存 localStorage ---------- */
+const layoutEl = document.querySelector(".layout");
+const wsResize = $("#ws-resize");
+
+function setWsCollapsed(on) {
+	layoutEl.classList.toggle("ws-collapsed", on);
+	localStorage.setItem("pilore-ws-collapsed", on ? "1" : "");
+}
+
+$("#ws-toggle").onclick = () => setWsCollapsed(true);
+$("#ws-expand").onclick = () => setWsCollapsed(false);
+
+let wsResizing = false;
+wsResize.addEventListener("mousedown", (e) => {
+	wsResizing = true;
+	document.body.classList.add("ws-resizing");
+	e.preventDefault();
+});
+document.addEventListener("mousemove", (e) => {
+	if (!wsResizing) return;
+	// 以 aside 右缘为基准，避免 layout 的 padding 造成偏差
+	const right = document.querySelector(".workspace").getBoundingClientRect().right;
+	const w = Math.round(Math.min(520, Math.max(220, right - e.clientX)));
+	layoutEl.style.setProperty("--ws-w", `${w}px`);
+});
+document.addEventListener("mouseup", () => {
+	if (!wsResizing) return;
+	wsResizing = false;
+	document.body.classList.remove("ws-resizing");
+	localStorage.setItem("pilore-ws-w", layoutEl.style.getPropertyValue("--ws-w"));
+});
+wsResize.addEventListener("dblclick", () => {
+	layoutEl.style.removeProperty("--ws-w");
+	localStorage.removeItem("pilore-ws-w");
+});
+
+if (localStorage.getItem("pilore-ws-collapsed") === "1") setWsCollapsed(true);
+const savedWsW = localStorage.getItem("pilore-ws-w");
+if (savedWsW) layoutEl.style.setProperty("--ws-w", savedWsW);
 
 loadState();

@@ -91,27 +91,44 @@ body {
 }
 
 .model-info {
-	font-size: 12px;
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 11px;
 	color: var(--text-secondary);
+	background: #f6f6f6;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 2px 8px;
 }
 
+/* 白底小方角 + 方点标识，弱化胶囊感 */
 .persona-badge {
-	background: var(--persona-bg);
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	background: #fff;
 	color: var(--persona);
-	border: 1px solid #ddd0f2;
-	padding: 3px 10px;
-	border-radius: 999px;
+	border: 1px solid #e3dbf4;
+	padding: 2px 9px;
+	border-radius: 4px;
 	font-size: 12px;
 	font-weight: 600;
 }
 
+.persona-badge::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 2px;
+	background: var(--persona);
+}
+
 .demo-badge {
-	background: #fff4ce;
+	background: #fff8e6;
 	color: #9d5d00;
-	border: 1px solid #f5e0a3;
-	padding: 3px 10px;
-	border-radius: 999px;
-	font-size: 12px;
+	border: 1px solid #f0dcae;
+	padding: 2px 8px;
+	border-radius: 4px;
+	font-size: 11px;
 	font-weight: 600;
 }
 
@@ -122,11 +139,16 @@ body {
 /* ===== 主布局 ===== */
 .layout {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 300px;
+	/* 宽度由 --ws-w 控制，支持拖拽调整 */
+	grid-template-columns: minmax(0, 1fr) var(--ws-w, 300px);
 	gap: 16px;
 	padding: 16px 20px;
 	flex: 1;
 	min-height: 0;
+}
+
+.layout.ws-collapsed {
+	grid-template-columns: minmax(0, 1fr) 44px;
 }
 
 .chat {
@@ -575,7 +597,7 @@ body {
 	font-size: 11.5px;
 	font-weight: 600;
 	padding: 2px 10px;
-	border-radius: 999px;
+	border-radius: 4px;
 	background: var(--persona-bg);
 	color: var(--persona);
 	border: 1px solid #ddd0f2;
@@ -603,7 +625,7 @@ body {
 	color: var(--text-secondary);
 	background: #e9e9e9;
 	padding: 3px 14px;
-	border-radius: 999px;
+	border-radius: 4px;
 }
 
 .error-line {
@@ -636,7 +658,7 @@ body {
 .chip {
 	border: 1px solid var(--border);
 	background: #fff;
-	border-radius: 999px;
+	border-radius: 6px;
 	padding: 4px 12px;
 	font-size: 12px;
 	color: var(--text-secondary);
@@ -724,15 +746,94 @@ button {
 
 /* ===== 工作区侧栏 ===== */
 .workspace {
+	position: relative;
 	padding: 16px;
 	overflow-y: auto;
 	min-height: 0;
 }
 
+.ws-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+
 .workspace h2 {
 	font-size: 14px;
 	font-weight: 600;
-	margin-bottom: 10px;
+	margin-bottom: 0;
+}
+
+/* 左缘拖拽手柄 */
+.ws-resize {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: -5px;
+	width: 10px;
+	cursor: col-resize;
+	z-index: 5;
+}
+
+.ws-resize::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 4px;
+	width: 2px;
+	background: transparent;
+	transition: background 0.15s;
+}
+
+.ws-resize:hover::after,
+body.ws-resizing .ws-resize::after {
+	background: var(--accent);
+}
+
+body.ws-resizing {
+	cursor: col-resize;
+	user-select: none;
+}
+
+/* 折叠态：只留窄轨 */
+.layout.ws-collapsed .ws-head,
+.layout.ws-collapsed .file-list,
+.layout.ws-collapsed .ws-resize {
+	display: none;
+}
+
+.layout.ws-collapsed .workspace {
+	padding: 8px 6px;
+	overflow: hidden;
+}
+
+.ws-rail {
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 0;
+	border: none;
+	background: none;
+	color: var(--text-secondary);
+	cursor: pointer;
+}
+
+.ws-rail:hover {
+	color: var(--accent);
+}
+
+.layout.ws-collapsed .ws-rail {
+	display: flex;
+}
+
+.ws-rail-text {
+	writing-mode: vertical-rl;
+	font-size: 12px;
+	letter-spacing: 2px;
 }
 
 .file-list {

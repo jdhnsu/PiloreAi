@@ -17,7 +17,7 @@
 				</div>
 			</div>
 			<div class="topbar-right">
-				<span id="demo-badge" class="demo-badge hidden">演示模式</span>
+				<span id="demo-badge" class="demo-badge hidden">演示</span>
 				<span id="persona-badge" class="persona-badge hidden"></span>
 				<span id="model-info" class="model-info"></span>
 			</div>
@@ -54,10 +54,18 @@
 			</section>
 
 			<aside class="workspace card">
-				<h2>工作区</h2>
+				<div id="ws-resize" class="ws-resize" title="拖动调整宽度，双击复位"></div>
+				<div class="ws-head">
+					<h2>工作区</h2>
+					<button id="ws-toggle" class="icon-btn" title="收起工作区">»</button>
+				</div>
 				<ul id="file-list" class="file-list">
 					<li class="empty">暂无文件</li>
 				</ul>
+				<button id="ws-expand" class="ws-rail" title="展开工作区">
+					<span class="ws-rail-icon">«</span>
+					<span class="ws-rail-text">工作区</span>
+				</button>
 			</aside>
 		</main>
 	</div>
