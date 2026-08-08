@@ -8,8 +8,11 @@ const abortBtn = $("#abort");
 const personaBadge = $("#persona-badge");
 const demoBadge = $("#demo-badge");
 const modelInfo = $("#model-info");
+const modelNameEl = $("#model-name");
 const fileList = $("#file-list");
 const resetChip = $("#reset-persona");
+const composerEl = $("#composer");
+const personaHintEl = $("#persona-hint");
 
 let busy = false;
 let currentPersona = null; // 当前老师名；null = PiLore 自动路由
@@ -403,6 +406,9 @@ function applyPersona(name) {
 	currentPersona = name ?? null;
 	setPersonaBadge(name);
 	resetChip.classList.toggle("hidden", !name);
+	personaHintEl.classList.toggle("hidden", !name);
+	personaHintEl.textContent = name ? `由 ${name} 回答` : "";
+	inputEl.placeholder = name ? `向 ${name} 提问…` : "向 PiLore 提问…";
 }
 
 /* 卡片右下角老师徽标；徽标存在时新内容一律插在它前面，保证它始终在右下角 */
@@ -495,9 +501,10 @@ function handleEvent(ev, block) {
 
 function setBusy(value) {
 	busy = value;
-	sendBtn.disabled = value;
+	composerEl.classList.toggle("streaming", value);
 	sendBtn.classList.toggle("hidden", value);
 	abortBtn.classList.toggle("hidden", !value);
+	if (!value) updateSend();
 	inputEl.disabled = false;
 }
 
@@ -506,6 +513,8 @@ async function send(text) {
 	if (!message || busy) return;
 	inputEl.value = "";
 	autoGrow();
+	syncChips();
+	updateSend();
 
 	const userEl = document.createElement("div");
 	userEl.className = "msg-user";
@@ -747,14 +756,23 @@ async function loadState() {
 		const resp = await fetch("/api/state");
 		const state = await resp.json();
 		modelInfo.title = state.model ?? "";
-		modelInfo.textContent = shortModel(state.model);
+		modelNameEl.textContent = shortModel(state.model);
+		modelInfo.classList.remove("error");
 		applyPersona(state.persona?.name ?? null);
 		if (state.demo) demoBadge.classList.remove("hidden");
 	} catch {
-		/* 忽略 */
+		modelInfo.classList.add("error");
 	}
 	refreshFiles();
 }
+
+/* 按时段问候，降低机械感 */
+(function greet() {
+	const h = new Date().getHours();
+	const hi = h < 5 ? "夜深了" : h < 11 ? "早上好" : h < 13 ? "中午好" : h < 18 ? "下午好" : "晚上好";
+	const tail = h < 5 ? "慢慢学，别熬太晚" : "今天想学点什么？";
+	$("#greeting").textContent = `${hi}，${tail}`;
+})();
 
 sendBtn.onclick = () => send();
 abortBtn.onclick = () => fetch("/api/abort", { method: "POST" });
@@ -770,14 +788,31 @@ function autoGrow() {
 	autoGrowHeight = Math.max(INITIAL_TA_HEIGHT, Math.min(inputEl.scrollHeight + 2, window.innerHeight * 0.4));
 	inputEl.style.height = `${autoGrowHeight}px`;
 }
-inputEl.addEventListener("input", autoGrow);
+inputEl.addEventListener("input", () => {
+	autoGrow();
+	syncChips();
+	updateSend();
+});
 
-// offsetHeight 与自动增高设置值不一致 ⇒ 用户在拖拽拉伸柄
-new ResizeObserver(() => {
-	if (!autoGrowEnabled) return;
-	const expected = autoGrowHeight || INITIAL_TA_HEIGHT;
-	if (Math.abs(inputEl.offsetHeight - expected) > 2) autoGrowEnabled = false;
-}).observe(inputEl);
+/* 自定义拉伸柄：拖动后固定高度（原生 resize 已禁用） */
+const gripEl = document.querySelector(".resize-grip");
+gripEl.addEventListener("pointerdown", (e) => {
+	e.preventDefault();
+	autoGrowEnabled = false;
+	gripEl.classList.add("dragging");
+	const startY = e.clientY;
+	const startH = inputEl.offsetHeight;
+	const move = (ev) => {
+		inputEl.style.height = `${Math.max(INITIAL_TA_HEIGHT, Math.min(startH + ev.clientY - startY, window.innerHeight * 0.4))}px`;
+	};
+	const up = () => {
+		gripEl.classList.remove("dragging");
+		window.removeEventListener("pointermove", move);
+		window.removeEventListener("pointerup", up);
+	};
+	window.addEventListener("pointermove", move);
+	window.addEventListener("pointerup", up);
+});
 
 inputEl.addEventListener("keydown", (e) => {
 	if (e.key === "Enter" && !e.shiftKey) {
@@ -790,11 +825,31 @@ document.querySelectorAll(".suggestion").forEach((btn) => {
 	btn.onclick = () => send(btn.textContent);
 });
 
-document.querySelectorAll(".chip[data-mention]").forEach((chip) => {
+/* 老师 chips：插入 @mention 前缀，再点同一 chip 取消 */
+const MENTION_RE = /^@[a-zA-Z][a-zA-Z0-9_-]*\s+/;
+const chips = [...document.querySelectorAll(".chip[data-mention]")];
+
+const mentionInInput = () => {
+	const m = inputEl.value.match(/^(@[a-zA-Z][a-zA-Z0-9_-]*)\s/);
+	return m ? m[1].toLowerCase() : null;
+};
+
+function syncChips() {
+	const mention = mentionInInput();
+	for (const chip of chips) chip.classList.toggle("active", chip.dataset.mention === mention);
+}
+
+function updateSend() {
+	sendBtn.disabled = !inputEl.value.trim();
+}
+
+chips.forEach((chip) => {
 	chip.onclick = () => {
-		const mention = `${chip.dataset.mention} `;
-		inputEl.value = inputEl.value.replace(/^@[a-zA-Z][a-zA-Z0-9_-]*\s+/, "");
-		inputEl.value = mention + inputEl.value;
+		const wasActive = chip.dataset.mention === mentionInInput();
+		inputEl.value = inputEl.value.replace(MENTION_RE, "");
+		if (!wasActive) inputEl.value = `${chip.dataset.mention} ${inputEl.value}`;
+		syncChips();
+		updateSend();
 		inputEl.focus();
 	};
 });
@@ -807,7 +862,10 @@ resetChip.onclick = async () => {
 			body: JSON.stringify({ persona: null }),
 		});
 		if (!resp.ok) return;
+		inputEl.value = inputEl.value.replace(MENTION_RE, "");
 		applyPersona(null);
+		syncChips();
+		updateSend();
 		const note = document.createElement("div");
 		note.className = "system-note";
 		note.textContent = "已切回 PiLore 自动路由";
@@ -817,6 +875,9 @@ resetChip.onclick = async () => {
 		/* 忽略 */
 	}
 };
+
+syncChips();
+updateSend();
 
 /* ---------- 工作区面板：折叠 + 拖拽调宽，偏好存 localStorage ---------- */
 const layoutEl = document.querySelector(".layout");

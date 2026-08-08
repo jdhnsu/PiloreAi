@@ -11,6 +11,8 @@
 	--danger: #c42b1c;
 	--persona: #8661c5;
 	--persona-bg: #f3eefc;
+	--persona-border: #ddd0f2;
+	--surface-muted: #fafafa;
 	--radius: 8px;
 	--shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
@@ -54,8 +56,10 @@ body {
 	justify-content: space-between;
 	height: 60px;
 	padding: 0 20px;
-	background: var(--card);
+	/* 极淡冷色渐变 + 轻投影，弱化纯白面板的机械感 */
+	background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 	border-bottom: 1px solid var(--border);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 	flex-shrink: 0;
 }
 
@@ -71,12 +75,25 @@ body {
 	border-radius: 8px;
 	object-fit: cover;
 	display: block;
+	box-shadow: 0 0 0 1px var(--border), 0 2px 6px rgba(0, 0, 0, 0.08);
+	transition: transform 0.2s ease;
 }
 
-.brand h1 {
-	font-size: 16px;
-	font-weight: 600;
+/* hover 时吉祥物歪头 */
+.brand:hover .logo {
+	transform: rotate(-6deg) scale(1.06);
+}
+
+/* 品牌字标：Pi 提为强调蓝，整体加粗收紧 */
+.brand .wordmark {
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: -0.3px;
 	line-height: 1.2;
+}
+
+.wm-pi {
+	color: var(--accent);
 }
 
 .subtitle {
@@ -87,17 +104,53 @@ body {
 .topbar-right {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 12px;
+}
+
+/* 徽标组与模型信息之间的竖向分隔线，无徽标时隐藏 */
+.topbar-sep {
+	display: none;
+	width: 1px;
+	height: 18px;
+	background: var(--border);
+}
+
+.topbar-right:has(:is(.persona-badge, .demo-badge):not(.hidden)) .topbar-sep {
+	display: block;
 }
 
 .model-info {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	font-family: "Cascadia Code", Consolas, monospace;
 	font-size: 11px;
 	color: var(--text-secondary);
 	background: #f6f6f6;
 	border: 1px solid var(--border);
 	border-radius: 4px;
-	padding: 2px 8px;
+	padding: 3px 10px;
+	transition: background 0.15s;
+}
+
+.model-info:hover {
+	background: #efefef;
+}
+
+/* 连接状态圆点：loadState 成功=绿，失败=红 */
+.model-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #0e700e;
+}
+
+.model-info.error {
+	color: var(--danger);
+}
+
+.model-info.error .model-dot {
+	background: var(--danger);
 }
 
 /* 白底小方角 + 方点标识，弱化胶囊感 */
@@ -636,18 +689,33 @@ body {
 	font-size: 13px;
 }
 
-/* ===== 输入区 ===== */
+/* ===== 输入区：整体式 Fluent 输入卡片 ===== */
 .composer {
-	padding: 12px;
+	padding: 0;
 	flex-shrink: 0;
+	overflow: hidden;
+	transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.teacher-chips {
+/* 焦点环从内部 textarea 上移到整张卡片 */
+.composer:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--accent-light), var(--shadow);
+}
+
+.composer.streaming {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--accent-light), var(--shadow);
+}
+
+.composer-toolbar {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-bottom: 10px;
 	flex-wrap: wrap;
+	padding: 8px 12px;
+	background: var(--surface-muted);
+	border-bottom: 1px solid var(--border);
 }
 
 .chips-label {
@@ -656,6 +724,9 @@ body {
 }
 
 .chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	border: 1px solid var(--border);
 	background: #fff;
 	border-radius: 6px;
@@ -672,37 +743,117 @@ body {
 	background: var(--persona-bg);
 }
 
-.input-row {
-	display: flex;
-	gap: 10px;
-	align-items: flex-end;
+/* 方点标识，与 persona-badge 的方点语言一致 */
+.chip-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 2px;
+	background: #d6d6d6;
+	transition: background 0.15s;
 }
 
-textarea {
-	flex: 1;
-	/* 允许手动拖拽拉伸；拖动后 JS 停止自动增高（见 app.js） */
-	resize: vertical;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	padding: 9px 12px;
+.chip:hover .chip-dot {
+	background: var(--persona);
+}
+
+.chip.active {
+	background: var(--persona-bg);
+	border-color: var(--persona-border);
+	color: var(--persona);
+	font-weight: 600;
+}
+
+.chip.active .chip-dot {
+	background: var(--persona);
+}
+
+.composer-input {
+	position: relative;
+}
+
+.composer textarea {
+	display: block;
+	width: 100%;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	padding: 12px 14px 6px;
 	font-family: inherit;
 	font-size: 14px;
 	line-height: 1.5;
 	outline: none;
-	min-height: 42px;
+	min-height: 64px;
 	max-height: 40vh;
 	overflow-y: auto;
+	resize: none;
 }
 
-textarea:focus {
-	border-color: var(--accent);
-	box-shadow: 0 0 0 2px var(--accent-light);
+/* 圆头细斜杠替代原生 resize grip：静止隐藏，hover/拖动时淡入 */
+.resize-grip {
+	position: absolute;
+	right: 3px;
+	bottom: 3px;
+	width: 16px;
+	height: 16px;
+	border-radius: 4px;
+	cursor: nwse-resize;
+	opacity: 0;
+	transition: opacity 0.15s;
+	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M4.5 10.5 L10.5 4.5 M7.5 10.5 L10.5 7.5' stroke='%23a6a6a6' stroke-width='1.6' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") no-repeat center;
 }
 
-.buttons {
+.composer-input:hover .resize-grip,
+.resize-grip.dragging {
+	opacity: 1;
+}
+
+.resize-grip.dragging {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M4.5 10.5 L10.5 4.5 M7.5 10.5 L10.5 7.5' stroke='%230067c0' stroke-width='1.6' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+}
+
+.composer-footer {
 	display: flex;
-	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	padding: 2px 12px 10px;
+}
+
+.composer-hint {
+	font-size: 12px;
+	color: var(--text-secondary);
+}
+
+.composer-hint kbd {
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 11px;
+	background: #f5f5f5;
+	border: 1px solid var(--border);
+	border-bottom-width: 2px;
+	border-radius: 4px;
+	padding: 0 5px;
+}
+
+.persona-hint {
+	display: inline-flex;
+	align-items: center;
 	gap: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--persona);
+}
+
+.persona-hint::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 2px;
+	background: var(--persona);
+}
+
+.composer-actions {
+	margin-left: auto;
+	display: flex;
+	gap: 8px;
 }
 
 button {

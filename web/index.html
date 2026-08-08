@@ -12,14 +12,15 @@
 			<div class="brand">
 				<img class="logo" src="/assets/2d/pilore_face_smile.png" alt="PiLore">
 				<div>
-					<h1>PiLore</h1>
-					<p class="subtitle">AI 编程教育助手</p>
+					<h1 class="wordmark"><span class="wm-pi">Pi</span>Lore</h1>
+					<p class="subtitle" id="greeting">今天想学点什么？</p>
 				</div>
 			</div>
 			<div class="topbar-right">
 				<span id="demo-badge" class="demo-badge hidden">演示</span>
 				<span id="persona-badge" class="persona-badge hidden"></span>
-				<span id="model-info" class="model-info"></span>
+				<span class="topbar-sep" aria-hidden="true"></span>
+				<span id="model-info" class="model-info" title=""><span class="model-dot"></span><span id="model-name"></span></span>
 			</div>
 		</header>
 
@@ -37,16 +38,23 @@
 					</div>
 				</div>
 
-				<div class="composer card">
-					<div class="teacher-chips">
+				<div class="composer card" id="composer">
+					<div class="composer-toolbar">
 						<span class="chips-label">指定老师：</span>
-						<button class="chip" data-mention="@feynman">Feynman</button>
-						<button class="chip" data-mention="@socrates">Socrates</button>
-						<button class="chip" data-mention="@oris">Oris</button>						<button class="chip chip-reset hidden" id="reset-persona">↩ 切回 PiLore</button>					</div>
-					<div class="input-row">
-						<textarea id="input" rows="2" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
-						<div class="buttons">
-							<button id="send" class="btn-primary">发送</button>
+						<button class="chip" data-mention="@feynman"><span class="chip-dot"></span>Feynman</button>
+						<button class="chip" data-mention="@socrates"><span class="chip-dot"></span>Socrates</button>
+						<button class="chip" data-mention="@oris"><span class="chip-dot"></span>Oris</button>
+						<button class="chip chip-reset hidden" id="reset-persona">↩ 切回 PiLore</button>
+					</div>
+					<div class="composer-input">
+						<textarea id="input" rows="2" placeholder="向 PiLore 提问…"></textarea>
+						<span class="resize-grip" title="拖动调整高度"></span>
+					</div>
+					<div class="composer-footer">
+						<span id="persona-hint" class="persona-hint hidden"></span>
+						<span class="composer-hint"><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
+						<div class="composer-actions">
+							<button id="send" class="btn-primary" disabled>发送</button>
 							<button id="abort" class="btn-danger hidden">停止</button>
 						</div>
 					</div>
