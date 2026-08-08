@@ -31,7 +31,7 @@ npm install
 npm run demo
 
 # 2. 有 API key：
-cp .env.example .env   # 填入 DEEPSEEK_API_KEY（首选）或 MOONSHOT_API_KEY
+cp .env.example .env   # 填入 DEEPSEEK_API_KEY（首选）、MOONSHOT_API_KEY 或 LONGCAT_API_KEY
 
 # 3. Web 界面（主要测试面，浏览器打开提示的地址，默认 8100 端口）：
 npm run web            # 真实模型
@@ -58,6 +58,10 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 
 ```
 ├─ src/
+│  ├─ models/        # 模型 API 层（模块化）：provider 注册表 + 各 provider 定义
+│  │  ├─ index.ts      # createModelCollection() / DEFAULT_MODEL_IDS / PROVIDERS
+│  │  ├─ registry.ts   # 注册表：新增 provider 只需追加一项
+│  │  └─ providers/    # deepseek / moonshot-cn / longcat（含官方文档 URL）
 │  ├─ vfs.ts          # 内存虚拟文件系统（Map<path, content>，路径规范化、list）
 │  ├─ exec-client.ts  # codapi 风格执行后端 HTTP 客户端（POST /v1/exec）
 │  ├─ personas.ts     # 加载 agent-design/*.md（Feynman/Socrates/Oris 教学 prompt）+ @老师 解析
@@ -133,16 +137,27 @@ session.abort(); session.listFiles(); session.readFile("main.py");
 
 `src/server.ts` 与 `src/cli.ts` 都只是它的两个适配器——把 `EduEvent` 换成 WebSocket 或嵌入其它 UI 框架即可复用。`adopt_persona` 是内部工具，会话层将其折叠为 `persona` 事件对外暴露，外部消费者无需感知 pi-agent-core。
 
+## 模型 API 层（模块化）
+
+模型 API 层独立为 `src/models/`，与新模型平台对接只需三步：在 `providers/` 下实现一个 `ProviderDefinition`（pi-ai 的 `createProvider` 工厂 + 元数据），追加进 `src/models/registry.ts`，然后在 `.env.example` 登记对应环境变量。每个 provider 定义都带有官方文档 URL（`docsUrl`），例如：
+
+- LongCat（OpenAI 兼容，接入点 `https://api.longcat.chat/openai/v1`）：https://longcat.chat/platform/docs/zh/
+- DeepSeek：https://platform.deepseek.com/
+- Kimi 国内站（moonshotai-cn）：https://platform.moonshot.cn/docs/intro
+
+运行 `npm run list-models` 可查看全部已注册 provider 的模型、key 环境变量与文档链接，`PROVIDER=longcat`（配 `LONGCAT_API_KEY`）即可使用 LongCat。
+
 ## 环境变量
 
 见 [.env.example](.env.example)。
 
 | 变量 | 说明 |
 | --- | --- |
-| `PROVIDER` | `deepseek`（默认）或 `moonshotai-cn` |
+| `PROVIDER` | `deepseek`（默认）、`moonshotai-cn` 或 `longcat` |
 | `DEEPSEEK_API_KEY` | DeepSeek API key（首选测试 provider） |
 | `MOONSHOT_API_KEY` | Moonshot/Kimi（api.moonshot.cn）key，provider id 为 `moonshotai-cn` |
-| `MODEL_ID` | 模型 ID，默认按 provider 取（deepseek → `deepseek-v4-pro`），以 `npm run list-models` 为准 |
+| `LONGCAT_API_KEY` | LongCat key（https://api.longcat.chat/openai），provider id 为 `longcat`，文档见 <https://longcat.chat/platform/docs/zh/> |
+| `MODEL_ID` | 模型 ID，默认按 provider 取（deepseek → `deepseek-v4-pro`，longcat → `LongCat-2.0`），以 `npm run list-models` 为准 |
 | `THINKING_LEVEL` | 推理级别 `off`~`max`，默认 `off` |
 | `EXEC_API_BASE` | 执行服务地址，默认 `http://192.168.172.134:1313`（真实沙箱） |
 

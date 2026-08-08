@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createModelCollection } from "../src/agent.js";
+import { createModelCollection, PROVIDERS } from "../src/models/index.js";
 
 /** 打印已注册 provider 的可用模型，用于确认 MODEL_ID。用法: npm run list-models [providerId] */
 
@@ -25,4 +25,9 @@ for (const provider of models.getProviders()) {
 	}
 }
 
-console.log("\n提示: provider 的 API key 从环境变量解析（DEEPSEEK_API_KEY / MOONSHOT_API_KEY），见 .env.example");
+console.log("\n提示: 各 provider 的 API key 从环境变量解析，见 .env.example");
+for (const p of PROVIDERS) {
+	const env = p.envVar.padEnd(18);
+	const docs = p.docsUrl ? `（文档: ${p.docsUrl}）` : "";
+	console.log(`  ${p.id.padEnd(14)} <- $${env}${docs}`);
+}

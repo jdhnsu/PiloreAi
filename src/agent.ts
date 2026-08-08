@@ -1,10 +1,11 @@
-import { createModels, type Model, type MutableModels } from "@earendil-works/pi-ai";
-import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
-import { moonshotaiCnProvider } from "@earendil-works/pi-ai/providers/moonshotai-cn";
+import { type Model, type MutableModels } from "@earendil-works/pi-ai";
 import { Agent, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { PERSONAS } from "./personas.js";
 import { createTools } from "./tools.js";
 import { VirtualFS } from "./vfs.js";
+import { createModelCollection, DEFAULT_MODEL_IDS, resolveProviderId } from "./models/index.js";
+
+export { createModelCollection, DEFAULT_MODEL_IDS, resolveProviderId } from "./models/index.js";
 
 const TUTOR_PROMPT = `你是 PiLore，一位编程教学导师。你掌握三种教学方法（Feynman、Socrates、Oris，见文末），根据学习者状态选择方法，并以该方法的风格亲自继续回答。
 
@@ -44,24 +45,6 @@ export function buildPiLorePrompt(): string {
 }
 
 export const SYSTEM_PROMPT = buildPiLorePrompt();
-
-/** 各 provider 的默认模型 ID（可用 npm run list-models 查看全部）。 */
-export const DEFAULT_MODEL_IDS: Record<string, string> = {
-	deepseek: "deepseek-v4-pro",
-	"moonshotai-cn": "kimi-k2-0905-preview",
-};
-
-export function resolveProviderId(): string {
-	return process.env.PROVIDER ?? "deepseek";
-}
-
-/** 注册本项目支持的 LLM provider；key 由各 provider 从环境变量解析。 */
-export function createModelCollection(): MutableModels {
-	const models = createModels();
-	models.setProvider(deepseekProvider()); // DEEPSEEK_API_KEY
-	models.setProvider(moonshotaiCnProvider()); // MOONSHOT_API_KEY
-	return models;
-}
 
 export interface CreateAgentOptions {
 	/** 注入自定义 models 集合（如 demo 用 fauxProvider）；默认注册真实 provider。 */
