@@ -9,15 +9,11 @@ const personaBadge = $("#persona-badge");
 const demoBadge = $("#demo-badge");
 const modelInfo = $("#model-info");
 const fileList = $("#file-list");
-const fileView = $("#file-view");
-const fileViewName = $("#file-view-name");
-const fileViewCode = $("#file-view-code");
-const copyBtn = $("#copy-file");
 const resetChip = $("#reset-persona");
 
 let busy = false;
 let currentPersona = null; // 当前老师名；null = PiLore 自动路由
-let currentFile = null; // 工作区当前查看的文件 { path, content }
+let currentFile = null; // 工作区当前展开的文件 { path, content }
 
 const TOOL_GLYPHS = { write_file: "✎", read_file: "≡", run_code: "▶" };
 const TOOL_LABELS = { write_file: "写入", read_file: "读取", run_code: "运行", adopt_persona: "切换老师" };
@@ -583,13 +579,6 @@ function langOfPath(p) {
 	return EXT_LANG[ext] ?? "";
 }
 
-function showFile(f) {
-	currentFile = f;
-	fileViewName.textContent = f.path;
-	fileViewCode.innerHTML = highlightCode(f.content, langOfPath(f.path));
-	fileView.classList.remove("hidden");
-}
-
 async function copyText(text) {
 	try {
 		await navigator.clipboard.writeText(text);
@@ -608,39 +597,141 @@ async function copyText(text) {
 	}
 }
 
+/* 编辑器式文件项：点击行原地展开内容（手风琴，同时只展开一个） */
+function renderFileItem(f) {
+	const li = document.createElement("li");
+	li.className = "file-item";
+	li.innerHTML = `
+		<div class="file-item-head">
+			<span class="file-caret">▸</span>
+			<span class="file-path"></span>
+			<button class="copy-btn view-btn" type="button" title="弹窗查看">⛶</button>
+			<button class="copy-btn" type="button">复制</button>
+		</div>
+		<div class="file-item-body"><pre class="file-view-body"><code></code></pre></div>`;
+	li.querySelector(".file-path").textContent = f.path;
+	const caret = li.querySelector(".file-caret");
+	const code = li.querySelector("code");
+	const copyButton = li.querySelector(".copy-btn:not(.view-btn)");
+	li.querySelector(".view-btn").onclick = (e) => {
+		e.stopPropagation();
+		openCodeModal(f.path);
+	};
+
+	const setExpanded = (on) => {
+		li.classList.toggle("expanded", on);
+		caret.textContent = on ? "▾" : "▸";
+		if (on) code.innerHTML = highlightCode(f.content, langOfPath(f.path));
+	};
+
+	li.querySelector(".file-item-head").onclick = () => {
+		const opening = !li.classList.contains("expanded");
+		fileList.querySelectorAll(".file-item.expanded").forEach((el) => {
+			el.classList.remove("expanded");
+			el.querySelector(".file-caret").textContent = "▸";
+		});
+		currentFile = opening ? f : null;
+		setExpanded(opening);
+	};
+
+	copyButton.onclick = async (e) => {
+		e.stopPropagation(); // 不触发展开/收起
+		const ok = await copyText(f.content);
+		copyButton.textContent = ok ? "已复制 ✓" : "复制失败";
+		setTimeout(() => (copyButton.textContent = "复制"), 1500);
+	};
+
+	if (currentFile?.path === f.path) {
+		currentFile = f; // 刷新后用最新内容覆盖
+		setExpanded(true);
+	}
+	return li;
+}
+
 async function refreshFiles() {
 	try {
 		const resp = await fetch("/api/files");
 		const { files } = await resp.json();
+		knownFiles = files;
+		if (!modal.classList.contains("hidden")) renderModalFile();
 		fileList.innerHTML = "";
 		if (!files.length) {
 			fileList.innerHTML = '<li class="empty">暂无文件</li>';
-			fileView.classList.add("hidden");
 			currentFile = null;
 			return;
 		}
-		for (const f of files) {
-			const li = document.createElement("li");
-			li.className = "file-item";
-			li.textContent = f.path;
-			if (f.path === currentFile?.path) li.classList.add("active");
-			li.onclick = () => {
-				fileList.querySelectorAll(".file-item").forEach((el) => el.classList.toggle("active", el === li));
-				showFile(f);
-			};
-			fileList.appendChild(li);
-		}
-		// 文件可能被 run_code/write_file 更新，同步刷新正在查看的内容
-		const selected = files.find((f) => f.path === currentFile?.path);
-		if (selected) showFile(selected);
-		else if (currentFile) {
-			currentFile = null;
-			fileView.classList.add("hidden");
-		}
+		if (currentFile && !files.some((f) => f.path === currentFile.path)) currentFile = null;
+		for (const f of files) fileList.appendChild(renderFileItem(f));
 	} catch {
 		/* 侧栏刷新失败不影响对话 */
 	}
 }
+
+/* ---------- 代码弹窗：循环切换工作区文件，支持全屏 ---------- */
+const modal = $("#code-modal");
+const modalPanel = modal.querySelector(".modal-panel");
+const modalTitle = $("#modal-title");
+const modalIndex = $("#modal-index");
+const modalCode = $("#modal-code");
+const modalCopyBtn = $("#modal-copy");
+const modalFullBtn = $("#modal-fullscreen");
+
+let knownFiles = [];
+let modalPath = null;
+
+function openCodeModal(path) {
+	modalPath = path;
+	renderModalFile();
+	modal.classList.remove("hidden");
+}
+
+function closeCodeModal() {
+	modal.classList.add("hidden");
+	modalPanel.classList.remove("fullscreen");
+	modalFullBtn.textContent = "全屏";
+}
+
+function renderModalFile() {
+	const pos = knownFiles.findIndex((f) => f.path === modalPath);
+	if (pos < 0) {
+		closeCodeModal(); // 文件已被删除
+		return;
+	}
+	modalTitle.textContent = knownFiles[pos].path;
+	modalIndex.textContent = `${pos + 1} / ${knownFiles.length}`;
+	modalCode.innerHTML = highlightCode(knownFiles[pos].content, langOfPath(knownFiles[pos].path));
+}
+
+/* 首尾环绕的循环切换 */
+function stepModal(delta) {
+	const pos = knownFiles.findIndex((f) => f.path === modalPath);
+	if (pos < 0 || !knownFiles.length) return;
+	modalPath = knownFiles[(pos + delta + knownFiles.length) % knownFiles.length].path;
+	renderModalFile();
+}
+
+$("#modal-prev").onclick = () => stepModal(-1);
+$("#modal-next").onclick = () => stepModal(1);
+$("#modal-close").onclick = closeCodeModal;
+modal.querySelector(".modal-backdrop").onclick = closeCodeModal;
+modalFullBtn.onclick = () => {
+	const on = modalPanel.classList.toggle("fullscreen");
+	modalFullBtn.textContent = on ? "退出全屏" : "全屏";
+};
+modalCopyBtn.onclick = async () => {
+	const f = knownFiles.find((x) => x.path === modalPath);
+	if (!f) return;
+	const ok = await copyText(f.content);
+	modalCopyBtn.textContent = ok ? "已复制 ✓" : "复制失败";
+	setTimeout(() => (modalCopyBtn.textContent = "复制"), 1500);
+};
+
+document.addEventListener("keydown", (e) => {
+	if (modal.classList.contains("hidden")) return;
+	if (e.key === "Escape") closeCodeModal();
+	else if (e.key === "ArrowLeft") stepModal(-1);
+	else if (e.key === "ArrowRight") stepModal(1);
+});
 
 async function loadState() {
 	try {
@@ -658,19 +749,25 @@ async function loadState() {
 sendBtn.onclick = () => send();
 abortBtn.onclick = () => fetch("/api/abort", { method: "POST" });
 
-copyBtn.onclick = async () => {
-	if (!currentFile) return;
-	const ok = await copyText(currentFile.content);
-	copyBtn.textContent = ok ? "已复制 ✓" : "复制失败";
-	setTimeout(() => (copyBtn.textContent = "复制"), 1500);
-};
+/* 输入框随内容自动增高；用户拖动拉伸柄后切换为手动固定高度 */
+let autoGrowEnabled = true;
+let autoGrowHeight = 0;
+const INITIAL_TA_HEIGHT = inputEl.offsetHeight;
 
-/* 输入框随内容自动增高，超过视口 40% 后内部滚动，支持长文输入 */
 function autoGrow() {
-	inputEl.style.height = "auto";
-	inputEl.style.height = `${Math.min(inputEl.scrollHeight, window.innerHeight * 0.4)}px`;
+	if (!autoGrowEnabled) return;
+	// border-box：scrollHeight 不含 2px 边框；不低于初始高度避免打字时回缩跳动
+	autoGrowHeight = Math.max(INITIAL_TA_HEIGHT, Math.min(inputEl.scrollHeight + 2, window.innerHeight * 0.4));
+	inputEl.style.height = `${autoGrowHeight}px`;
 }
 inputEl.addEventListener("input", autoGrow);
+
+// offsetHeight 与自动增高设置值不一致 ⇒ 用户在拖拽拉伸柄
+new ResizeObserver(() => {
+	if (!autoGrowEnabled) return;
+	const expected = autoGrowHeight || INITIAL_TA_HEIGHT;
+	if (Math.abs(inputEl.offsetHeight - expected) > 2) autoGrowEnabled = false;
+}).observe(inputEl);
 
 inputEl.addEventListener("keydown", (e) => {
 	if (e.key === "Enter" && !e.shiftKey) {

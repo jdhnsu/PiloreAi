@@ -69,13 +69,8 @@ body {
 	width: 36px;
 	height: 36px;
 	border-radius: 8px;
-	background: var(--accent);
-	color: #fff;
-	font-size: 20px;
-	font-weight: 700;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	object-fit: cover;
+	display: block;
 }
 
 .brand h1 {
@@ -343,46 +338,151 @@ body {
 	background: #fafafa;
 }
 
-/* 高亮 token（VS Code Light 配色），聊天气泡与文件查看器共用 */
-:is(.msg-text, .file-view) .tok-kw {
+/* 高亮 token（VS Code Light 配色），聊天气泡 / 文件面板 / 代码弹窗共用 */
+:is(.msg-text, .file-item, .modal-body) .tok-kw {
 	color: #0033b3;
 }
 
-:is(.msg-text, .file-view) .tok-str {
+:is(.msg-text, .file-item, .modal-body) .tok-str {
 	color: #a31515;
 }
 
-:is(.msg-text, .file-view) .tok-com {
+:is(.msg-text, .file-item, .modal-body) .tok-com {
 	color: #107c10;
 	font-style: italic;
 }
 
-:is(.msg-text, .file-view) .tok-num {
+:is(.msg-text, .file-item, .modal-body) .tok-num {
 	color: #098658;
 }
 
-:is(.msg-text, .file-view) .tok-fn {
+:is(.msg-text, .file-item, .modal-body) .tok-fn {
 	color: #795e26;
 }
 
-:is(.msg-text, .file-view) .tok-const {
+:is(.msg-text, .file-item, .modal-body) .tok-const {
 	color: #0070c1;
 }
 
-:is(.msg-text, .file-view) .tok-key {
+:is(.msg-text, .file-item, .modal-body) .tok-key {
 	color: #0451a5;
 }
 
-:is(.msg-text, .file-view) .tok-tag {
+:is(.msg-text, .file-item, .modal-body) .tok-tag {
 	color: #800000;
 }
 
-:is(.msg-text, .file-view) .tok-attr {
+:is(.msg-text, .file-item, .modal-body) .tok-attr {
 	color: #e50000;
 }
 
-:is(.msg-text, .file-view) .tok-var {
+:is(.msg-text, .file-item, .modal-body) .tok-var {
 	color: #001080;
+}
+
+/* ===== 代码查看弹窗（循环切换 + 全屏） ===== */
+.modal {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+}
+
+.modal-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.35);
+}
+
+.modal-panel {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: min(960px, 94vw);
+	height: min(680px, 88vh);
+	overflow: hidden;
+}
+
+/* fixed 覆盖外层 padding，保证全屏精确铺满视口 */
+.modal-panel.fullscreen {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.modal-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--border);
+	background: #efefef;
+	flex-shrink: 0;
+}
+
+.modal-title {
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 13px;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.modal-index {
+	font-size: 12px;
+	color: var(--text-secondary);
+	flex-shrink: 0;
+}
+
+.modal-actions {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.icon-btn {
+	width: 26px;
+	height: 26px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--border);
+	background: #fff;
+	border-radius: 4px;
+	font-size: 14px;
+	color: var(--text-secondary);
+	transition: all 0.15s;
+}
+
+.icon-btn:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.modal-body {
+	flex: 1;
+	margin: 0;
+	padding: 14px 16px;
+	background: #fafafa;
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 13px;
+	line-height: 1.6;
+	white-space: pre;
+	overflow: auto;
+}
+
+.modal-body code {
+	font-family: inherit;
 }
 
 /* ===== 工具卡片 ===== */
@@ -558,7 +658,8 @@ body {
 
 textarea {
 	flex: 1;
-	resize: none;
+	/* 允许手动拖拽拉伸；拖动后 JS 停止自动增高（见 app.js） */
+	resize: vertical;
 	border: 1px solid var(--border);
 	border-radius: 6px;
 	padding: 9px 12px;
@@ -649,46 +750,68 @@ button {
 .file-item {
 	font-family: "Cascadia Code", Consolas, monospace;
 	font-size: 12.5px;
-	padding: 6px 10px;
 	border-radius: 6px;
-	cursor: pointer;
 	border: 1px solid transparent;
+	overflow: hidden;
+}
+
+.file-item-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 6px 10px;
+	background: none;
+	border: none;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
 }
 
 .file-item:hover {
 	background: var(--accent-light);
 }
 
-.file-item.active {
-	background: var(--accent-light);
+.file-item.expanded {
+	background: #fff;
 	border-color: var(--accent);
-	color: var(--accent);
 }
 
-.file-view {
-	margin-top: 12px;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	overflow: hidden;
-}
-
-.file-view-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 5px 10px;
-	background: #efefef;
-	border-bottom: 1px solid var(--border);
-}
-
-.file-view-name {
-	font-family: "Cascadia Code", Consolas, monospace;
-	font-size: 12px;
+.file-caret {
+	flex-shrink: 0;
+	width: 10px;
+	font-size: 10px;
 	color: var(--text-secondary);
+}
+
+.file-path {
+	flex: 1;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* 复制按钮悬停/展开时才出现；⛶ 查看按钮常驻 */
+.file-item .copy-btn {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.file-item .view-btn,
+.file-item:hover .copy-btn,
+.file-item.expanded .copy-btn {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.file-item-body {
+	display: none;
+	border-top: 1px solid var(--border);
+}
+
+.file-item.expanded .file-item-body {
+	display: block;
 }
 
 .copy-btn {

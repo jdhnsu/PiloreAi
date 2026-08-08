@@ -10,7 +10,7 @@
 	<div class="app">
 		<header class="topbar">
 			<div class="brand">
-				<div class="logo">π</div>
+				<img class="logo" src="/assets/2d/pilore_face_smile.png" alt="PiLore">
 				<div>
 					<h1>PiLore</h1>
 					<p class="subtitle">AI 编程教育助手</p>
@@ -58,16 +58,28 @@
 				<ul id="file-list" class="file-list">
 					<li class="empty">暂无文件</li>
 				</ul>
-				<div id="file-view" class="file-view hidden">
-					<div class="file-view-head">
-						<span id="file-view-name" class="file-view-name"></span>
-						<button id="copy-file" class="copy-btn" type="button">复制</button>
-					</div>
-					<pre class="file-view-body"><code id="file-view-code"></code></pre>
-				</div>
 			</aside>
 		</main>
 	</div>
+
+	<div id="code-modal" class="modal hidden">
+		<div class="modal-backdrop"></div>
+		<div class="modal-panel card">
+			<div class="modal-head">
+				<span id="modal-title" class="modal-title"></span>
+				<span id="modal-index" class="modal-index"></span>
+				<div class="modal-actions">
+					<button id="modal-prev" class="icon-btn" title="上一个文件（←）">‹</button>
+					<button id="modal-next" class="icon-btn" title="下一个文件（→）">›</button>
+					<button id="modal-copy" class="copy-btn" type="button">复制</button>
+					<button id="modal-fullscreen" class="copy-btn" type="button">全屏</button>
+					<button id="modal-close" class="icon-btn" title="关闭（Esc）">✕</button>
+				</div>
+			</div>
+			<pre class="modal-body"><code id="modal-code"></code></pre>
+		</div>
+	</div>
+
 	<script src="/app.js"></script>
 </body>
 </html>
