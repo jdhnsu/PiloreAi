@@ -1,5 +1,5 @@
 // 离线用例之一:VFS / normalizePath 边界(见 TEST-SPEC OVF-01/02)。
-import { normalizePath, VirtualFS } from "../../../src/vfs.js";
+import { normalizePath, VirtualFS } from "../../../src/index.js";
 import type { OfflineCaseDef } from "../../harness/score.js";
 
 export const vfsCases: OfflineCaseDef[] = [

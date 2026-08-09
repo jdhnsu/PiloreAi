@@ -12,5 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/**/*", "mock/**/*", "scripts/**/*", "tests/**/*"]
+  "include": ["src/**/*", "mock/**/*", "scripts/**/*", "tests/**/*", "examples/**/*"]
 }

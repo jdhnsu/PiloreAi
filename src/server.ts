@@ -6,8 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { createMockExecServer } from "../mock/exec-server.js";
-import { createEduSession, type EduEvent, type EduSessionOptions } from "./session.js";
-import { getPersona, type PersonaKey } from "./personas.js";
+import { createEduSession, getPersona, type EduEvent, type EduSessionOptions, type PersonaKey } from "./index.js";
 
 /**
  * Web 适配层：把 EduSession 暴露为 HTTP 接口。

@@ -1,16 +1,23 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { execCode } from "./exec-client.js";
-import { getPersona, PERSONA_KEYS } from "./personas.js";
+import type { ExecClient } from "./exec-client.js";
+import { getPersona, getPersonaKeys, type Persona } from "./personas.js";
 import type { SharedState } from "./shared-state.js";
 import type { VirtualFS } from "./vfs.js";
 
-/** 五个 AgentTool：write_file / read_file / run_code / adopt_persona / update_teaching，全部作用于内存 VFS、远程沙箱与教学状态。 */
-export function createTools(vfs: VirtualFS, shared: SharedState): AgentTool<any>[] {
+/** createTools 的可注入依赖：执行后端与老师集合均由外部解析后传入（核心不做缺省猜测）。 */
+export interface ToolDeps {
+	exec: ExecClient;
+	personas: Persona[];
+}
+
+/** 五个 AgentTool：write_file / read_file / run_code / adopt_persona / update_teaching，全部作用于内存 VFS、注入的执行器与教学状态。 */
+export function createTools(vfs: VirtualFS, shared: SharedState, deps: ToolDeps): AgentTool<any>[] {
+	const personas = deps.personas;
 	// 声明教学方法：写入共享状态（护栏 + 计数）→ prepareNextTurn 换入 systemPrompt；不操作 VFS
 	const adoptParams = Type.Object({
 		persona: Type.Union(
-			[...PERSONA_KEYS.map((k) => Type.Literal(k)), Type.Literal("auto")],
+			[...getPersonaKeys(personas).map((k) => Type.Literal(k)), Type.Literal("auto")],
 			{ description: "要采用的教学方法；auto = 交还 PiLore 自动路由" },
 		),
 	});
@@ -32,7 +39,7 @@ export function createTools(vfs: VirtualFS, shared: SharedState): AgentTool<any>
 			}
 			const blocked = shared.canAdopt(params.persona);
 			if (blocked) throw new Error(blocked);
-			const persona = getPersona(params.persona);
+			const persona = getPersona(params.persona, personas);
 			if (!persona) throw new Error(`未知教学方法: ${params.persona}`);
 			shared.recordSwitch();
 			shared.setPersona(persona, "model");
@@ -130,7 +137,7 @@ export function createTools(vfs: VirtualFS, shared: SharedState): AgentTool<any>
 			// codapi 沙箱入口文件名固定（python 为 main.py），非 main.py 的入口别名挂载
 			const payload =
 				params.sandbox === "python" && params.entry !== "main.py" ? { ...files, "main.py": entryContent } : files;
-			const result = await execCode({ sandbox: params.sandbox, command: "run", files: payload });
+			const result = await deps.exec.exec({ sandbox: params.sandbox, command: "run", files: payload });
 			if (!result.ok) {
 				throw new Error(`沙箱执行失败 (id=${result.id}):\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
 			}

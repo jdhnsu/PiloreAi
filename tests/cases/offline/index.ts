@@ -5,5 +5,6 @@ import { toolsCases } from "./tools.js";
 import { personasCases } from "./personas.js";
 import { sessionCases } from "./session.js";
 import { execCases } from "./exec.js";
+import { injectionCases } from "./injection.js";
 
-export const offlineCases: OfflineCaseDef[] = [...vfsCases, ...toolsCases, ...personasCases, ...sessionCases, ...execCases];
+export const offlineCases: OfflineCaseDef[] = [...vfsCases, ...toolsCases, ...personasCases, ...sessionCases, ...execCases, ...injectionCases];

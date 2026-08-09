@@ -14,7 +14,7 @@ import {
 	getProviderDefinition,
 	DEFAULT_MODEL_IDS,
 	resolveProviderId,
-} from "../src/models/index.js";
+} from "../src/index.js";
 
 type Mode = "offline" | "real" | "all";
 

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createModelCollection, PROVIDERS } from "../src/models/index.js";
+import { createModelCollection, PROVIDERS } from "../src/index.js";
 
 /** 打印已注册 provider 的可用模型，用于确认 MODEL_ID。用法: npm run list-models [providerId] */
 

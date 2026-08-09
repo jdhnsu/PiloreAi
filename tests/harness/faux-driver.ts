@@ -1,7 +1,7 @@
 // faux 证据:构造脚本化 faux 模型,跑完一轮 agent,并抽出「实际发生的证据」供断言。
 // 工具结果由 agent-core 对真实工具执行后自动回写,因此证据反映的是真实执行序列,而非脚本本身。
 import { createModels, fauxProvider, type FauxResponseStep, type ToolResultMessage } from "@earendil-works/pi-ai";
-import { createAgent, type CreateAgentOptions, type EduAgent } from "../../src/agent.js";
+import { createAgent, type CreateAgentOptions, type EduAgent } from "../../src/index.js";
 
 /** 一次运行中实际执行过的工具(按 assistant 消息里的 toolCall 顺序)。 */
 export interface ToolCallEvidence {

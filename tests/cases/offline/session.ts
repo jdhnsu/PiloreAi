@@ -2,7 +2,7 @@
 // 通过 createEduSession + faux 驱动,校验事件序列、persona 单发、busy 互斥、abort 后可重发。
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import type { OfflineCaseDef } from "../../harness/score.js";
-import { createEduSession } from "../../../src/session.js";
+import { createEduSession } from "../../../src/index.js";
 
 function makeFauxSession(opts?: { slowTokensPerSecond?: number }) {
 	// 默认即时假响应;slow 用 tokensPerSecond 控制流速,便于让 abort/busy 落在运行中段

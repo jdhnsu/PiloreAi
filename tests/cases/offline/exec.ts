@@ -1,6 +1,6 @@
 // 离线用例之五:执行后端(simulate 三分支 / exec-client 成功与错误路径,见 TEST-SPEC OEX-01..03)。
 import { simulate } from "../../../mock/exec-server.js";
-import { execCode, getExecApiBase } from "../../../src/exec-client.js";
+import { execCode, getExecApiBase } from "../../../src/index.js";
 import { ensureMockExec } from "../../harness/exec-mock.js";
 import type { OfflineCaseDef } from "../../harness/score.js";
 

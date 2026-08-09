@@ -11,6 +11,7 @@
     "web:demo": "tsx scripts/web-demo.ts",
     "demo": "tsx scripts/demo.ts",
     "list-models": "tsx scripts/list-models.ts",
+    "example:embed": "tsx examples/embed-minimal.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test src/shared-state.test.ts",
     "test:agent": "tsx tests/run.ts",

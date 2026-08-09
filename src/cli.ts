@@ -1,7 +1,6 @@
 import "dotenv/config";
 import readline from "node:readline/promises";
-import { createAgent, buildPersonaPrompt, SYSTEM_PROMPT } from "./agent.js";
-import { PERSONAS, getPersona, type Persona } from "./personas.js";
+import { createAgent, buildPersonaPrompt, getSystemPrompt, getDefaultPersonas, getPersona, type Persona } from "./index.js";
 import { attachConsoleRenderer, personaBanner } from "./render.js";
 
 const HELP = `命令:
@@ -9,7 +8,9 @@ const HELP = `命令:
   /abort  中断当前交互
   /help   显示帮助
 老师:
-${PERSONAS.map((p) => `  @${p.key} 问题   指定 ${p.meta.name} 的教学方法`).join("\n")}
+${getDefaultPersonas()
+	.map((p) => `  @${p.key} 问题   指定 ${p.meta.name} 的教学方法`)
+	.join("\n")}
   @pilore 问题    切回 PiLore 自动路由
   不带 @ 时由 PiLore 自动判断`;
 
@@ -29,8 +30,9 @@ function bubble(text: string, color: string): void {
 }
 
 function main(): void {
+	const personas = getDefaultPersonas();
 	const { agent, model, shared, setActivePersona } = createAgent();
-	const basePrompt = SYSTEM_PROMPT;
+	const basePrompt = getSystemPrompt();
 	let currentPersona: Persona | undefined;
 	attachConsoleRenderer(agent, { onPersonaChange: (p) => (currentPersona = p) });
 	console.log(`PiLore 教育 agent 已就绪（model: ${model.provider}/${model.id}）`);
@@ -77,7 +79,7 @@ function main(): void {
 		let message = text;
 		if (text.startsWith("@")) {
 			const mention = text.match(/^@([a-zA-Z][a-zA-Z0-9_-]*)\s+([\s\S]+)$/);
-			const available = PERSONAS.map((p) => `@${p.key}`).join(" / ");
+			const available = personas.map((p) => `@${p.key}`).join(" / ");
 			if (!mention) {
 				console.log(`用法: @feynman 你的问题（可用: ${available} / @pilore）`);
 				ask();
@@ -91,7 +93,7 @@ function main(): void {
 				console.log("[老师] 已切回 PiLore 自动路由");
 				message = mention[2];
 			} else {
-				const persona = getPersona(key);
+				const persona = getPersona(key, personas);
 				if (!persona) {
 					console.log(`没有这位老师: @${mention[1]}（可用: ${available} / @pilore）`);
 					ask();

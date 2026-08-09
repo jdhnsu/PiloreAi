@@ -20,8 +20,9 @@ PiLore 是一个 AI 辅助编程教育工具的核心 agent 组件，本阶段�
 - 多「老师」教学人格：Feynman / Socrates / Oris，模型自动路由或 `@` 手动指定；**按需加载** —— 路由目录常驻，选中后才把方法论全文换入 system prompt
 - 能力契约：每位老师用 frontmatter 声明允许/禁止的能力（deny-list），运行时强制拦截，文档与运行时解耦
 - 传输无关的事件协议：`EduEvent` 纯 JSON 流，Web / CLI / 其它项目共用同一会话层
+- **嵌入友好**：`createEduSession(config)` 一条接入，模型集合 / 老师集合 / 执行后端 / 工作区全部可注入，import 核心无任何副作用（不扫磁盘、不读 env、不发请求），见 [examples/embed-minimal.ts](examples/embed-minimal.ts)
 - Fluent（微软）风格 Web 界面：流式回答、工具调用卡片、实时工作区侧栏
-- 可替换执行后端：兼容 codapi 风格 `POST /v1/exec` 协议，改一个环境变量即可切换
+- 可替换执行后端：实现 `ExecClient` 接口，或用兼容 codapi 风格 `POST /v1/exec` 协议的服务，改一个环境变量即可切换
 
 ## 快速开始
 
@@ -70,21 +71,27 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 
 ```
 ├─ src/
-│  ├─ models/        # 模型 API 层（模块化）：provider 注册表 + 各 provider 定义
-│  │  ├─ index.ts      # createModelCollection() / DEFAULT_MODEL_IDS / PROVIDERS
-│  │  ├─ registry.ts   # 注册表：新增 provider 只需追加一项
-│  │  └─ providers/    # deepseek / moonshot-cn / longcat（含官方文档 URL）
+│  ├─ interfaces.ts   # 组件边界：EduAgentConfig 统一配置（models/personas/exec/vfs 全可注入）
+│  ├─ models/         # 模型 API 层（模块化）：provider 注册表 + 各 provider 定义
+│  │  ├─ index.ts       # createModelCollection() / DEFAULT_MODEL_IDS / PROVIDERS
+│  │  ├─ registry.ts    # 注册表：新增 provider 只需追加一项
+│  │  └─ providers/     # deepseek / moonshot-cn / longcat（含官方文档 URL）
 │  ├─ vfs.ts          # 内存虚拟文件系统（Map<path, content>，路径规范化、list）
-│  ├─ exec-client.ts  # codapi 风格执行后端 HTTP 客户端（POST /v1/exec）
-│  ├─ personas.ts     # 目录扫描 agent-design/*.md + frontmatter 元数据解析（yaml）+ @老师 解析 + buildCatalog()
-│  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_persona（+ PersonaState 共享状态）
-│  ├─ agent.ts        # Agent 组装工厂 createAgent()：基座/Persona 两套 systemPrompt + prepareNextTurn 换入 + beforeToolCall 权限拦截
-│  ├─ session.ts      # 会话组件层：传输无关的 EduEvent 协议（Web / CLI / 其它项目共用）；@指定 结构性激活
+│  ├─ exec-client.ts  # ExecClient 边界接口 + codapi 风格 HTTP 实现（POST /v1/exec）
+│  ├─ personas.ts     # 老师登记与解析：parsePersona（纯函数）/ loadPersonasFromDir /
+│  │                  #   getDefaultPersonas（懒加载，import 不扫盘）/ @老师 解析 / buildCatalog()
+│  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_persona / update_teaching
+│  │                  #   （执行后端与老师集合经 ToolDeps 注入，不硬编码）
+│  ├─ agent.ts        # Agent 组装工厂 createAgent(config)：基座/Persona 两套 systemPrompt +
+│  │                  #   prepareNextTurn 换入 + beforeToolCall 权限拦截
+│  ├─ shared-state.ts # 教学状态单一事实源（activePersona / 按老师分桶的教学进度 / 切换护栏）
+│  ├─ session.ts      # 会话组件层：传输无关的 EduEvent 协议（Web / CLI / 其它项目共用）
 │  ├─ render.ts       # 事件流 → 终端渲染（CLI 适配层用）
 │  ├─ cli.ts          # CLI 适配层（遗留测试面）
 │  ├─ server.ts       # Web 适配层：HTTP + SSE + 静态服务
-│  └─ index.ts        # 组件公开导出（迁移到其它项目的入口）
-├─ agent-design/      # Feynman / Socrates / Oris 老师设计文档（*.md）
+│  └─ index.ts        # 组件公开入口：全部对外 API（仓库内所有消费者均从这里导入）
+├─ examples/          # 嵌入示例：embed-minimal.ts（无需 API key / agent-design/ / 远程沙箱）
+├─ agent-design/      # Feynman / Socrates / Oris 内置老师设计文档（*.md，缺省老师集合）
 ├─ web/               # Fluent 风格前端（index.html / style.css / app.js）
 ├─ mock/
 │  └─ exec-server.ts  # mock 代码执行服务（node:http，不真正执行代码）
@@ -136,7 +143,7 @@ HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消�
 
 ## 老师设计文档与元数据（按需加载）
 
-`agent-design/*.md` 即「老师」的注册表：**新增一位老师只需放一个带 frontmatter 的 md 文件**，启动时目录扫描自动登记，无需改代码。
+`agent-design/*.md` 是内置的「老师」集合：**新增一位老师只需放一个带 frontmatter 的 md 文件**，首次创建会话时才扫描登记（懒加载），无需改代码。嵌入其它项目时也可以完全绕开该目录，用 `parsePersona(source, fileName)` 从任意来源（字符串 / 数据库 / 配置中心）构造 `Persona[]` 并注入 `createEduSession({ personas })`。
 
 ```yaml
 ---
@@ -162,20 +169,44 @@ capabilities:
 2. **选中后注入**：模型 `adopt_persona(key)` 或用户 `@key` → `prepareNextTurn` / 会话层把该老师全文换入 system prompt，下一轮 LLM 调用即生效；`adopt_persona("auto")` / `@pilore` 恢复基座
 3. **权限强制**：active persona 的 `capabilities` deny 命中时 `beforeToolCall` 拦截工具并给出原因（如 Socrates 激活时覆盖已有文件 → 被拦），模型看到拦截原因后自我纠正
 
-## 组件接口（迁移到其它项目）
+## 组件接口（嵌入到其他项目）
 
-核心是可移植的会话层 `src/session.ts`，不依赖任何传输层，事件协议为纯 JSON：
+核心是可移植的会话层，统一配置对象 `EduAgentConfig`（`src/interfaces.ts`），所有依赖均有缺省值、全部可注入：
+
+| 配置项 | 缺省值 | 说明 |
+| --- | --- | --- |
+| `models` | 内置 provider 注册表 | 自定义模型集合（如测试用 fauxProvider） |
+| `providerId` / `modelId` | env `PROVIDER` / `MODEL_ID` | 模型选择 |
+| `thinkingLevel` | env `THINKING_LEVEL`，缺省 `off` | 推理级别 |
+| `systemPrompt` | `buildBasePrompt(personas)` | 自定义基座提示词 |
+| `vfs` | 新建空实例 | 自定义工作区（可预置学习者文件） |
+| `personas` | `agent-design/` 懒加载 | 自定义老师集合（`parsePersona` 纯函数构造） |
+| `exec` | `createHttpExecClient()` | 自定义执行后端（实现 `ExecClient` 接口） |
+| `maxTurns` | 不限 | 单次 prompt 的 LLM 回合护栏 |
+
+import 核心不产生任何副作用（不扫磁盘、不读 env、不发请求），缺省值在创建会话时才解析：
 
 ```ts
-import { createEduSession } from "./src/index.js"; // 组件公开入口
+import { createEduSession, parsePersona } from "./src/index.js";
 
-const session = createEduSession(); // 可传 models/providerId/modelId/systemPrompt（测试可注入 fauxProvider）
-await session.prompt("什么是闭包？", (event) => {
-	// event: text_delta / tool_start / tool_end / persona / error / done ...
+// 最小用法：全部缺省
+const session = createEduSession();
+
+// 完全替换：自有老师 + 自有沙箱 + 自有模型，不依赖 agent-design/ 与 EXEC_API_BASE
+const session = createEduSession({
+  personas: [parsePersona(myTeacherMd, "guide.md")],  // 从字符串/数据库/配置中心构造
+  exec: { exec: async (req) => mySandbox.run(req) },  // 实现 ExecClient
+  models: myModels, providerId: "x", modelId: "y",
 });
+
+await session.prompt("什么是闭包？", (event) => {
+  // event: text_delta / tool_start / tool_end / persona / error / done ...
+});
+session.setPersona("guide");   // 也可直接切换老师（null = 自动路由）
 session.abort(); session.listFiles(); session.readFile("main.py");
 ```
 
+完整可运行示例见 [examples/embed-minimal.ts](examples/embed-minimal.ts)（`npm run example:embed`，无需 API key）。
 `src/server.ts` 与 `src/cli.ts` 都只是它的两个适配器——把 `EduEvent` 换成 WebSocket 或嵌入其它 UI 框架即可复用。`adopt_persona` 是内部工具，会话层将其折叠为 `persona` 事件对外暴露，外部消费者无需感知 pi-agent-core。
 
 ## 模型 API 层（模块化）
@@ -204,7 +235,7 @@ session.abort(); session.listFiles(); session.readFile("main.py");
 
 ## 执行后端协议（替换真实沙箱）
 
-`run_code` 工具把整个 VFS 作为 `files` 对象提交：
+执行后端是可插拔的 `ExecClient` 接口（`src/exec-client.ts`）：`run_code` 工具把整个 VFS 作为 `files` 对象提交，缺省实现为 codapi 风格 HTTP 客户端：
 
 ```
 POST {EXEC_API_BASE}/v1/exec
@@ -213,11 +244,11 @@ POST {EXEC_API_BASE}/v1/exec
 → 200 { "id": "...", "ok": true, "duration": 143, "stdout": "hi", "stderr": "" }
 ```
 
-替换真实后端（如 [codapi](https://github.com/nalgeon/codapi)）只需把 `EXEC_API_BASE` 指向兼容该协议的服务，代码无需改动；`ok: false` 会被转成错误工具结果让模型自我纠正。mock 服务（`mock/exec-server.ts`）不真正执行代码，只按规则模拟输出（提取 `print("字面量")`，否则返回说明/hello），仅用于无沙箱环境演示。
+替换真实后端有两种方式：实现 `ExecClient` 接口注入 `createEduSession({ exec })`（进程内沙箱/子进程均可），或把 `EXEC_API_BASE` 指向兼容该协议的服务（如 [codapi](https://github.com/nalgeon/codapi)），代码无需改动；`ok: false` 会被转成错误工具结果让模型自我纠正。mock 服务（`mock/exec-server.ts`）不真正执行代码，只按规则模拟输出（提取 `print("字面量")`，否则返回说明/hello），仅用于无沙箱环境演示。
 
 ## 下一步：接 HTTP / UI
 
-`createAgent()` 是无副作用的工厂，返回 `{ agent, vfs, model, models }`，可直接在 HTTP 服务中按会话创建实例复用：
+`createAgent()` 是无副作用的工厂，返回 `{ agent, vfs, model, models, shared, personas }`，可直接在 HTTP 服务中按会话创建实例复用：
 
 1. 用任意 HTTP 框架（如 Hono/Express）暴露 `POST /chat`：每个会话持有一个 `createAgent()` 实例
 2. 把 `agent.subscribe` 的事件流通过 SSE/WebSocket 转发给前端，渲染逻辑与 `src/render.ts` 一一对应（事件类型见 `pi-agent-core` 的 `AgentEvent`）

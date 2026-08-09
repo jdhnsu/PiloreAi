@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_SWITCHES_PER_TURN, SharedState } from "./shared-state.js";
-import type { Persona } from "./personas.js";
+import { MAX_SWITCHES_PER_TURN, SharedState, type Persona } from "./index.js";
 
 function makePersona(key: string, name = key): Persona {
 	return {

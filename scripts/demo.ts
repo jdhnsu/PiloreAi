@@ -7,7 +7,7 @@ import {
 	fauxText,
 	fauxToolCall,
 } from "@earendil-works/pi-ai";
-import { createAgent } from "../src/agent.js";
+import { createAgent } from "../src/index.js";
 import { attachConsoleRenderer } from "../src/render.js";
 import { createMockExecServer } from "../mock/exec-server.js";
 

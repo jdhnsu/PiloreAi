@@ -1,5 +1,6 @@
-import { createAgent, buildPersonaPrompt, SYSTEM_PROMPT, type CreateAgentOptions } from "./agent.js";
-import { getPersona, resolveMention, type Persona, type PersonaKey } from "./personas.js";
+import { createAgent, buildBasePrompt, buildPersonaPrompt } from "./agent.js";
+import type { EduAgentConfig } from "./interfaces.js";
+import { getDefaultPersonas, getPersona, resolveMention, type Persona } from "./personas.js";
 import type { PersonaSource } from "./shared-state.js";
 
 /**
@@ -13,18 +14,18 @@ export type EduEvent =
 	| { type: "tool_start"; toolName: string; args: unknown }
 	| { type: "tool_end"; toolName: string; isError: boolean; text: string }
 	// persona/name 为 null 表示切回 PiLore 自动路由
-	| { type: "persona"; persona: PersonaKey | null; name: string | null; source: PersonaSource }
+	| { type: "persona"; persona: string | null; name: string | null; source: PersonaSource }
 	| { type: "error"; message: string }
 	| { type: "done"; errorMessage?: string };
 
-export type EduSessionOptions = Omit<CreateAgentOptions, "vfs">;
+export type EduSessionOptions = EduAgentConfig;
 
 export interface EduSession {
 	/** 发送一条用户消息；事件通过 onEvent 流式回调，整轮结束后 resolve。 */
 	prompt(text: string, onEvent: (event: EduEvent) => void): Promise<void>;
 	abort(): void;
 	/** 直接设置/清除当前老师（null = 切回 PiLore 自动路由），无需经过对话。 */
-	setPersona(key: PersonaKey | null): void;
+	setPersona(key: string | null): void;
 	listFiles(): string[];
 	readFile(path: string): string | undefined;
 	readonly busy: boolean;
@@ -33,10 +34,12 @@ export interface EduSession {
 }
 
 /** 创建一个教学会话。不依赖任何传输层，可直接嵌入其它项目。 */
-export function createEduSession(options: EduSessionOptions = {}): EduSession {
-	const edu = createAgent(options);
+export function createEduSession(config: EduSessionOptions = {}): EduSession {
+	// personas 只解析一次：createAgent、@ 解析、setPersona 全部以它为准（支持自定义集合）
+	const personas = config.personas ?? getDefaultPersonas();
+	const edu = createAgent({ ...config, personas });
 	const { agent, vfs, model } = edu;
-	const basePrompt = options.systemPrompt ?? SYSTEM_PROMPT;
+	const basePrompt = config.systemPrompt ?? buildBasePrompt(personas);
 	let busy = false;
 	let emit: ((event: EduEvent) => void) | undefined;
 
@@ -103,7 +106,7 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 		abort: () => agent.abort(),
 		setPersona: (key) => {
 			// 结构性激活：换入对应 systemPrompt；null = 切回自动路由（基座 prompt）
-			const persona = key ? getPersona(key) : undefined;
+			const persona = key ? getPersona(key, personas) : undefined;
 			edu.setActivePersona(persona);
 			agent.state.systemPrompt = persona ? buildPersonaPrompt(persona) : basePrompt;
 		},
@@ -115,7 +118,7 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 			edu.shared.resetUserTurn();
 			let message = text;
 			try {
-				const mention = resolveMention(text);
+				const mention = resolveMention(text, personas);
 				if (mention) {
 					// @指定：结构性激活（换入 systemPrompt），persona 事件由 onPersonaChange 发出
 					const persona = mention.persona ?? undefined;

@@ -18,6 +18,7 @@
 | 会话协议 | `EduEvent` 序列、persona 事件单发与状态一致、busy 互斥、abort 后可重发 |
 | 路径/VFS 边界 | `normalizePath`(越界/空/反斜杠/`.`/`..`/重复分隔符)、read 缺失、clear |
 | 执行后端 | `simulate` 三分支、`exec-client` 请求/响应/非 2xx/连接失败 |
+| 依赖注入 | 自定义 personas 集合注入（`parsePersona` 内存构造）、自定义 `ExecClient` 注入（不依赖 env/网络） |
 | 在线行为 | 真实模型的路由选择(三类问题→三种 persona)、执行纪律(写码必跑、基于真实输出)、多轮教学进度维护与交还 |
 
 ---
@@ -130,6 +131,17 @@
 - 维度:执行后端 · 权重:1
 - 输入:非 200(404)与连接失败(指向未监听端口)。
 - 预期:非 200 抛 `HTTP 404 …`;连接失败抛 `无法连接代码执行服务 …`。
+
+### OIN-01 自定义 personas 集合可注入
+- 维度:教学行为 · 权重:2
+- 输入:用 `parsePersona` 从内嵌字符串构造自定义老师(`guide`),经 `agentOptions: { personas }` 注入;faux 依次 adopt `guide` → `update_teaching` → 文本。
+- 预期:`edu.shared.activePersona.key === "guide"`;换入的 systemPrompt 含自定义方法论正文;`getTeaching("guide")` 有进度;`edu.personas` 恰为注入的数组。
+- 判定:全部断言不经 agent-design/ 磁盘文件,纯内存构造。
+
+### OIN-02 自定义 ExecClient 可注入
+- 维度:执行后端 · 权重:2
+- 输入:自实现 `ExecClient`(记录调用、返回固定 stdout `INJECTED_OUTPUT`),经 `agentOptions: { exec }` 注入;faux write_file → run_code → 文本。
+- 预期:注入后端恰被调用 1 次且请求 files 完整;run_code 工具结果文本含 `INJECTED_OUTPUT`(不依赖 EXEC_API_BASE / 网络)。
 
 ---
 

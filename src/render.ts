@@ -1,5 +1,5 @@
 import type { Agent } from "@earendil-works/pi-agent-core";
-import { getPersona, type Persona } from "./personas.js";
+import { getDefaultPersonas, getPersona, type Persona } from "./index.js";
 
 const MAGENTA = "\x1b[35m";
 const RESET = "\x1b[0m";

@@ -2,7 +2,7 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { makeFauxModels, runFauxCase } from "../../harness/faux-driver.js";
 import type { OfflineCaseDef } from "../../harness/score.js";
-import { createEduSession } from "../../../src/session.js";
+import { createEduSession } from "../../../src/index.js";
 
 export const personasCases: OfflineCaseDef[] = [
 	{

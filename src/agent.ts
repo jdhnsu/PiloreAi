@@ -1,6 +1,8 @@
 import { type Model, type MutableModels } from "@earendil-works/pi-ai";
 import { Agent, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { buildCatalog, type Persona } from "./personas.js";
+import { createHttpExecClient } from "./exec-client.js";
+import type { EduAgentConfig } from "./interfaces.js";
+import { buildCatalog, getDefaultPersonas, type Persona } from "./personas.js";
 import { createTools } from "./tools.js";
 import { SharedState, type TeachingProgress } from "./shared-state.js";
 import { VirtualFS } from "./vfs.js";
@@ -43,9 +45,17 @@ const TOOL_ADAPTATION = `## 环境适配（教学方法中提到"文件/终端"�
 - 方法中"不要修改或删除用户的任何文件"指：不要覆盖或删除学习者工作区里已有的文件`;
 
 /** 组装自动路由 system prompt：角色 + 路由规则 + 目录 + 执行纪律 + 环境适配。不含任何方法论全文。 */
-export function buildBasePrompt(): string {
-	const sections = [ROLE, ROUTER_GUIDE, `## 教学方法目录\n\n${buildCatalog()}`, EXECUTION_DISCIPLINE, TOOL_ADAPTATION];
+export function buildBasePrompt(personas: Persona[] = getDefaultPersonas()): string {
+	const sections = [ROLE, ROUTER_GUIDE, `## 教学方法目录\n\n${buildCatalog(personas)}`, EXECUTION_DISCIPLINE, TOOL_ADAPTATION];
 	return sections.join("\n\n---\n\n");
+}
+
+/**
+ * 缺省基座 system prompt（懒求值）：首次调用时才解析内置老师集合。
+ * 自定义 personas 时用 buildBasePrompt(personas)。
+ */
+export function getSystemPrompt(): string {
+	return buildBasePrompt();
 }
 
 /** 把教学进度工作记忆渲染成 system prompt 注入块（无进度时提示尚未开始）。 */
@@ -79,23 +89,7 @@ export function buildPiLorePrompt(): string {
 	return buildBasePrompt();
 }
 
-export const SYSTEM_PROMPT = buildBasePrompt();
-
-export interface CreateAgentOptions {
-	/** 注入自定义 models 集合（如 demo 用 fauxProvider）；默认注册真实 provider。 */
-	models?: MutableModels;
-	providerId?: string;
-	modelId?: string;
-	thinkingLevel?: ThinkingLevel;
-	systemPrompt?: string;
-	vfs?: VirtualFS;
-	/**
-	 * 单次 prompt 运行的 LLM 回合数上限（0/undefined = 不限制）。
-	 * 用于测试护栏：模型陷入纯工具循环时强制结束本轮，避免烧 token。
-	 * 每轮 `agent_start` 自动清零。
-	 */
-	maxTurns?: number;
-}
+export interface CreateAgentOptions extends EduAgentConfig {}
 
 export interface EduAgent {
 	agent: Agent;
@@ -104,6 +98,8 @@ export interface EduAgent {
 	models: MutableModels;
 	/** 教学状态的单一事实源：会话层订阅它驱动 persona 事件，工具与钩子共享它 */
 	shared: SharedState;
+	/** 该 agent 使用的老师集合（自定义或内置默认）；@ 解析 / systemPrompt 换入以它为准 */
+	personas: Persona[];
 	/** 当前激活的教学方法（undefined = 自动路由）；会话层用它驱动 systemPrompt 换入 */
 	getActivePersona(): Persona | undefined;
 	setActivePersona(persona: Persona | undefined): void;
@@ -138,10 +134,10 @@ function checkCapability(persona: Persona, toolName: string, args: unknown, vfs:
 	return undefined;
 }
 
-export function createAgent(options: CreateAgentOptions = {}): EduAgent {
-	const models = options.models ?? createModelCollection();
-	const providerId = options.providerId ?? resolveProviderId();
-	const modelId = options.modelId ?? process.env.MODEL_ID ?? DEFAULT_MODEL_IDS[providerId];
+export function createAgent(config: EduAgentConfig = {}): EduAgent {
+	const models = config.models ?? createModelCollection();
+	const providerId = config.providerId ?? resolveProviderId();
+	const modelId = config.modelId ?? process.env.MODEL_ID ?? DEFAULT_MODEL_IDS[providerId];
 	const model = models.getModel(providerId, modelId);
 	if (!model) {
 		const available = models
@@ -153,8 +149,10 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 		);
 	}
 
-	const vfs = options.vfs ?? new VirtualFS();
-	const basePrompt = options.systemPrompt ?? SYSTEM_PROMPT;
+	const vfs = config.vfs ?? new VirtualFS();
+	const personas = config.personas ?? getDefaultPersonas();
+	const exec = config.exec ?? createHttpExecClient();
+	const basePrompt = config.systemPrompt ?? buildBasePrompt(personas);
 	const shared = new SharedState();
 	// 测试护栏：单次运行内 LLM 回合计数，agent_start 时清零
 	let turnsThisRun = 0;
@@ -163,14 +161,14 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 		initialState: {
 			systemPrompt: basePrompt,
 			model,
-			thinkingLevel: options.thinkingLevel ?? (process.env.THINKING_LEVEL as ThinkingLevel | undefined) ?? "off",
-			tools: createTools(vfs, shared),
+			thinkingLevel: config.thinkingLevel ?? (process.env.THINKING_LEVEL as ThinkingLevel | undefined) ?? "off",
+			tools: createTools(vfs, shared, { exec, personas }),
 		},
 		streamFn: models.streamSimple.bind(models),
 		// 测试护栏：单次 prompt 最多 maxTurns 个 LLM 回合（0/undefined = 不限）
 		shouldStopAfterTurn: async () => {
-			if (!options.maxTurns) return false;
-			return ++turnsThisRun >= options.maxTurns;
+			if (!config.maxTurns) return false;
+			return ++turnsThisRun >= config.maxTurns;
 		},
 		// persona 激活/交还或教学进度变化后，把 systemPrompt 换入/换回（工具已写入 shared）
 		prepareNextTurn: async () => {
@@ -211,6 +209,7 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 		model,
 		models,
 		shared,
+		personas,
 		getActivePersona: () => shared.activePersona,
 		setActivePersona: (persona) => {
 			shared.setPersona(persona, "user");

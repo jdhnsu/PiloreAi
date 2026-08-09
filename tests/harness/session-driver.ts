@@ -1,7 +1,6 @@
 // 会话驱动器:真实驱动 createEduSession(在线用例),按序发送多条用户消息,
 // 收集 EduEvent 与最终状态,建成评委可判定的 evidence。
-import { createEduSession, type EduEvent, type EduSessionOptions } from "../../src/session.js";
-import { getPersona, type Persona } from "../../src/personas.js";
+import { createEduSession, getPersona, type EduEvent, type EduSessionOptions, type Persona } from "../../src/index.js";
 
 export interface OnlineRule {
 	name: string;
