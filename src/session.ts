@@ -1,4 +1,4 @@
-import { createAgent, type CreateAgentOptions } from "./agent.js";
+import { createAgent, buildPersonaPrompt, SYSTEM_PROMPT, type CreateAgentOptions } from "./agent.js";
 import { getPersona, resolveMention, type Persona, type PersonaKey } from "./personas.js";
 
 /**
@@ -33,7 +33,9 @@ export interface EduSession {
 
 /** 创建一个教学会话。不依赖任何传输层，可直接嵌入其它项目。 */
 export function createEduSession(options: EduSessionOptions = {}): EduSession {
-	const { agent, vfs, model } = createAgent(options);
+	const edu = createAgent(options);
+	const { agent, vfs, model } = edu;
+	const basePrompt = options.systemPrompt ?? SYSTEM_PROMPT;
 	let busy = false;
 	let currentPersona: Persona | undefined;
 	let emit: ((event: EduEvent) => void) | undefined;
@@ -106,7 +108,11 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 		},
 		abort: () => agent.abort(),
 		setPersona: (key) => {
-			currentPersona = key ? getPersona(key) : undefined;
+			// 结构性激活：换入对应 systemPrompt；null = 切回自动路由（基座 prompt）
+			const persona = key ? getPersona(key) : undefined;
+			currentPersona = persona;
+			edu.setActivePersona(persona);
+			agent.state.systemPrompt = persona ? buildPersonaPrompt(persona) : basePrompt;
 		},
 		async prompt(text, onEvent) {
 			if (busy) throw new Error("上一轮对话还在进行，请先等待或中止");
@@ -116,15 +122,18 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 			try {
 				const mention = resolveMention(text);
 				if (mention) {
-					currentPersona = mention.persona ?? undefined;
+					// @指定：结构性激活（换入 systemPrompt），不再注入【指定教学方法】前缀
+					const persona = mention.persona ?? undefined;
+					currentPersona = persona;
+					edu.setActivePersona(persona);
+					agent.state.systemPrompt = persona ? buildPersonaPrompt(persona) : basePrompt;
 					onEvent({
 						type: "persona",
 						persona: mention.persona?.key ?? null,
 						name: mention.persona?.name ?? null,
 						source: "user",
 					});
-					// @pilore 只清除指定，不注入教学方法前缀
-					message = mention.persona ? `【指定教学方法：${mention.persona.name}】${mention.rest}` : mention.rest;
+					message = mention.rest;
 				}
 				onEvent({ type: "start" });
 				await agent.prompt(message);

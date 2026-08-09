@@ -1,15 +1,20 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { execCode } from "./exec-client.js";
-import { getPersona } from "./personas.js";
+import { getPersona, PERSONA_KEYS, type Persona } from "./personas.js";
 import type { VirtualFS } from "./vfs.js";
 
-/** 三个 AgentTool：write_file / read_file / run_code，全部作用于内存 VFS 与远程沙箱。 */
-export function createTools(vfs: VirtualFS): AgentTool<any>[] {
-	// 声明教学方法，让 CLI 能显示当前"老师"；不操作 VFS
+/** 当前激活的教学方法（会话层与工具共享的单一事实源，驱动 systemPrompt 换入与权限执行）。 */
+export interface PersonaState {
+	activePersona: Persona | undefined;
+}
+
+/** 四个 AgentTool：write_file / read_file / run_code / adopt_persona，全部作用于内存 VFS 与远程沙箱。 */
+export function createTools(vfs: VirtualFS, personaState: PersonaState): AgentTool<any>[] {
+	// 声明教学方法：写入共享状态 → prepareNextTurn 换入 systemPrompt；不操作 VFS
 	const adoptParams = Type.Object({
 		persona: Type.Union(
-			[Type.Literal("feynman"), Type.Literal("socrates"), Type.Literal("oris"), Type.Literal("auto")],
+			[...PERSONA_KEYS.map((k) => Type.Literal(k)), Type.Literal("auto")],
 			{ description: "要采用的教学方法；auto = 交还 PiLore 自动路由" },
 		),
 	});
@@ -21,6 +26,7 @@ export function createTools(vfs: VirtualFS): AgentTool<any>[] {
 		parameters: adoptParams,
 		execute: async (_toolCallId, params) => {
 			if (params.persona === "auto") {
+				personaState.activePersona = undefined;
 				return {
 					content: [{ type: "text", text: "已交还 PiLore 自动路由，请根据学习者接下来的问题重新判断教学方法或直接回答" }],
 					details: { persona: "auto" },
@@ -28,6 +34,7 @@ export function createTools(vfs: VirtualFS): AgentTool<any>[] {
 			}
 			const persona = getPersona(params.persona);
 			if (!persona) throw new Error(`未知教学方法: ${params.persona}`);
+			personaState.activePersona = persona;
 			return {
 				content: [{ type: "text", text: `已采用 ${persona.name} 教学方法，请以该方法的风格和流程继续回答` }],
 				details: { persona: persona.key },

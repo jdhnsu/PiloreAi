@@ -96,10 +96,38 @@ async function serveStatic(res: http.ServerResponse, pathname: string): Promise<
 	}
 }
 
+/** 每个候选端口用独立的 server 实例：Windows 上同一 server 连续 listen 会复用旧的 listening 回调（产生假成功日志）。 */
+function startServer(
+	handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,
+	candidates: number[],
+	demo: boolean,
+): void {
+	let index = 0;
+	const tryNext = () => {
+		const port = candidates[index];
+		const server = http.createServer(handler);
+		server.once("error", (err: NodeJS.ErrnoException) => {
+			server.removeAllListeners();
+			index += 1;
+			if ((err.code === "EACCES" || err.code === "EADDRINUSE") && index < candidates.length) {
+				console.warn(`[web] 端口 ${port} 不可用（${err.code}），改用 ${candidates[index]}`);
+				tryNext();
+				return;
+			}
+			console.error("[web] 启动失败:", err);
+			process.exit(1);
+		});
+		server.listen(port, () => {
+			console.log(`[web] PiLore 界面: http://localhost:${port}${demo ? "（演示模式，无需 API key）" : ""}`);
+		});
+	};
+	tryNext();
+}
+
 async function main(): Promise<void> {
 	const session = createEduSession(FAUX_DEMO ? await createDemoSessionOptions() : {});
 
-	const server = http.createServer(async (req, res) => {
+	const handler = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
 		const url = new URL(req.url ?? "/", "http://localhost");
 		try {
 			if (req.method === "GET" && url.pathname === "/api/state") {
@@ -175,12 +203,15 @@ async function main(): Promise<void> {
 			if (!res.headersSent) json(res, 500, { error: err instanceof Error ? err.message : String(err) });
 			else res.end();
 		}
-	});
+	};
 
-	const port = Number(process.env.WEB_PORT ?? 8100);
-	server.listen(port, () => {
-		console.log(`[web] PiLore 界面: http://localhost:${port}${FAUX_DEMO ? "（演示模式，无需 API key）" : ""}`);
-	});
+	// 默认 8600：本机 8100 常被 WSL2/Hyper-V 保留端口段（如 8079-8178）占用导致 EACCES；
+	// 未显式指定 WEB_PORT 时自动回退尝试后续端口，保证 npm run web 总能起来
+	const explicitPort = process.env.WEB_PORT !== undefined;
+	const port = Number(process.env.WEB_PORT ?? 8600);
+	const candidates = explicitPort ? [port] : Array.from({ length: 10 }, (_, i) => port + i);
+
+	startServer(handler, candidates, FAUX_DEMO);
 }
 
 main().catch((err) => {

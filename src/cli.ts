@@ -1,6 +1,6 @@
 import "dotenv/config";
 import readline from "node:readline/promises";
-import { createAgent } from "./agent.js";
+import { createAgent, buildPersonaPrompt, SYSTEM_PROMPT } from "./agent.js";
 import { PERSONAS, getPersona, type Persona } from "./personas.js";
 import { attachConsoleRenderer, personaBanner } from "./render.js";
 
@@ -9,9 +9,8 @@ const HELP = `命令:
   /abort  中断当前交互
   /help   显示帮助
 老师:
-  @feynman 问题   指定费曼式讲解（大白话/类比）
-  @socrates 问题  指定苏格拉底式讲解（讲透原理）
-  @oris 问题      指定搭脚手架式讲解（补前置基础）
+${PERSONAS.map((p) => `  @${p.key} 问题   指定 ${p.meta.name} 的教学方法`).join("\n")}
+  @pilore 问题    切回 PiLore 自动路由
   不带 @ 时由 PiLore 自动判断`;
 
 const CYAN = "\x1b[36m";
@@ -30,7 +29,8 @@ function bubble(text: string, color: string): void {
 }
 
 function main(): void {
-	const { agent, model } = createAgent();
+	const { agent, model, setActivePersona } = createAgent();
+	const basePrompt = SYSTEM_PROMPT;
 	let currentPersona: Persona | undefined;
 	attachConsoleRenderer(agent, { onPersonaChange: (p) => (currentPersona = p) });
 	console.log(`PiLore 教育 agent 已就绪（model: ${model.provider}/${model.id}）`);
@@ -73,7 +73,7 @@ function main(): void {
 			console.log("(agent 正在处理上一条消息，输入 /abort 可中断)");
 			return;
 		}
-		// @老师 前缀：直接指定教学方法，转为【指定教学方法】前缀注入；@pilore 切回自动路由
+		// @老师 前缀：结构性激活（换入 systemPrompt），与 session 层同一机制
 		let message = text;
 		if (text.startsWith("@")) {
 			const mention = text.match(/^@([a-zA-Z][a-zA-Z0-9_-]*)\s+([\s\S]+)$/);
@@ -86,6 +86,8 @@ function main(): void {
 			const key = mention[1].toLowerCase();
 			if (key === "pilore") {
 				currentPersona = undefined;
+				setActivePersona(undefined);
+				agent.state.systemPrompt = basePrompt;
 				console.log("[老师] 已切回 PiLore 自动路由");
 				message = mention[2];
 			} else {
@@ -96,8 +98,10 @@ function main(): void {
 					return;
 				}
 				currentPersona = persona;
+				setActivePersona(persona);
+				agent.state.systemPrompt = buildPersonaPrompt(persona);
 				console.log(personaBanner(persona, "用户指定"));
-				message = `【指定教学方法：${persona.name}】${mention[2]}`;
+				message = mention[2];
 			}
 		}
 		busy = true;

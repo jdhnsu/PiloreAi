@@ -17,7 +17,8 @@ PiLore 是一个 AI 辅助编程教育工具的核心 agent 组件，本阶段�
 **亮点**
 
 - 内存 VFS + 远程沙箱：学习者代码绝不落地、绝不在本地执行
-- 多「老师」教学人格：Feynman / Socrates / Oris，模型自动路由或 `@` 手动指定
+- 多「老师」教学人格：Feynman / Socrates / Oris，模型自动路由或 `@` 手动指定；**按需加载** —— 路由目录常驻，选中后才把方法论全文换入 system prompt
+- 能力契约：每位老师用 frontmatter 声明允许/禁止的能力（deny-list），运行时强制拦截，文档与运行时解耦
 - 传输无关的事件协议：`EduEvent` 纯 JSON 流，Web / CLI / 其它项目共用同一会话层
 - Fluent（微软）风格 Web 界面：流式回答、工具调用卡片、实时工作区侧栏
 - 可替换执行后端：兼容 codapi 风格 `POST /v1/exec` 协议，改一个环境变量即可切换
@@ -33,7 +34,8 @@ npm run demo
 # 2. 有 API key：
 cp .env.example .env   # 填入 DEEPSEEK_API_KEY（首选）、MOONSHOT_API_KEY 或 LONGCAT_API_KEY
 
-# 3. Web 界面（主要测试面，浏览器打开提示的地址，默认 8100 端口）：
+# 3. Web 界面（主要测试面，浏览器打开提示的地址；默认 8600 端口，被占用时自动回退 +1；
+#    显式指定用 WEB_PORT=xxxx npm run web）：
 npm run web            # 真实模型
 npm run web:demo       # 无需 API key（fauxProvider 脚本化 + 进程内 mock 执行服务）
 
@@ -64,10 +66,10 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 │  │  └─ providers/    # deepseek / moonshot-cn / longcat（含官方文档 URL）
 │  ├─ vfs.ts          # 内存虚拟文件系统（Map<path, content>，路径规范化、list）
 │  ├─ exec-client.ts  # codapi 风格执行后端 HTTP 客户端（POST /v1/exec）
-│  ├─ personas.ts     # 加载 agent-design/*.md（Feynman/Socrates/Oris 教学 prompt）+ @老师 解析
-│  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_personaa
-│  ├─ agent.ts        # Agent 组装工厂 createAgent()：路由式 systemPrompt + model + tools
-│  ├─ session.ts      # 会话组件层：传输无关的 EduEvent 协议（Web / CLI / 其它项目共用）
+│  ├─ personas.ts     # 目录扫描 agent-design/*.md + frontmatter 元数据解析（yaml）+ @老师 解析 + buildCatalog()
+│  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_persona（+ PersonaState 共享状态）
+│  ├─ agent.ts        # Agent 组装工厂 createAgent()：基座/Persona 两套 systemPrompt + prepareNextTurn 换入 + beforeToolCall 权限拦截
+│  ├─ session.ts      # 会话组件层：传输无关的 EduEvent 协议（Web / CLI / 其它项目共用）；@指定 结构性激活
 │  ├─ render.ts       # 事件流 → 终端渲染（CLI 适配层用）
 │  ├─ cli.ts          # CLI 适配层（遗留测试面）
 │  ├─ server.ts       # Web 适配层：HTTP + SSE + 静态服务
@@ -97,6 +99,7 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 
 - [`@earendil-works/pi-ai`](https://www.npmjs.com/package/@earendil-works/pi-ai)：统一 LLM API（models 集合、provider、流式事件协议）
 - [`@earendil-works/pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core)：agent loop / 工具调度 / 事件流
+- [`yaml`](https://www.npmjs.com/package/yaml)：老师设计文档 frontmatter 元数据解析
 - 不引入 `@earendil-works/pi-coding-agent`：其内置工具面向本地 fs / 进程，与本项目"内存 VFS + 远程沙箱"的模型不符
 
 ## Web 界面
@@ -120,6 +123,34 @@ HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消�
 | `POST /api/chat` | `{ message }` → SSE 流，每帧 `data: <EduEvent JSON>`，以 `done` 结束 |
 | `POST /api/persona` | `{ persona: "feynman"/"socrates"/"oris" }` 设置老师；`{ persona: null }` 切回自动路由 |
 | `POST /api/abort` | 中止当前运行 |
+
+## 老师设计文档与元数据（按需加载）
+
+`agent-design/*.md` 即「老师」的注册表：**新增一位老师只需放一个带 frontmatter 的 md 文件**，启动时目录扫描自动登记，无需改代码。
+
+```yaml
+---
+# 路由目录条目（单一事实源：路由器只依据它判断方法，方法正文不再手工 paraphrase）
+name: Socrates
+description: >-
+  当用户想理解原理、辨析易混淆概念、解释代码逻辑时使用。触发词：讲解、解释、原理、
+  为什么、区别、对比。用法示例：@socrates 讲讲 Python 的 GIL 是什么？
+# 本期无语义，预留给未来（如 manual = 仅 @ 指定）
+mode: primary
+# 环境契约：deny-list，只列禁止项，省略 = 允许；也可显式声明 allow。能力词汇与运行时工具解耦：
+#   file.read → read_file    file.write → write_file（新建）    file.modify → write_file（覆盖已有）
+#   exec.run  → run_code     （未来可扩展 file.list / web.fetch / web.search）
+capabilities:
+  file.write: allow
+  file.modify: deny
+---
+```
+
+按需加载机制：
+
+1. **目录常驻**：基座 system prompt 只含角色 + 路由规则 + 目录（name+description），不含任何方法论全文
+2. **选中后注入**：模型 `adopt_persona(key)` 或用户 `@key` → `prepareNextTurn` / 会话层把该老师全文换入 system prompt，下一轮 LLM 调用即生效；`adopt_persona("auto")` / `@pilore` 恢复基座
+3. **权限强制**：active persona 的 `capabilities` deny 命中时 `beforeToolCall` 拦截工具并给出原因（如 Socrates 激活时覆盖已有文件 → 被拦），模型看到拦截原因后自我纠正
 
 ## 组件接口（迁移到其它项目）
 
