@@ -80,22 +80,28 @@ export function createTools(vfs: VirtualFS, personaState: PersonaState): AgentTo
 	};
 
 	const runParams = Type.Object({
-		sandbox: Type.String({ description: "沙箱类型，如 python" }),
-		// 无默认值：沙箱不会自动找文件，必须由模型显式给出如 python fib.py
-		command: Type.String({ description: "执行命令，必须显式指定要运行的文件，如 python fib.py" }),
+		sandbox: Type.String({ description: "codapi 沙箱名，填具体语言如 python；不要填 default/auto 等含糊值" }),
+		entry: Type.String({ description: "要运行的入口文件（须已 write_file），如 fib.py" }),
 	});
 	const runCode: AgentTool<typeof runParams> = {
 		name: "run_code",
 		label: "运行代码",
 		description:
-			"在远程沙箱运行代码，返回 stdout/stderr。沙箱默认不会找文件，一定要在 command 里指定文件名再跑（如 python fib.py）。任何代码改动后都必须运行验证，不要凭空猜输出。",
+			"在远程沙箱运行代码，返回 stdout/stderr。用 entry 指定要运行的文件；python 沙箱入口固定 main.py，其它文件名会自动别名挂载。任何代码改动后都必须运行验证，不要凭空猜输出。",
 		parameters: runParams,
 		execute: async (_toolCallId, params) => {
 			const files = vfs.toRecord();
 			if (Object.keys(files).length === 0) {
 				throw new Error("工作区为空，请先用 write_file 写入代码再运行");
 			}
-			const result = await execCode({ sandbox: params.sandbox, command: params.command, files });
+			const entryContent = files[params.entry];
+			if (entryContent === undefined) {
+				throw new Error(`工作区不存在 ${params.entry}，现有文件: ${Object.keys(files).join(", ")}`);
+			}
+			// codapi 沙箱入口文件名固定（python 为 main.py），非 main.py 的入口别名挂载
+			const payload =
+				params.sandbox === "python" && params.entry !== "main.py" ? { ...files, "main.py": entryContent } : files;
+			const result = await execCode({ sandbox: params.sandbox, command: "run", files: payload });
 			if (!result.ok) {
 				throw new Error(`沙箱执行失败 (id=${result.id}):\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
 			}

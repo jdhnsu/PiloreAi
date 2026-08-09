@@ -40,7 +40,7 @@ async function main(): Promise<void> {
 		fauxAssistantMessage(
 			[
 				fauxText("文件写好了，现在提交到沙箱运行，看看真实输出：\n"),
-				fauxToolCall("run_code", { sandbox: "python", command: "run" }),
+				fauxToolCall("run_code", { sandbox: "python", entry: "fib.py" }),
 			],
 			{ stopReason: "toolUse" },
 		),

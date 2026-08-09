@@ -67,7 +67,7 @@ async function createDemoSessionOptions(): Promise<EduSessionOptions> {
 		}
 		if (phase === 2) {
 			return fauxAssistantMessage(
-				[fauxText("文件写好了，提交到沙箱运行看看输出：\n"), fauxToolCall("run_code", { sandbox: "python", command: "run" })],
+				[fauxText("文件写好了，提交到沙箱运行看看输出：\n"), fauxToolCall("run_code", { sandbox: "python", entry: "fib.py" })],
 				{ stopReason: "toolUse" },
 			);
 		}
