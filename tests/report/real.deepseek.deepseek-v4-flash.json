@@ -1,0 +1,13 @@
+{
+  "kind": "real",
+  "date": "2026-08-09T12:14:44.397Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "thinking": "off",
+  "iterations": 1,
+  "skipped": [],
+  "total": 0,
+  "grade": "D",
+  "dimensions": [],
+  "cases": []
+}

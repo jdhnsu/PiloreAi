@@ -52,6 +52,16 @@ npm run chat
 ```bash
 npm run list-models        # 打印各 provider 可用模型，确认 MODEL_ID
 npm run typecheck          # TypeScript 类型检查（不产出构建文件）
+npm test                   # 单元测试（shared-state）
+npm run test:agent         # Agent 核心离线测试（faux + mock，确定性，默认 3 轮）
+npm run test:agent:real    # Agent 核心在线测试（真实模型，行为达成度评分，默认 3 轮平均值）
+npm run test:agent:all     # 两者都跑
+```
+
+测试规格与评分模型见 `tests/TEST-SPEC.md`（用例清单、参数/预期/权重、S/A/B/C/D 等级）。切换在线测试模型：改 `.env` 的 `PROVIDER`/`MODEL_ID`/`THINKING_LEVEL`，或在命令后追加 `--provider x --model y --thinking off`，如：
+
+```bash
+npx tsx tests/run.ts --mode real --provider moonshotai-cn --model kimi-k2-0905-preview
 ```
 
 CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。

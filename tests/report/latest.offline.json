@@ -1,0 +1,41 @@
+{
+  "kind": "offline",
+  "date": "2026-08-09T12:14:44.393Z",
+  "iterations": 1,
+  "skipped": [],
+  "total": 100,
+  "grade": "S",
+  "dimensions": [
+    {
+      "dimension": "边界",
+      "score": 1,
+      "weight": 3
+    }
+  ],
+  "cases": [
+    {
+      "id": "OVF-01",
+      "name": "normalizePath 规范化与越界",
+      "dimension": "边界",
+      "weight": 2,
+      "score": 1,
+      "detail": {
+        "rounds": [
+          1
+        ]
+      }
+    },
+    {
+      "id": "OVF-02",
+      "name": "VirtualFS 读写清空",
+      "dimension": "边界",
+      "weight": 1,
+      "score": 1,
+      "detail": {
+        "rounds": [
+          1
+        ]
+      }
+    }
+  ]
+}

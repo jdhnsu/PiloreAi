@@ -1,0 +1,119 @@
+{
+  "kind": "real",
+  "date": "2026-08-09T12:15:15.795Z",
+  "provider": "longcat",
+  "model": "deepseek-v4-flash",
+  "thinking": "off",
+  "iterations": 1,
+  "skipped": [
+    {
+      "id": "ORT-01",
+      "reason": "no-key"
+    },
+    {
+      "id": "ORT-02",
+      "reason": "no-key"
+    },
+    {
+      "id": "ORT-03",
+      "reason": "no-key"
+    },
+    {
+      "id": "ORT-04",
+      "reason": "no-key"
+    },
+    {
+      "id": "ORD-05",
+      "reason": "no-key"
+    },
+    {
+      "id": "ORD-06",
+      "reason": "no-key"
+    },
+    {
+      "id": "ORD-07",
+      "reason": "no-key"
+    },
+    {
+      "id": "ORD-08",
+      "reason": "no-key"
+    }
+  ],
+  "total": 0,
+  "grade": "D",
+  "dimensions": [],
+  "cases": [
+    {
+      "id": "ORT-01",
+      "name": "抽象话题→Feynman",
+      "dimension": "在线路由",
+      "weight": 3,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    },
+    {
+      "id": "ORT-02",
+      "name": "原理辨析→Socrates",
+      "dimension": "在线路由",
+      "weight": 3,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    },
+    {
+      "id": "ORT-03",
+      "name": "前置补基础→Oris",
+      "dimension": "在线路由",
+      "weight": 3,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    },
+    {
+      "id": "ORT-04",
+      "name": "事实问答不触发 persona",
+      "dimension": "在线路由",
+      "weight": 2,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    },
+    {
+      "id": "ORD-05",
+      "name": "写码后实际运行",
+      "dimension": "工具纪律",
+      "weight": 3,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    },
+    {
+      "id": "ORD-06",
+      "name": "不凭空猜输出(bug 代码)",
+      "dimension": "工具纪律",
+      "weight": 3,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    },
+    {
+      "id": "ORD-07",
+      "name": "多轮教学进度维护",
+      "dimension": "教学行为",
+      "weight": 3,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    },
+    {
+      "id": "ORD-08",
+      "name": "收尾自测",
+      "dimension": "教学行为",
+      "weight": 2,
+      "score": 0,
+      "detail": [],
+      "skipped": true
+    }
+  ]
+}

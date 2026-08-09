@@ -89,6 +89,12 @@ export interface CreateAgentOptions {
 	thinkingLevel?: ThinkingLevel;
 	systemPrompt?: string;
 	vfs?: VirtualFS;
+	/**
+	 * 单次 prompt 运行的 LLM 回合数上限（0/undefined = 不限制）。
+	 * 用于测试护栏：模型陷入纯工具循环时强制结束本轮，避免烧 token。
+	 * 每轮 `agent_start` 自动清零。
+	 */
+	maxTurns?: number;
 }
 
 export interface EduAgent {
@@ -150,6 +156,8 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 	const vfs = options.vfs ?? new VirtualFS();
 	const basePrompt = options.systemPrompt ?? SYSTEM_PROMPT;
 	const shared = new SharedState();
+	// 测试护栏：单次运行内 LLM 回合计数，agent_start 时清零
+	let turnsThisRun = 0;
 	let agent: Agent;
 	agent = new Agent({
 		initialState: {
@@ -159,6 +167,11 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 			tools: createTools(vfs, shared),
 		},
 		streamFn: models.streamSimple.bind(models),
+		// 测试护栏：单次 prompt 最多 maxTurns 个 LLM 回合（0/undefined = 不限）
+		shouldStopAfterTurn: async () => {
+			if (!options.maxTurns) return false;
+			return ++turnsThisRun >= options.maxTurns;
+		},
 		// persona 激活/交还或教学进度变化后，把 systemPrompt 换入/换回（工具已写入 shared）
 		prepareNextTurn: async () => {
 			const expected = shared.activePersona
@@ -187,6 +200,10 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 				reason: `当前教学方法（${persona.name}）不允许${CAPABILITY_LABEL[denied] ?? denied}（${denied}: deny）`,
 			};
 		},
+	});
+	// 每次 run 开始清零回合计数（测试护栏按「单次 prompt 运行」计）
+	agent.subscribe((event) => {
+		if (event.type === "agent_start") turnsThisRun = 0;
 	});
 	return {
 		agent,
