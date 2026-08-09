@@ -3,6 +3,7 @@ export { createEduSession, type EduEvent, type EduSession, type EduSessionOption
 export { createAgent, buildBasePrompt, buildPersonaPrompt, buildPiLorePrompt, SYSTEM_PROMPT, type CreateAgentOptions, type EduAgent } from "./agent.js";
 export * from "./models/index.js";
 export { PERSONAS, PERSONA_KEYS, getPersona, resolveMention, buildCatalog, type Persona, type PersonaKey, type PersonaMeta, type PersonaCapabilities } from "./personas.js";
+export { SharedState, MAX_SWITCHES_PER_TURN, type TeachingProgress, type PersonaSource } from "./shared-state.js";
 export { VirtualFS, normalizePath } from "./vfs.js";
 export { createTools } from "./tools.js";
 export { execCode, getExecApiBase, type ExecRequest, type ExecResponse } from "./exec-client.js";

@@ -29,7 +29,7 @@ function bubble(text: string, color: string): void {
 }
 
 function main(): void {
-	const { agent, model, setActivePersona } = createAgent();
+	const { agent, model, shared, setActivePersona } = createAgent();
 	const basePrompt = SYSTEM_PROMPT;
 	let currentPersona: Persona | undefined;
 	attachConsoleRenderer(agent, { onPersonaChange: (p) => (currentPersona = p) });
@@ -105,6 +105,7 @@ function main(): void {
 			}
 		}
 		busy = true;
+		shared.resetUserTurn();
 		void (async () => {
 			try {
 				await agent.prompt(message);

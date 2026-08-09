@@ -1,7 +1,8 @@
 import { type Model, type MutableModels } from "@earendil-works/pi-ai";
 import { Agent, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { buildCatalog, type Persona } from "./personas.js";
-import { createTools, type PersonaState } from "./tools.js";
+import { createTools } from "./tools.js";
+import { SharedState, type TeachingProgress } from "./shared-state.js";
 import { VirtualFS } from "./vfs.js";
 import { createModelCollection, DEFAULT_MODEL_IDS, resolveProviderId } from "./models/index.js";
 
@@ -26,6 +27,7 @@ const ROUTER_GUIDE = `## 1. 判断该用哪种方法（心里有数，不说出�
 /** Persona 激活模式：不再路由判断，只保留交接规则。 */
 const PERSONA_MODE_GUIDE = `## 当前教学模式
 - 你正在以 {name} 的教学方法回答，严格执行下文该方法的流程与输出格式，不要重新判断或换方法
+- 用 update_teaching 工具随阶段推进记录教学进度（阶段/主题/已覆盖/待展开），下一轮会自动看到「当前教学进度」
 - 交还时机：当前方法的教学阶段完成（讲解完毕且检验通过、学习者表示懂了），或学习者明显切换到新话题、需要别的方法时，调用 adopt_persona("auto") 交还自动路由，下一轮重新判断
 - 需要换成另一位老师时直接 adopt_persona(新方法)，不必先经过 auto`;
 
@@ -46,11 +48,25 @@ export function buildBasePrompt(): string {
 	return sections.join("\n\n---\n\n");
 }
 
-/** 组装 persona 激活时的 system prompt：当前教学模式 + 执行纪律 + 环境适配 + 该老师方法论全文。 */
-export function buildPersonaPrompt(persona: Persona): string {
+/** 把教学进度工作记忆渲染成 system prompt 注入块（无进度时提示尚未开始）。 */
+function renderTeachingBlock(teaching: TeachingProgress | undefined): string {
+	if (!teaching) {
+		return "- 尚未开始记录（随阶段推进用 update_teaching 工具更新）";
+	}
+	const lines = [
+		`- 阶段：${teaching.stage || "（未标注）"}　·　主题：${teaching.topic || "（未标注）"}`,
+		teaching.covered.length ? `- 已覆盖：${teaching.covered.join("；")}` : "",
+		teaching.pending.length ? `- 待展开：${teaching.pending.join("；")}` : "",
+	].filter(Boolean);
+	return lines.join("\n");
+}
+
+/** 组装 persona 激活时的 system prompt：当前教学模式 + 教学进度 + 执行纪律 + 环境适配 + 该老师方法论全文。 */
+export function buildPersonaPrompt(persona: Persona, teaching?: TeachingProgress): string {
 	const sections = [
 		`你是 PiLore，当前以 ${persona.name}（@${persona.key}）的教学方法进行教学。`,
 		PERSONA_MODE_GUIDE.replace("{name}", persona.name),
+		`## 当前教学进度（会话记忆，用 update_teaching 工具维护）\n${renderTeachingBlock(teaching)}`,
 		EXECUTION_DISCIPLINE,
 		TOOL_ADAPTATION,
 		`# 教学方法：${persona.name}\n\n${persona.prompt}`,
@@ -80,6 +96,8 @@ export interface EduAgent {
 	vfs: VirtualFS;
 	model: Model<string>;
 	models: MutableModels;
+	/** 教学状态的单一事实源：会话层订阅它驱动 persona 事件，工具与钩子共享它 */
+	shared: SharedState;
 	/** 当前激活的教学方法（undefined = 自动路由）；会话层用它驱动 systemPrompt 换入 */
 	getActivePersona(): Persona | undefined;
 	setActivePersona(persona: Persona | undefined): void;
@@ -131,19 +149,21 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 
 	const vfs = options.vfs ?? new VirtualFS();
 	const basePrompt = options.systemPrompt ?? SYSTEM_PROMPT;
-	const personaState: PersonaState = { activePersona: undefined };
+	const shared = new SharedState();
 	let agent: Agent;
 	agent = new Agent({
 		initialState: {
 			systemPrompt: basePrompt,
 			model,
 			thinkingLevel: options.thinkingLevel ?? (process.env.THINKING_LEVEL as ThinkingLevel | undefined) ?? "off",
-			tools: createTools(vfs, personaState),
+			tools: createTools(vfs, shared),
 		},
 		streamFn: models.streamSimple.bind(models),
-		// persona 激活/交还后，把 systemPrompt 换入/换回（工具已写入 personaState）
+		// persona 激活/交还或教学进度变化后，把 systemPrompt 换入/换回（工具已写入 shared）
 		prepareNextTurn: async () => {
-			const expected = personaState.activePersona ? buildPersonaPrompt(personaState.activePersona) : basePrompt;
+			const expected = shared.activePersona
+				? buildPersonaPrompt(shared.activePersona, shared.getTeaching())
+				: basePrompt;
 			if (agent.state.systemPrompt !== expected) {
 				agent.state.systemPrompt = expected;
 				return {
@@ -158,7 +178,7 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 		},
 		// 权限执行：active persona 的 capabilities deny 命中 → 拦截工具（含用户 @ 指定，选择即接受契约）
 		beforeToolCall: async (ctx) => {
-			const persona = personaState.activePersona;
+			const persona = shared.activePersona;
 			if (!persona) return undefined; // auto 模式：全局默认全允许
 			const denied = checkCapability(persona, ctx.toolCall.name, ctx.args, vfs);
 			if (!denied) return undefined;
@@ -173,9 +193,10 @@ export function createAgent(options: CreateAgentOptions = {}): EduAgent {
 		vfs,
 		model,
 		models,
-		getActivePersona: () => personaState.activePersona,
+		shared,
+		getActivePersona: () => shared.activePersona,
 		setActivePersona: (persona) => {
-			personaState.activePersona = persona;
+			shared.setPersona(persona, "user");
 		},
 	};
 }

@@ -1,17 +1,13 @@
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { execCode } from "./exec-client.js";
-import { getPersona, PERSONA_KEYS, type Persona } from "./personas.js";
+import { getPersona, PERSONA_KEYS } from "./personas.js";
+import type { SharedState } from "./shared-state.js";
 import type { VirtualFS } from "./vfs.js";
 
-/** 当前激活的教学方法（会话层与工具共享的单一事实源，驱动 systemPrompt 换入与权限执行）。 */
-export interface PersonaState {
-	activePersona: Persona | undefined;
-}
-
-/** 四个 AgentTool：write_file / read_file / run_code / adopt_persona，全部作用于内存 VFS 与远程沙箱。 */
-export function createTools(vfs: VirtualFS, personaState: PersonaState): AgentTool<any>[] {
-	// 声明教学方法：写入共享状态 → prepareNextTurn 换入 systemPrompt；不操作 VFS
+/** 五个 AgentTool：write_file / read_file / run_code / adopt_persona / update_teaching，全部作用于内存 VFS、远程沙箱与教学状态。 */
+export function createTools(vfs: VirtualFS, shared: SharedState): AgentTool<any>[] {
+	// 声明教学方法：写入共享状态（护栏 + 计数）→ prepareNextTurn 换入 systemPrompt；不操作 VFS
 	const adoptParams = Type.Object({
 		persona: Type.Union(
 			[...PERSONA_KEYS.map((k) => Type.Literal(k)), Type.Literal("auto")],
@@ -22,22 +18,55 @@ export function createTools(vfs: VirtualFS, personaState: PersonaState): AgentTo
 		name: "adopt_persona",
 		label: "切换老师",
 		description:
-			"声明本轮要采用的教学方法。首次需要教学方法或切换方法时必须先调用，再以该方法风格回答；persona=auto 表示当前教学阶段结束，交还 PiLore 自动路由。简单事实问答、用户 @ 指定、同一方法的连续对话不要调用。",
+			"声明本轮要采用的教学方法。首次需要教学方法或切换方法时必须先调用，再以该方法风格回答；persona=auto 表示当前教学阶段结束，交还 PiLore 自动路由。简单事实问答、用户 @ 指定、同一方法的连续对话不要调用（同一轮内最多切换 2 次）。",
 		parameters: adoptParams,
 		execute: async (_toolCallId, params) => {
 			if (params.persona === "auto") {
-				personaState.activePersona = undefined;
+				shared.setPersona(undefined, "model");
+				// 交还是结算点:清零同轮切换预算,让后续可以直接切到新方法
+				shared.resetUserTurn();
 				return {
 					content: [{ type: "text", text: "已交还 PiLore 自动路由，请根据学习者接下来的问题重新判断教学方法或直接回答" }],
 					details: { persona: "auto" },
 				};
 			}
+			const blocked = shared.canAdopt(params.persona);
+			if (blocked) throw new Error(blocked);
 			const persona = getPersona(params.persona);
 			if (!persona) throw new Error(`未知教学方法: ${params.persona}`);
-			personaState.activePersona = persona;
+			shared.recordSwitch();
+			shared.setPersona(persona, "model");
 			return {
 				content: [{ type: "text", text: `已采用 ${persona.name} 教学方法，请以该方法的风格和流程继续回答` }],
 				details: { persona: persona.key },
+			};
+		},
+	};
+
+	// 维护教学阶段工作记忆：只写共享状态（按当前老师 key 保存），不操作 VFS
+	const teachingParams = Type.Partial(
+		Type.Object({
+			stage: Type.String({ description: "当前教学阶段，如「诊断」「分层讲解」「演示」" }),
+			topic: Type.String({ description: "当前主线主题，一句话" }),
+			covered: Type.Array(Type.String(), { description: "已覆盖 / 已带过的知识点（整体替换该字段）" }),
+			pending: Type.Array(Type.String(), { description: "待展开 / 后续可回主线深挖的点（整体替换该字段）" }),
+		}),
+	);
+	const updateTeaching: AgentTool<typeof teachingParams> = {
+		name: "update_teaching",
+		label: "更新教学进度",
+		description:
+			"记录当前教学阶段进度（阶段 / 主题 / 已覆盖 / 待展开），供后续轮次记忆。按当前激活的教学方法保存：阶段推进、主题明确、或收口总结时调用，只更新变化的字段。未激活教学方法时不可用（先 adopt_persona）。",
+		parameters: teachingParams,
+		execute: async (_toolCallId, params) => {
+			const progress = shared.updateTeaching(params);
+			const text =
+				`已记录教学进度（${shared.activePersona?.name ?? ""}）：阶段「${progress.stage}」主题「${progress.topic}」` +
+				(progress.covered.length ? `\n已覆盖: ${progress.covered.join(" / ")}` : "") +
+				(progress.pending.length ? `\n待展开: ${progress.pending.join(" / ")}` : "");
+			return {
+				content: [{ type: "text", text }],
+				details: { progress },
 			};
 		},
 	};
@@ -113,5 +142,5 @@ export function createTools(vfs: VirtualFS, personaState: PersonaState): AgentTo
 		},
 	};
 
-	return [adoptPersona, writeFile, readFile, runCode];
+	return [adoptPersona, updateTeaching, writeFile, readFile, runCode];
 }

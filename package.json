@@ -11,7 +11,8 @@
     "web:demo": "tsx scripts/web-demo.ts",
     "demo": "tsx scripts/demo.ts",
     "list-models": "tsx scripts/list-models.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/shared-state.test.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.84.1",

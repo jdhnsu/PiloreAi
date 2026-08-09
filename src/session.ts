@@ -1,5 +1,6 @@
 import { createAgent, buildPersonaPrompt, SYSTEM_PROMPT, type CreateAgentOptions } from "./agent.js";
 import { getPersona, resolveMention, type Persona, type PersonaKey } from "./personas.js";
+import type { PersonaSource } from "./shared-state.js";
 
 /**
  * PiLore 会话组件的对外事件协议（纯 JSON，可跨 SSE/WebSocket/进程边界传输）。
@@ -12,7 +13,7 @@ export type EduEvent =
 	| { type: "tool_start"; toolName: string; args: unknown }
 	| { type: "tool_end"; toolName: string; isError: boolean; text: string }
 	// persona/name 为 null 表示切回 PiLore 自动路由
-	| { type: "persona"; persona: PersonaKey | null; name: string | null; source: "model" | "user" }
+	| { type: "persona"; persona: PersonaKey | null; name: string | null; source: PersonaSource }
 	| { type: "error"; message: string }
 	| { type: "done"; errorMessage?: string };
 
@@ -37,8 +38,14 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 	const { agent, vfs, model } = edu;
 	const basePrompt = options.systemPrompt ?? SYSTEM_PROMPT;
 	let busy = false;
-	let currentPersona: Persona | undefined;
 	let emit: ((event: EduEvent) => void) | undefined;
+
+	// persona 状态唯一源在 edu.shared：切换（工具 / @指定 / setPersona）都会触发该监听，
+	// 会话层据此发 persona 事件，不再各自维护副本或解析工具结果
+	edu.shared.onPersonaChange((persona, source) => {
+		if (!emit) return;
+		emit({ type: "persona", persona: persona?.key ?? null, name: persona?.name ?? null, source });
+	});
 
 	agent.subscribe((event) => {
 		if (!emit) return;
@@ -59,20 +66,7 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 				break;
 			case "tool_execution_end": {
 				if (event.toolName === "adopt_persona") {
-					const key = String(event.result?.details?.persona ?? "");
-					// auto = 模型判断教学阶段结束，交还 PiLore 自动路由
-					if (key === "auto") {
-						if (currentPersona) {
-							currentPersona = undefined;
-							emit({ type: "persona", persona: null, name: null, source: "model" });
-						}
-						break;
-					}
-					const persona = getPersona(key);
-					if (persona) {
-						currentPersona = persona;
-						emit({ type: "persona", persona: persona.key, name: persona.name, source: "model" });
-					}
+					// persona 变化已由 onPersonaChange 发出，这里只跳过工具卡渲染
 					break;
 				}
 				const text = (event.result?.content ?? [])
@@ -93,7 +87,7 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 			return busy;
 		},
 		get persona() {
-			return currentPersona;
+			return edu.shared.activePersona;
 		},
 		get modelInfo() {
 			return `${model.provider}/${model.id}`;
@@ -110,7 +104,6 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 		setPersona: (key) => {
 			// 结构性激活：换入对应 systemPrompt；null = 切回自动路由（基座 prompt）
 			const persona = key ? getPersona(key) : undefined;
-			currentPersona = persona;
 			edu.setActivePersona(persona);
 			agent.state.systemPrompt = persona ? buildPersonaPrompt(persona) : basePrompt;
 		},
@@ -118,21 +111,16 @@ export function createEduSession(options: EduSessionOptions = {}): EduSession {
 			if (busy) throw new Error("上一轮对话还在进行，请先等待或中止");
 			busy = true;
 			emit = onEvent;
+			// 用户查询是切换预算的边界:同一查询内模型多次 adopt 才受护栏约束
+			edu.shared.resetUserTurn();
 			let message = text;
 			try {
 				const mention = resolveMention(text);
 				if (mention) {
-					// @指定：结构性激活（换入 systemPrompt），不再注入【指定教学方法】前缀
+					// @指定：结构性激活（换入 systemPrompt），persona 事件由 onPersonaChange 发出
 					const persona = mention.persona ?? undefined;
-					currentPersona = persona;
 					edu.setActivePersona(persona);
 					agent.state.systemPrompt = persona ? buildPersonaPrompt(persona) : basePrompt;
-					onEvent({
-						type: "persona",
-						persona: mention.persona?.key ?? null,
-						name: mention.persona?.name ?? null,
-						source: "user",
-					});
 					message = mention.rest;
 				}
 				onEvent({ type: "start" });
