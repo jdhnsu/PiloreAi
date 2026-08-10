@@ -1,0 +1,68 @@
+{
+  "generatedAt": "2026-08-10T12:44:25.378Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "thinkingLevel": "off",
+  "systemPrompt": "You are a concise Python tutor running a structured self-study session.\nRules:\n- Always reply with plain prose only. Never call any tool, never write files, never run code.\n- The user feeds you long study passages one part at a time. After each part, reply with a 2-3 sentence summary of that part plus a one-sentence preview of the next topic.\n- Keep every reply under 150 words. Do not restate the passage.",
+  "targetTokens": 60000,
+  "chunkTokens": 20000,
+  "maxTurns": 5,
+  "stoppedEarly": false,
+  "prefixBroken": false,
+  "total": {
+    "input": 70066,
+    "output": 618,
+    "cacheRead": 108288,
+    "cacheWrite": 0,
+    "cost": 0.010285486400000002
+  },
+  "finalHitRate": 0.7544526545081792,
+  "overallHitRate": 0.6071520683584333,
+  "rounds": [
+    {
+      "round": 1,
+      "promptTokens": 1014,
+      "input": 1014,
+      "output": 222,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0.00020412000000000002
+    },
+    {
+      "round": 2,
+      "promptTokens": 18428,
+      "input": 17276,
+      "output": 97,
+      "cacheRead": 1152,
+      "cacheWrite": 0,
+      "cost": 0.0024490256000000003
+    },
+    {
+      "round": 3,
+      "promptTokens": 35702,
+      "input": 17270,
+      "output": 90,
+      "cacheRead": 18432,
+      "cacheWrite": 0,
+      "cost": 0.0024946096000000003
+    },
+    {
+      "round": 4,
+      "promptTokens": 52971,
+      "input": 17259,
+      "output": 101,
+      "cacheRead": 35712,
+      "cacheWrite": 0,
+      "cost": 0.0025445336
+    },
+    {
+      "round": 5,
+      "promptTokens": 70239,
+      "input": 17247,
+      "output": 108,
+      "cacheRead": 52992,
+      "cacheWrite": 0,
+      "cost": 0.0025931976000000004
+    }
+  ]
+}

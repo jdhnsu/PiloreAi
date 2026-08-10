@@ -1,0 +1,257 @@
+{
+  "generatedAt": "2026-08-10T12:46:36.968Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "thinkingLevel": "off",
+  "systemPrompt": "You are a concise Python tutor running a structured self-study session.\nRules:\n- Always reply with plain prose only. Never call any tool, never write files, never run code.\n- The user feeds you long study passages one part at a time. After each part, reply with a 2-3 sentence summary of that part plus a one-sentence preview of the next topic.\n- Keep every reply under 150 words. Do not restate the passage.",
+  "targetTokens": 512000,
+  "chunkTokens": 24000,
+  "maxTurns": 80,
+  "stoppedEarly": false,
+  "prefixBroken": false,
+  "total": {
+    "input": 514741,
+    "output": 3430,
+    "cacheRead": 6230528,
+    "cacheWrite": 0,
+    "cost": 0.09046961840000001
+  },
+  "finalHitRate": 0.9603899495154645,
+  "overallHitRate": 0.9236885882534855,
+  "rounds": [
+    {
+      "round": 1,
+      "promptTokens": 1014,
+      "input": 118,
+      "output": 104,
+      "cacheRead": 896,
+      "cacheWrite": 0,
+      "cost": 0.0000481488
+    },
+    {
+      "round": 2,
+      "promptTokens": 21723,
+      "input": 20699,
+      "output": 96,
+      "cacheRead": 1024,
+      "cacheWrite": 0,
+      "cost": 0.0029276072000000005
+    },
+    {
+      "round": 3,
+      "promptTokens": 42421,
+      "input": 20661,
+      "output": 119,
+      "cacheRead": 21760,
+      "cacheWrite": 0,
+      "cost": 0.002986788
+    },
+    {
+      "round": 4,
+      "promptTokens": 63146,
+      "input": 20650,
+      "output": 126,
+      "cacheRead": 42496,
+      "cacheWrite": 0,
+      "cost": 0.0030452688
+    },
+    {
+      "round": 5,
+      "promptTokens": 83872,
+      "input": 20640,
+      "output": 125,
+      "cacheRead": 63232,
+      "cacheWrite": 0,
+      "cost": 0.0031016496
+    },
+    {
+      "round": 6,
+      "promptTokens": 104611,
+      "input": 20643,
+      "output": 139,
+      "cacheRead": 83968,
+      "cacheWrite": 0,
+      "cost": 0.0031640504
+    },
+    {
+      "round": 7,
+      "promptTokens": 125358,
+      "input": 20654,
+      "output": 123,
+      "cacheRead": 104704,
+      "cacheWrite": 0,
+      "cost": 0.0032191712000000003
+    },
+    {
+      "round": 8,
+      "promptTokens": 146099,
+      "input": 20659,
+      "output": 146,
+      "cacheRead": 125440,
+      "cacheWrite": 0,
+      "cost": 0.0032843720000000002
+    },
+    {
+      "round": 9,
+      "promptTokens": 166848,
+      "input": 20672,
+      "output": 162,
+      "cacheRead": 146176,
+      "cacheWrite": 0,
+      "cost": 0.0033487328000000004
+    },
+    {
+      "round": 10,
+      "promptTokens": 187621,
+      "input": 20709,
+      "output": 153,
+      "cacheRead": 166912,
+      "cacheWrite": 0,
+      "cost": 0.0034094536000000004
+    },
+    {
+      "round": 11,
+      "promptTokens": 208229,
+      "input": 20581,
+      "output": 146,
+      "cacheRead": 187648,
+      "cacheWrite": 0,
+      "cost": 0.0034476344
+    },
+    {
+      "round": 12,
+      "promptTokens": 228827,
+      "input": 20571,
+      "output": 156,
+      "cacheRead": 208256,
+      "cacheWrite": 0,
+      "cost": 0.0035067368
+    },
+    {
+      "round": 13,
+      "promptTokens": 249435,
+      "input": 20571,
+      "output": 150,
+      "cacheRead": 228864,
+      "cacheWrite": 0,
+      "cost": 0.0035627592
+    },
+    {
+      "round": 14,
+      "promptTokens": 270033,
+      "input": 20561,
+      "output": 145,
+      "cacheRead": 249472,
+      "cacheWrite": 0,
+      "cost": 0.0036176616
+    },
+    {
+      "round": 15,
+      "promptTokens": 290635,
+      "input": 20555,
+      "output": 159,
+      "cacheRead": 270080,
+      "cacheWrite": 0,
+      "cost": 0.0036784440000000003
+    },
+    {
+      "round": 16,
+      "promptTokens": 311240,
+      "input": 20552,
+      "output": 155,
+      "cacheRead": 290688,
+      "cacheWrite": 0,
+      "cost": 0.0037346064000000003
+    },
+    {
+      "round": 17,
+      "promptTokens": 331847,
+      "input": 20551,
+      "output": 134,
+      "cacheRead": 311296,
+      "cacheWrite": 0,
+      "cost": 0.0037862888000000003
+    },
+    {
+      "round": 18,
+      "promptTokens": 352430,
+      "input": 20526,
+      "output": 123,
+      "cacheRead": 331904,
+      "cacheWrite": 0,
+      "cost": 0.0038374112000000003
+    },
+    {
+      "round": 19,
+      "promptTokens": 372999,
+      "input": 20487,
+      "output": 111,
+      "cacheRead": 352512,
+      "cacheWrite": 0,
+      "cost": 0.0038862936
+    },
+    {
+      "round": 20,
+      "promptTokens": 393567,
+      "input": 20575,
+      "output": 107,
+      "cacheRead": 372992,
+      "cacheWrite": 0,
+      "cost": 0.0039548376
+    },
+    {
+      "round": 21,
+      "promptTokens": 414114,
+      "input": 20514,
+      "output": 116,
+      "cacheRead": 393600,
+      "cacheWrite": 0,
+      "cost": 0.00400652
+    },
+    {
+      "round": 22,
+      "promptTokens": 434693,
+      "input": 20485,
+      "output": 116,
+      "cacheRead": 414208,
+      "cacheWrite": 0,
+      "cost": 0.0040601624
+    },
+    {
+      "round": 23,
+      "promptTokens": 455255,
+      "input": 20567,
+      "output": 134,
+      "cacheRead": 434688,
+      "cacheWrite": 0,
+      "cost": 0.004134026400000001
+    },
+    {
+      "round": 24,
+      "promptTokens": 475841,
+      "input": 20545,
+      "output": 132,
+      "cacheRead": 455296,
+      "cacheWrite": 0,
+      "cost": 0.0041880888
+    },
+    {
+      "round": 25,
+      "promptTokens": 496421,
+      "input": 20517,
+      "output": 116,
+      "cacheRead": 475904,
+      "cacheWrite": 0,
+      "cost": 0.0042373912
+    },
+    {
+      "round": 26,
+      "promptTokens": 516990,
+      "input": 20478,
+      "output": 137,
+      "cacheRead": 496512,
+      "cacheWrite": 0,
+      "cost": 0.0042955136
+    }
+  ]
+}

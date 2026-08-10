@@ -52,6 +52,8 @@ npm run test:agent        # Agent 核心离线测试（faux + mock，确定性�
 npm run test:agent:real   # 在线测试（真实模型，行为达成度评分，需 .env key）
 npm run test:agent:all    # 两者
 npm run list-models       # 打印各 provider 可用模型
+npm run cache:warmup      # 在线缓存利用率测试：多轮对话把上下文增长到 ~512k tokens（默认 deepseek-v4-flash，需 .env key）
+npm run cache:realistic   # 同上，但模拟真实使用：调用工具(write_file/run_code/read_file)、中途切换角色(Oris/Feynman/Socrates/自动路由)
 npm run demo / web:demo   # 无需 API key 的演示（fauxProvider + 进程内 mock）
 npm run example:embed     # 最小嵌入示例（自定义 personas + exec，无需 API key）
 ```
