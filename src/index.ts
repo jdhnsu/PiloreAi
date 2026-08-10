@@ -49,12 +49,14 @@ export {
 	type Aes256GcmCryptoOptions,
 } from "./crypto.js";
 export {
+	deriveSessionTitle,
 	SessionStoreError,
 	SessionNotFoundError,
 	SessionBusyError,
 	SessionRevisionConflictError,
 	type SessionStore,
 	type SessionIdentity,
+	type SessionSummary,
 	type StoredSession,
 	type StoredRun,
 	type RunAuditPayload,
@@ -64,6 +66,7 @@ export {
 	type CompleteRunInput,
 	type FailRunInput,
 } from "./persistence.js";
+export { InMemorySessionStore, createInMemorySessionStore } from "./memory-store.js";
 export {
 	POSTGRES_MIGRATION_001,
 	applyPostgresMigrations,

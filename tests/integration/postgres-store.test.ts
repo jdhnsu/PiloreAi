@@ -121,3 +121,28 @@ test("PostgreSQL failRun 解除会话占用", { skip: !databaseConfig }, async (
 	assert.equal(next.status, "running");
 	await store.failRun({ runId: next.id, sessionId: created.id, errorCode: "CLEANUP" });
 });
+
+test("PostgreSQL list：按身份过滤、updatedAt 降序、标题派生两条路径", { skip: !databaseConfig }, async () => {
+	const identity = { tenantId: "t1", userId: "u3" };
+
+	// b：创建时快照已含用户消息，标题在 create 即派生
+	const b = await store.create({ identity, snapshot: snapshot() });
+	assert.equal(b.title, "PLAINTEXT_STUDENT_MESSAGE");
+
+	// a：空快照创建（标题为空），首轮 completeRun 后由首条用户消息派生
+	const a = await store.create({ identity, snapshot: { ...snapshot(), files: {}, messages: [] } });
+	assert.equal(a.title, "");
+	const run = await store.beginRun({ sessionId: a.id, expectedRevision: 0, providerId: "faux", modelId: "faux-1", audit: { input: "x" } });
+	await new Promise((r) => setTimeout(r, 5)); // 保证 updatedAt 严格递增
+	const done = await store.completeRun({ runId: run.id, sessionId: a.id, expectedRevision: 0, snapshot: snapshot(), audit: { input: "x" } });
+	assert.equal(done.title, "PLAINTEXT_STUDENT_MESSAGE");
+
+	await store.create({ identity: { tenantId: "t1", userId: "other" }, snapshot: snapshot() });
+
+	const list = await store.list(identity);
+	assert.equal(list.length, 2);
+	assert.equal(list[0].id, a.id); // 最近更新的排最前
+	assert.equal(list[0].title, "PLAINTEXT_STUDENT_MESSAGE");
+	assert.equal(list[1].id, b.id);
+	assert.deepEqual(await store.list({ tenantId: "t1", userId: "nobody" }), []);
+});

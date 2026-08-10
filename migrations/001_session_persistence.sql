@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS pilore.sessions (
   tenant_id text NOT NULL,
   user_id text NOT NULL,
   course_id text,
+  title text NOT NULL DEFAULT '',
   revision bigint NOT NULL CHECK (revision >= 0),
   snapshot_version integer NOT NULL,
   snapshot_algorithm text NOT NULL,

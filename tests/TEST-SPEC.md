@@ -19,7 +19,7 @@
 | 路径/VFS 边界 | `normalizePath`(越界/空/反斜杠/`.`/`..`/重复分隔符)、read 缺失、clear |
 | 执行后端 | `simulate` 三分支、`exec-client` 请求/响应/非 2xx/连接失败 |
 | 依赖注入 | 自定义 personas 集合注入（`parsePersona` 内存构造）、自定义 `ExecClient` 注入（不依赖 env/网络） |
-| 会话持久化 | 快照 JSON 往返/恢复/非法数据、AES-256-GCM/AAD/key rotation、PostgreSQL migration/加密/互斥/revision/失败清理 |
+| 会话持久化 | 快照 JSON 往返/恢复/非法数据、AES-256-GCM/AAD/key rotation、PostgreSQL migration/加密/互斥/revision/失败清理、标题派生/list 过滤排序、内存版存储同语义 |
 | 在线行为 | 真实模型的路由选择(三类问题→三种 persona)、执行纪律(写码必跑、基于真实输出)、多轮教学进度维护与交还 |
 
 ---
@@ -159,6 +159,14 @@
 ### PGS-02 PostgreSQL 失败恢复（`npm run test:postgres`）
 - 输入：beginRun 后调用 failRun，再次 beginRun。
 - 预期：运行标记 failed、错误码落库、active_run_id 清空，原 revision 下允许重试；测试结束删除临时 schema。
+
+### PGS-03 PostgreSQL 会话列表与标题（`npm run test:postgres`）
+- 输入：同一身份建两个会话（一空快照、一含用户消息）+ 另一身份一个会话；空快照会话完成首轮运行。
+- 预期：`list` 只返回匹配身份、按 updatedAt 降序；标题两条派生路径——空快照创建时为空、首轮 completeRun 后由首条用户消息派生，含消息创建时 create 即派生；未知身份返回空数组。
+
+### MEM-01 内存版 SessionStore 与标题派生（`npm test`）
+- 输入：`createInMemorySessionStore` 全生命周期 + `deriveSessionTitle`（空白/超长/块内容）。
+- 预期：与 PostgreSQL 版同语义——revision/互斥/冲突/不存在错误、failRun 解锁、快照深拷贝隔离、list 按身份与 courseId 过滤且 updatedAt 降序、标题派生规则一致。
 
 ---
 

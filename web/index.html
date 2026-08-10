@@ -17,6 +17,7 @@
 				</div>
 			</div>
 			<div class="topbar-right">
+				<button id="ss-mobile-toggle" class="icon-btn ss-mobile-only" type="button" title="会话历史" aria-label="打开会话历史" aria-expanded="false">☰</button>
 				<span id="demo-badge" class="demo-badge hidden">演示</span>
 				<span id="persona-badge" class="persona-badge hidden"></span>
 				<span class="topbar-sep" aria-hidden="true"></span>
@@ -26,6 +27,24 @@
 		</header>
 
 		<main class="layout">
+			<nav class="sessions card" id="sessions-panel" aria-label="会话历史">
+				<div id="ss-resize" class="ss-resize" role="separator" aria-orientation="vertical" tabindex="0"
+					aria-label="侧边栏宽度（左右方向键调整，Enter 收起，Home 复位）" aria-valuemin="180" aria-valuenow="240" title="拖动调整宽度，双击复位"></div>
+				<div class="ss-head">
+					<h2>会话</h2>
+					<button id="ss-toggle" class="icon-btn" title="收起会话历史" aria-controls="sessions-panel" aria-expanded="true">«</button>
+				</div>
+				<button id="ss-new" class="ss-new" type="button">＋ 新建会话</button>
+				<ul id="session-list" class="session-list"></ul>
+				<div class="ss-foot">
+					<span id="storage-badge" class="storage-badge" title=""></span>
+				</div>
+				<button id="ss-rail" class="ss-rail" title="展开会话历史" aria-controls="sessions-panel" aria-expanded="false">
+					<span class="ss-rail-icon">»</span>
+					<span class="ss-rail-text">会话</span>
+				</button>
+			</nav>
+
 			<section class="chat">
 				<div id="messages" class="messages">
 					<div class="welcome card">
@@ -81,7 +100,8 @@
 		</main>
 	</div>
 
-	<div id="ws-backdrop" class="ws-backdrop" aria-hidden="true"></div>
+	<div id="ss-backdrop" class="panel-backdrop" aria-hidden="true"></div>
+	<div id="ws-backdrop" class="panel-backdrop" aria-hidden="true"></div>
 
 	<div id="code-modal" class="modal hidden">
 		<div class="modal-backdrop"></div>

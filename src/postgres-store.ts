@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import type { CryptoContext, CryptoProvider, EncryptedPayload } from "./crypto.js";
 import {
+	deriveSessionTitle,
 	SessionBusyError,
 	SessionNotFoundError,
 	SessionRevisionConflictError,
@@ -11,7 +12,9 @@ import {
 	type CreateStoredSession,
 	type FailRunInput,
 	type RunAuditPayload,
+	type SessionIdentity,
 	type SessionStore,
+	type SessionSummary,
 	type StoredRun,
 	type StoredSession,
 } from "./persistence.js";
@@ -33,6 +36,7 @@ CREATE TABLE IF NOT EXISTS pilore.sessions (
   tenant_id text NOT NULL,
   user_id text NOT NULL,
   course_id text,
+  title text NOT NULL DEFAULT '',
   revision bigint NOT NULL CHECK (revision >= 0),
   snapshot_version integer NOT NULL,
   snapshot_algorithm text NOT NULL,
@@ -105,6 +109,7 @@ interface SessionRow {
 	tenant_id: string;
 	user_id: string;
 	course_id: string | null;
+	title: string;
 	revision: string;
 	snapshot_version: number;
 	snapshot_algorithm: string;
@@ -201,6 +206,7 @@ export class PostgresSessionStore implements SessionStore {
 			userId: row.user_id,
 			...(row.course_id ? { courseId: row.course_id } : {}),
 			revision,
+			title: row.title,
 			snapshot,
 			...(row.active_run_id ? { activeRunId: row.active_run_id } : {}),
 			createdAt: row.created_at,
@@ -221,10 +227,21 @@ export class PostgresSessionStore implements SessionStore {
 		const [algorithm, ciphertext, nonce, keyId] = encryptedColumns(payload);
 		const result = await this.options.pool.query<SessionRow>(
 			`INSERT INTO ${this.schema}.sessions
-			 (id, tenant_id, user_id, course_id, revision, snapshot_version, snapshot_algorithm, snapshot_ciphertext, snapshot_nonce, snapshot_key_id)
-			 VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8, $9)
+			 (id, tenant_id, user_id, course_id, title, revision, snapshot_version, snapshot_algorithm, snapshot_ciphertext, snapshot_nonce, snapshot_key_id)
+			 VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $10)
 			 RETURNING *`,
-			[id, input.identity.tenantId, input.identity.userId, input.identity.courseId ?? null, input.snapshot.version, algorithm, ciphertext, nonce, keyId],
+			[
+				id,
+				input.identity.tenantId,
+				input.identity.userId,
+				input.identity.courseId ?? null,
+				deriveSessionTitle(input.snapshot),
+				input.snapshot.version,
+				algorithm,
+				ciphertext,
+				nonce,
+				keyId,
+			],
 		);
 		return this.decodeSession(result.rows[0]);
 	}
@@ -232,6 +249,27 @@ export class PostgresSessionStore implements SessionStore {
 	async load(sessionId: string): Promise<StoredSession | undefined> {
 		const result = await this.options.pool.query<SessionRow>(`SELECT * FROM ${this.schema}.sessions WHERE id = $1`, [sessionId]);
 		return result.rows[0] ? this.decodeSession(result.rows[0]) : undefined;
+	}
+
+	async list(identity: SessionIdentity): Promise<SessionSummary[]> {
+		const result = await this.options.pool.query<Omit<SessionRow, "snapshot_algorithm" | "snapshot_ciphertext" | "snapshot_nonce" | "snapshot_key_id" | "snapshot_version">>(
+			`SELECT id, tenant_id, user_id, course_id, title, revision, active_run_id, created_at, updated_at
+			 FROM ${this.schema}.sessions
+			 WHERE tenant_id = $1 AND user_id = $2 AND course_id IS NOT DISTINCT FROM $3
+			 ORDER BY updated_at DESC LIMIT 100`,
+			[identity.tenantId, identity.userId, identity.courseId ?? null],
+		);
+		return result.rows.map((row) => ({
+			id: row.id,
+			tenantId: row.tenant_id,
+			userId: row.user_id,
+			...(row.course_id ? { courseId: row.course_id } : {}),
+			revision: Number(row.revision),
+			title: row.title,
+			...(row.active_run_id ? { activeRunId: row.active_run_id } : {}),
+			createdAt: row.created_at,
+			updatedAt: row.updated_at,
+		}));
 	}
 
 	async beginRun(input: BeginRunInput): Promise<StoredRun> {
@@ -285,9 +323,21 @@ export class PostgresSessionStore implements SessionStore {
 			const updated = await client.query<SessionRow>(
 				`UPDATE ${this.schema}.sessions SET
 				 revision = $3, snapshot_version = $4, snapshot_algorithm = $5, snapshot_ciphertext = $6,
-				 snapshot_nonce = $7, snapshot_key_id = $8, active_run_id = NULL, updated_at = now()
+				 snapshot_nonce = $7, snapshot_key_id = $8, active_run_id = NULL, updated_at = now(),
+				 title = CASE WHEN title = '' THEN $10 ELSE title END
 				 WHERE id = $1 AND revision = $2 AND active_run_id = $9 RETURNING *`,
-				[input.sessionId, String(input.expectedRevision), String(nextRevision), snapshot.version, snapshotAlgorithm, snapshotCiphertext, snapshotNonce, snapshotKeyId, input.runId],
+				[
+					input.sessionId,
+					String(input.expectedRevision),
+					String(nextRevision),
+					snapshot.version,
+					snapshotAlgorithm,
+					snapshotCiphertext,
+					snapshotNonce,
+					snapshotKeyId,
+					input.runId,
+					deriveSessionTitle(snapshot),
+				],
 			);
 			if (!updated.rows[0]) throw new SessionRevisionConflictError(input.sessionId, input.expectedRevision);
 			const runUpdated = await client.query(

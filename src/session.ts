@@ -1,4 +1,5 @@
 import { createAgent, buildBasePrompt, buildPersonaPrompt } from "./agent.js";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { EduAgentConfig } from "./interfaces.js";
 import { getDefaultPersonas, getPersona, resolveMention, type Persona } from "./personas.js";
 import type { PersonaSource } from "./shared-state.js";
@@ -9,6 +10,20 @@ import {
 	type EduSessionSnapshot,
 	type EduSessionSnapshotV1,
 } from "./snapshot.js";
+
+/** 递归删除值为 undefined 的属性：运行时临时字段（如 assistant 的 deferred）不进入持久化快照。 */
+function stripUndefined(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(stripUndefined);
+	if (value && typeof value === "object") {
+		const out: Record<string, unknown> = {};
+		for (const [key, item] of Object.entries(value)) {
+			if (item === undefined) continue;
+			out[key] = stripUndefined(item);
+		}
+		return out;
+	}
+	return value;
+}
 
 /**
  * PiLore 会话组件的对外事件协议（纯 JSON，可跨 SSE/WebSocket/进程边界传输）。
@@ -128,7 +143,7 @@ export function createEduSession(config: EduSessionOptions = {}): EduSession {
 				activePersonaKey: edu.shared.activePersona?.key ?? null,
 				teachingByPersona: edu.shared.exportTeaching(),
 				files: vfs.toRecord(),
-				messages: agent.state.messages.slice(),
+				messages: agent.state.messages.map((m) => stripUndefined(m) as AgentMessage),
 			}),
 		abort: () => agent.abort(),
 		setPersona: (key) => {

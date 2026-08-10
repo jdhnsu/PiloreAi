@@ -13,6 +13,9 @@ const fileList = $("#file-list");
 const resetChip = $("#reset-persona");
 const composerEl = $("#composer");
 const personaHintEl = $("#persona-hint");
+const sessionListEl = $("#session-list");
+const storageBadgeEl = $("#storage-badge");
+const welcomeEl = messagesEl.querySelector(".welcome");
 
 let busy = false;
 let currentPersona = null; // 当前老师名；null = PiLore 自动路由
@@ -528,7 +531,7 @@ async function send(text) {
 		const resp = await fetch("/api/chat", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ message }),
+			body: JSON.stringify({ sessionId, message }),
 		});
 		if (!resp.ok || !resp.body) {
 			const info = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
@@ -561,6 +564,7 @@ async function send(text) {
 	} finally {
 		setBusy(false);
 		refreshFiles();
+		refreshSessionList(); // 首轮完成后标题/时间有变化
 	}
 }
 
@@ -658,8 +662,9 @@ function renderFileItem(f) {
 }
 
 async function refreshFiles() {
+	if (!sessionId) return;
 	try {
-		const resp = await fetch("/api/files");
+		const resp = await fetch(`/api/files?id=${encodeURIComponent(sessionId)}`);
 		const { files } = await resp.json();
 		knownFiles = files;
 		if (!modal.classList.contains("hidden")) renderModalFile();
@@ -738,6 +743,7 @@ modalCopyBtn.onclick = async () => {
 document.addEventListener("keydown", (e) => {
 	if (e.key === "Escape") {
 		if (!modal.classList.contains("hidden")) closeCodeModal();
+		else if (document.body.classList.contains("ss-mobile-open")) setMobileSs(false);
 		else if (document.body.classList.contains("ws-mobile-open")) setMobileWs(false);
 		return;
 	}
@@ -756,14 +762,18 @@ function shortModel(m) {
 }
 
 async function loadState() {
+	if (!sessionId) return;
 	try {
-		const resp = await fetch("/api/state");
+		const resp = await fetch(`/api/state?id=${encodeURIComponent(sessionId)}`);
 		const state = await resp.json();
 		modelInfo.title = state.model ?? "";
 		modelNameEl.textContent = shortModel(state.model);
 		modelInfo.classList.remove("error");
 		applyPersona(state.persona?.name ?? null);
 		if (state.demo) demoBadge.classList.remove("hidden");
+		const postgres = state.storage === "postgres";
+		storageBadgeEl.textContent = postgres ? "PostgreSQL 持久化" : "内存持久化";
+		storageBadgeEl.title = postgres ? "会话已加密存入 PostgreSQL" : "会话仅保存在服务器内存，重启后丢失";
 	} catch {
 		modelInfo.classList.add("error");
 	}
@@ -779,7 +789,12 @@ async function loadState() {
 })();
 
 sendBtn.onclick = () => send();
-abortBtn.onclick = () => fetch("/api/abort", { method: "POST" });
+abortBtn.onclick = () =>
+	fetch("/api/abort", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ sessionId }),
+	});
 
 /* 输入框随内容自动增高；用户拖动拉伸柄后切换为手动固定高度 */
 let autoGrowEnabled = true;
@@ -905,7 +920,7 @@ resetChip.onclick = async () => {
 		const resp = await fetch("/api/persona", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ persona: null }),
+			body: JSON.stringify({ sessionId, persona: null }),
 		});
 		if (!resp.ok) return;
 		inputEl.value = inputEl.value.replace(MENTION_RE, "");
@@ -1049,4 +1064,284 @@ if (savedWsW >= WS_MIN_W) {
 }
 wsResize.setAttribute("aria-valuemax", String(wsMaxW()));
 
-loadState();
+/* ---------- 会话侧边栏：历史列表 / 切换 / 新建 / 删除 ---------- */
+const sessionsEl = document.querySelector(".sessions");
+const ssResize = $("#ss-resize");
+const ssToggleBtn = $("#ss-toggle");
+const ssRailBtn = $("#ss-rail");
+
+let sessionId = null;
+let sessionsCache = [];
+
+function relTime(value) {
+	const diff = Date.now() - new Date(value).getTime();
+	const minutes = Math.floor(diff / 60000);
+	if (minutes < 1) return "刚刚";
+	if (minutes < 60) return `${minutes} 分钟前`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours} 小时前`;
+	const d = new Date(value);
+	return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function renderSessionList() {
+	sessionListEl.innerHTML = "";
+	if (!sessionsCache.length) {
+		sessionListEl.innerHTML = '<li class="empty">暂无会话</li>';
+		return;
+	}
+	for (const s of sessionsCache) {
+		const title = s.title || "新会话";
+		const li = document.createElement("li");
+		li.className = s.id === sessionId ? "session-item active" : "session-item";
+		const main = document.createElement("button");
+		main.type = "button";
+		main.className = "session-item-main";
+		main.innerHTML = '<span class="session-title"></span><span class="session-time"></span>';
+		main.querySelector(".session-title").textContent = title;
+		main.querySelector(".session-time").textContent = relTime(s.updatedAt);
+		main.onclick = () => switchSession(s.id);
+		const del = document.createElement("button");
+		del.type = "button";
+		del.className = "icon-btn session-del";
+		del.title = "删除会话";
+		del.setAttribute("aria-label", `删除会话：${title}`);
+		del.textContent = "✕";
+		del.onclick = async () => {
+			if (!window.confirm(`删除会话「${title}」？此操作不可恢复。`)) return;
+			try {
+				await fetch(`/api/sessions?id=${encodeURIComponent(s.id)}`, { method: "DELETE" });
+			} catch {
+				return;
+			}
+			const wasCurrent = s.id === sessionId;
+			await refreshSessionList();
+			if (wasCurrent) {
+				if (sessionsCache.length) await switchSession(sessionsCache[0].id);
+				else await newSession();
+			}
+		};
+		li.append(main, del);
+		sessionListEl.appendChild(li);
+	}
+}
+
+async function refreshSessionList() {
+	try {
+		const resp = await fetch("/api/sessions");
+		const data = await resp.json();
+		sessionsCache = data.sessions ?? [];
+	} catch {
+		sessionsCache = [];
+	}
+	renderSessionList();
+	return sessionsCache;
+}
+
+async function createSessionOnServer() {
+	const resp = await fetch("/api/sessions", { method: "POST" });
+	const data = await resp.json();
+	return data.sessionId;
+}
+
+/* 启动/删除后保证存在当前会话：优先上次打开的，其次最新的，否则新建 */
+async function ensureSession() {
+	const sessions = await refreshSessionList();
+	const saved = localStorage.getItem("pilore-session-id");
+	if (saved && sessions.some((s) => s.id === saved)) sessionId = saved;
+	else if (!sessionId || !sessions.some((s) => s.id === sessionId)) sessionId = sessions[0]?.id ?? (await createSessionOnServer());
+	localStorage.setItem("pilore-session-id", sessionId);
+	renderSessionList();
+}
+
+function clearMessagesView() {
+	messagesEl.innerHTML = "";
+}
+
+/* 渲染历史消息；有内容时移除欢迎卡。返回是否恢复了消息。 */
+async function renderHistory() {
+	try {
+		const resp = await fetch(`/api/sessions/history?id=${encodeURIComponent(sessionId)}`);
+		if (!resp.ok) return false;
+		const { messages } = await resp.json();
+		if (!messages.length) return false;
+		clearMessagesView();
+		for (const m of messages) {
+			if (m.role === "user") {
+				const el = document.createElement("div");
+				el.className = "msg-user";
+				el.textContent = m.text;
+				messagesEl.appendChild(el);
+			} else {
+				const card = document.createElement("div");
+				card.className = "msg-assistant card";
+				const text = document.createElement("div");
+				text.className = "msg-text";
+				text.innerHTML = renderMarkdown(m.text);
+				card.appendChild(text);
+				messagesEl.appendChild(card);
+			}
+		}
+		scrollToBottom();
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function enterSession(id) {
+	sessionId = id;
+	localStorage.setItem("pilore-session-id", id);
+	clearMessagesView();
+	const restored = await renderHistory();
+	if (!restored && welcomeEl) messagesEl.appendChild(welcomeEl);
+	await loadState();
+	renderSessionList();
+}
+
+async function switchSession(id) {
+	if (id === sessionId) return;
+	if (busy) {
+		const note = document.createElement("div");
+		note.className = "system-note";
+		note.textContent = "正在生成回复，暂时无法切换会话";
+		messagesEl.appendChild(note);
+		scrollToBottom();
+		return;
+	}
+	await enterSession(id);
+}
+
+async function newSession() {
+	if (busy) return;
+	const id = await createSessionOnServer();
+	await enterSession(id);
+	await refreshSessionList();
+	inputEl.focus();
+}
+
+$("#ss-new").onclick = newSession;
+
+/* 折叠 + 拖拽/键盘调宽（镜像右侧工作区的交互约定），偏好存 localStorage */
+const SS_DEFAULT_W = 240; // 与 CSS var(--ss-w, 240px) 缺省值一致
+const SS_MIN_W = 180;
+const SS_COLLAPSE_AT = 140;
+
+let lastGoodSsW = SS_DEFAULT_W;
+
+function ssMaxW() {
+	return Math.min(420, Math.round(layoutEl.clientWidth * 0.45));
+}
+
+function applySsWidth(w) {
+	layoutEl.style.setProperty("--ss-w", `${w}px`);
+	ssResize.setAttribute("aria-valuenow", String(w));
+}
+
+function setSsCollapsed(on) {
+	layoutEl.classList.toggle("ss-collapsed", on);
+	localStorage.setItem("pilore-ss-collapsed", on ? "1" : "");
+	ssToggleBtn.setAttribute("aria-expanded", String(!on));
+	ssRailBtn.setAttribute("aria-expanded", String(!on));
+}
+
+/* 窄屏抽屉：顶栏按钮唤出会话历史（左侧覆盖层） */
+const ssMobileBtn = $("#ss-mobile-toggle");
+const ssBackdrop = $("#ss-backdrop");
+
+function setMobileSs(open) {
+	document.body.classList.toggle("ss-mobile-open", open);
+	ssMobileBtn.setAttribute("aria-expanded", String(open));
+}
+
+ssToggleBtn.onclick = () => {
+	if (mobileMq.matches) setMobileSs(false); // 窄屏下该按钮负责关闭抽屉
+	else setSsCollapsed(true);
+};
+ssRailBtn.onclick = () => setSsCollapsed(false);
+ssMobileBtn.onclick = () => setMobileSs(!document.body.classList.contains("ss-mobile-open"));
+ssBackdrop.onclick = () => setMobileSs(false);
+mobileMq.addEventListener("change", () => {
+	if (!mobileMq.matches) setMobileSs(false);
+	ssToggleBtn.title = mobileMq.matches ? "关闭会话历史" : "收起会话历史";
+});
+ssToggleBtn.title = mobileMq.matches ? "关闭会话历史" : "收起会话历史";
+
+let ssResizing = false;
+ssResize.addEventListener("pointerdown", (e) => {
+	if (e.pointerType === "mouse" && e.button !== 0) return;
+	ssResizing = true;
+	ssResize.setPointerCapture(e.pointerId);
+	document.body.classList.add("ss-resizing");
+	e.preventDefault();
+});
+ssResize.addEventListener("pointermove", (e) => {
+	if (!ssResizing) return;
+	// 以 nav 左缘为基准，向右拖增宽
+	const left = sessionsEl.getBoundingClientRect().left;
+	const w = Math.round(Math.min(ssMaxW(), Math.max(60, e.clientX - left)));
+	layoutEl.style.setProperty("--ss-w", `${w}px`);
+});
+function endSsResize(e) {
+	if (!ssResizing) return;
+	ssResizing = false;
+	document.body.classList.remove("ss-resizing");
+	try {
+		ssResize.releasePointerCapture(e.pointerId);
+	} catch {
+		/* pointercancel 时捕获可能已失效 */
+	}
+	const w = parseInt(layoutEl.style.getPropertyValue("--ss-w"), 10) || SS_DEFAULT_W;
+	if (w < SS_COLLAPSE_AT) {
+		applySsWidth(lastGoodSsW); // 拖拽折叠时保留原宽度，展开即恢复
+		setSsCollapsed(true);
+	} else {
+		lastGoodSsW = Math.min(ssMaxW(), Math.max(SS_MIN_W, w));
+		applySsWidth(lastGoodSsW);
+		localStorage.setItem("pilore-ss-w", `${lastGoodSsW}px`);
+	}
+}
+ssResize.addEventListener("pointerup", endSsResize);
+ssResize.addEventListener("pointercancel", endSsResize);
+
+ssResize.addEventListener("dblclick", () => {
+	lastGoodSsW = SS_DEFAULT_W;
+	applySsWidth(SS_DEFAULT_W);
+	localStorage.removeItem("pilore-ss-w");
+});
+
+ssResize.addEventListener("keydown", (e) => {
+	const cur = Math.round(sessionsEl.getBoundingClientRect().width);
+	const step = 24;
+	if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+		// 左面板：ArrowRight 增宽（与工作区方向相反）
+		const w = Math.min(ssMaxW(), Math.max(SS_MIN_W, cur + (e.key === "ArrowRight" ? step : -step)));
+		lastGoodSsW = w;
+		applySsWidth(w);
+		localStorage.setItem("pilore-ss-w", `${w}px`);
+	} else if (e.key === "Home") {
+		lastGoodSsW = SS_DEFAULT_W;
+		applySsWidth(SS_DEFAULT_W);
+		localStorage.removeItem("pilore-ss-w");
+	} else if (e.key === "Enter" || e.key === " ") {
+		setSsCollapsed(true);
+		ssRailBtn.focus();
+	} else {
+		return;
+	}
+	e.preventDefault();
+});
+
+if (localStorage.getItem("pilore-ss-collapsed") === "1") setSsCollapsed(true);
+const savedSsW = parseInt(localStorage.getItem("pilore-ss-w"), 10);
+if (savedSsW >= SS_MIN_W) {
+	lastGoodSsW = Math.min(420, savedSsW);
+	applySsWidth(lastGoodSsW);
+}
+ssResize.setAttribute("aria-valuemax", String(ssMaxW()));
+
+(async function init() {
+	await ensureSession();
+	await renderHistory();
+	await loadState();
+})();

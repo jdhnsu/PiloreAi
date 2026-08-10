@@ -58,3 +58,17 @@ test("snapshot 拒绝未知版本、未知 persona 和损坏消息", () => {
 		/timestamp/,
 	);
 });
+
+test("exportSnapshot 剥离运行时非序列化字段（deferred）", () => {
+	const models = modelsForRestore();
+	const session = createEduSession({ models, providerId: "faux", modelId: "faux-1" });
+
+	// 直接断言：exportSnapshot 产物必须可 JSON 序列化，且消息不携带 deferred。
+	const exported = session.exportSnapshot() as EduSessionSnapshotV1 & {
+		messages: Array<{ deferred?: unknown }>;
+	};
+	for (const m of exported.messages) {
+		assert.equal("deferred" in m, false, "快照消息不得携带 deferred 运行时字段");
+	}
+	assert.doesNotThrow(() => JSON.stringify(exported), "快照必须可 JSON 序列化");
+});

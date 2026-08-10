@@ -192,16 +192,24 @@ body {
 /* ===== 主布局 ===== */
 .layout {
 	display: grid;
-	/* 宽度由 --ws-w 控制，支持拖拽调整；min() 防止恢复的持久化大宽度在窄窗口挤死聊天区 */
-	grid-template-columns: minmax(0, 1fr) min(var(--ws-w, 300px), 55vw);
+	/* 左右面板宽度由 --ss-w / --ws-w 控制（拖拽调整）；min() 防止持久化的大宽度在窄窗口挤死聊天区 */
+	grid-template-columns: min(var(--ss-w, 240px), 40vw) minmax(0, 1fr) min(var(--ws-w, 300px), 55vw);
 	gap: 16px;
 	padding: 16px 20px;
 	flex: 1;
 	min-height: 0;
 }
 
+.layout.ss-collapsed {
+	grid-template-columns: 44px minmax(0, 1fr) min(var(--ws-w, 300px), 55vw);
+}
+
 .layout.ws-collapsed {
-	grid-template-columns: minmax(0, 1fr) 44px;
+	grid-template-columns: min(var(--ss-w, 240px), 40vw) minmax(0, 1fr) 44px;
+}
+
+.layout.ss-collapsed.ws-collapsed {
+	grid-template-columns: 44px minmax(0, 1fr) 44px;
 }
 
 .chat {
@@ -903,6 +911,223 @@ button {
 	background: #fde7e9;
 }
 
+/* ===== 会话历史侧栏（左） ===== */
+.sessions {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	padding: 16px 12px;
+	min-height: 0;
+	min-width: 0;
+}
+
+.ss-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+	flex-shrink: 0;
+}
+
+.sessions h2 {
+	font-size: 14px;
+	font-weight: 600;
+	margin-bottom: 0;
+}
+
+.ss-new {
+	flex-shrink: 0;
+	border: 1px dashed var(--border);
+	background: #fff;
+	border-radius: 6px;
+	padding: 7px 10px;
+	font-size: 12.5px;
+	color: var(--text-secondary);
+	transition: all 0.15s;
+	margin-bottom: 8px;
+}
+
+.ss-new:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+	background: var(--accent-light);
+}
+
+.session-list {
+	list-style: none;
+	flex: 1;
+	overflow-y: auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.session-list .empty {
+	color: var(--text-secondary);
+	font-size: 12.5px;
+}
+
+.session-item {
+	position: relative;
+	border-radius: 6px;
+	border: 1px solid transparent;
+	flex-shrink: 0;
+}
+
+.session-item:hover {
+	background: #f5f5f5;
+}
+
+.session-item.active {
+	background: var(--accent-light);
+	border-color: var(--accent);
+}
+
+.session-item-main {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: 100%;
+	padding: 7px 30px 7px 10px;
+	background: none;
+	border: none;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	min-width: 0;
+}
+
+.session-title {
+	font-size: 12.5px;
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.session-item.active .session-title {
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.session-time {
+	font-size: 11px;
+	color: var(--text-secondary);
+}
+
+/* 删除按钮悬停/键盘聚焦时才出现 */
+.session-del {
+	position: absolute;
+	right: 4px;
+	top: 7px;
+	width: 20px;
+	height: 20px;
+	font-size: 11px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.session-item:hover .session-del,
+.session-item:focus-within .session-del {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ss-foot {
+	display: flex;
+	flex-shrink: 0;
+	margin-top: 8px;
+}
+
+.storage-badge {
+	font-size: 11px;
+	color: var(--text-secondary);
+	background: #f6f6f6;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 2px 8px;
+}
+
+/* 右缘拖拽手柄（左面板） */
+.ss-resize {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: -5px;
+	width: 10px;
+	cursor: col-resize;
+	z-index: 5;
+	touch-action: none;
+}
+
+.ss-resize::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 4px;
+	width: 2px;
+	background: transparent;
+	transition: background 0.15s;
+}
+
+.ss-resize:hover::after,
+.ss-resize:focus-visible::after,
+body.ss-resizing .ss-resize::after {
+	background: var(--accent);
+}
+
+.ss-resize:focus-visible {
+	outline: none;
+}
+
+body.ss-resizing {
+	cursor: col-resize;
+	user-select: none;
+}
+
+/* 折叠态：只留窄轨 */
+.layout.ss-collapsed .ss-head,
+.layout.ss-collapsed .ss-new,
+.layout.ss-collapsed .session-list,
+.layout.ss-collapsed .ss-foot,
+.layout.ss-collapsed .ss-resize {
+	display: none;
+}
+
+.layout.ss-collapsed .sessions {
+	padding: 8px 6px;
+	overflow: hidden;
+}
+
+.ss-rail {
+	display: none;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 0;
+	border: none;
+	background: none;
+	color: var(--text-secondary);
+	cursor: pointer;
+}
+
+.ss-rail:hover {
+	color: var(--accent);
+}
+
+.layout.ss-collapsed .ss-rail {
+	display: flex;
+}
+
+.ss-rail-text {
+	writing-mode: vertical-rl;
+	font-size: 12px;
+	letter-spacing: 2px;
+}
+
 /* ===== 工作区侧栏 ===== */
 .workspace {
 	position: relative;
@@ -1130,8 +1355,8 @@ body.ws-resizing {
 	background-clip: content-box;
 }
 
-/* ===== 窄屏工作区抽屉 ===== */
-.ws-backdrop {
+/* ===== 窄屏抽屉（会话历史 / 工作区共用遮罩） ===== */
+.panel-backdrop {
 	position: fixed;
 	inset: 0;
 	background: rgba(0, 0, 0, 0.3);
@@ -1139,23 +1364,51 @@ body.ws-resizing {
 	display: none;
 }
 
-/* 仅窄屏显示的顶栏工作区入口 */
-.ws-mobile-only {
+/* 仅窄屏显示的顶栏入口按钮 */
+.ws-mobile-only,
+.ss-mobile-only {
 	display: none;
 }
 
 @media (max-width: 900px) {
-	.layout {
+	.layout,
+	.layout.ss-collapsed,
+	.layout.ws-collapsed,
+	.layout.ss-collapsed.ws-collapsed {
 		grid-template-columns: 1fr;
 	}
-	.workspace {
+	.workspace,
+	.sessions {
 		display: none;
 	}
-	.ws-mobile-only {
+	.ws-mobile-only,
+	.ss-mobile-only {
 		display: flex;
 	}
-	body.ws-mobile-open .ws-backdrop {
+	body.ws-mobile-open #ws-backdrop,
+	body.ss-mobile-open #ss-backdrop {
 		display: block;
+	}
+	/* 会话历史抽屉：左侧覆盖层，忽略桌面折叠态 */
+	body.ss-mobile-open .sessions {
+		display: flex;
+		position: fixed;
+		top: 12px;
+		left: 12px;
+		bottom: 12px;
+		width: min(86vw, 360px);
+		z-index: 90;
+		padding: 14px;
+	}
+	body.ss-mobile-open .sessions .ss-head,
+	body.ss-mobile-open .sessions .ss-new,
+	body.ss-mobile-open .sessions .session-list,
+	body.ss-mobile-open .sessions .ss-foot {
+		display: flex;
+	}
+	body.ss-mobile-open .sessions .ss-resize,
+	body.ss-mobile-open .sessions .ss-rail {
+		display: none;
 	}
 	/* 抽屉覆盖层：忽略桌面折叠态，始终展示完整内容 */
 	body.ws-mobile-open .workspace {

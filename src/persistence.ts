@@ -9,7 +9,22 @@ export interface SessionIdentity {
 export interface StoredSession extends SessionIdentity {
 	id: string;
 	revision: number;
+	/** 首条用户消息摘要；创建时通常为空，首轮完成后由存储派生。 */
+	title: string;
 	snapshot: EduSessionSnapshotV1;
+	activeRunId?: string;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+/** 会话列表条目：不含快照密文，服务端可直接用于历史侧边栏。 */
+export interface SessionSummary {
+	id: string;
+	tenantId: string;
+	userId: string;
+	courseId?: string;
+	revision: number;
+	title: string;
 	activeRunId?: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -75,10 +90,29 @@ export interface FailRunInput {
 export interface SessionStore {
 	create(input: CreateStoredSession): Promise<StoredSession>;
 	load(sessionId: string): Promise<StoredSession | undefined>;
+	/** 按身份列出会话（不含快照），按 updatedAt 降序，实现上限 100 条。 */
+	list(identity: SessionIdentity): Promise<SessionSummary[]>;
 	beginRun(input: BeginRunInput): Promise<StoredRun>;
 	completeRun(input: CompleteRunInput): Promise<StoredSession>;
 	failRun(input: FailRunInput): Promise<void>;
 	delete(sessionId: string): Promise<void>;
+}
+
+/** 从快照的首条用户消息派生会话标题（空白折叠、截断到 maxLength）。 */
+export function deriveSessionTitle(snapshot: EduSessionSnapshotV1, maxLength = 40): string {
+	for (const message of snapshot.messages) {
+		if (message.role !== "user") continue;
+		const text =
+			typeof message.content === "string"
+				? message.content
+				: (message.content as Array<{ type?: unknown; text?: unknown }>)
+						.filter((block) => block?.type === "text" && typeof block.text === "string")
+						.map((block) => block.text as string)
+						.join(" ");
+		const title = text.replace(/\s+/g, " ").trim().slice(0, maxLength);
+		if (title) return title;
+	}
+	return "";
 }
 
 export class SessionStoreError extends Error {
