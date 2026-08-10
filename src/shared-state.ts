@@ -44,8 +44,33 @@ export class SharedState {
 	}
 
 	/** 订阅 persona 变化(会话层用它发 EduEvent,无需再解析工具结果) */
-	onPersonaChange(cb: (persona: Persona | undefined, source: PersonaSource) => void): void {
+	onPersonaChange(cb: (persona: Persona | undefined, source: PersonaSource) => void): () => void {
 		this.listeners.add(cb);
+		return () => this.listeners.delete(cb);
+	}
+
+	/** 导出可序列化的教学进度副本，供会话快照持久化。 */
+	exportTeaching(): Record<string, TeachingProgress> {
+		return Object.fromEntries(
+			[...this.teachingByPersona].map(([key, progress]) => [
+				key,
+				{ ...progress, covered: [...progress.covered], pending: [...progress.pending] },
+			]),
+		);
+	}
+
+	/** 从已校验快照恢复教学进度；恢复过程不触发 persona 事件。 */
+	restore(persona: Persona | undefined, teachingByPersona: Record<string, TeachingProgress>): void {
+		this.activePersona = persona;
+		this.teachingByPersona.clear();
+		for (const [key, progress] of Object.entries(teachingByPersona)) {
+			this.teachingByPersona.set(key, {
+				...progress,
+				covered: [...progress.covered],
+				pending: [...progress.pending],
+			});
+		}
+		this.switchCount = 0;
 	}
 
 	/** 读取某位老师(默认当前激活老师)的教学进度快照 */

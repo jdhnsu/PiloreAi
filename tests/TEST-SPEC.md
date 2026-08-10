@@ -2,9 +2,9 @@
 
 > 本文件是 Agent 核心测试套件的**唯一事实来源**:定义被测对象、用例清单、每条用例的输入/预期/判定口径、两套评分模型、运行方式与结果解读。实现与文档以本文件为准;若脚本行为与规格不符,以规格为准并修正脚本。
 
-- 被测范围:Agent 核心(`src/agent.ts` / `src/session.ts` / `src/tools.ts` / `src/shared-state.ts` / `src/vfs.ts` / `src/exec-client.ts`)+ 执行后端协议(`mock/exec-server.ts`)。
+- 被测范围:Agent 核心、会话快照、加密/持久化兼容层、PostgreSQL 适配器与执行后端协议。
 - 驱动方式:离线 = `fauxProvider`(脚本化回复)+ 进程内 mock exec,确定性、无需网络;在线 = 真实 LLM provider(读 `.env` / 环境变量的 API key)。
-- 运行:`npm run test:agent`(离线)、`npm run test:agent:real`(在线)、`npm run test:agent:all`(两者)。详见 [§4 运行方式](#4-运行方式)。
+- 运行:`npm test`(组件单测)、`npm run test:postgres`(持久化集成)、`npm run test:agent`(离线)、`npm run test:agent:real`(在线)。详见 [§4 运行方式](#4-运行方式)。
 
 ---
 
@@ -19,6 +19,7 @@
 | 路径/VFS 边界 | `normalizePath`(越界/空/反斜杠/`.`/`..`/重复分隔符)、read 缺失、clear |
 | 执行后端 | `simulate` 三分支、`exec-client` 请求/响应/非 2xx/连接失败 |
 | 依赖注入 | 自定义 personas 集合注入（`parsePersona` 内存构造）、自定义 `ExecClient` 注入（不依赖 env/网络） |
+| 会话持久化 | 快照 JSON 往返/恢复/非法数据、AES-256-GCM/AAD/key rotation、PostgreSQL migration/加密/互斥/revision/失败清理 |
 | 在线行为 | 真实模型的路由选择(三类问题→三种 persona)、执行纪律(写码必跑、基于真实输出)、多轮教学进度维护与交还 |
 
 ---
@@ -74,7 +75,7 @@
 - 维度:教学行为 · 权重:2
 - 输入:faux:1) adopt socrates;2) `update_teaching({stage:"讲解", topic:"闭包", covered:["闭包定义"]})`;3) adopt oris;4) `update_teaching({stage:"拆解"})`。
 - 预期:Socrates 记忆含 topic=闭包;Oris 记忆独立(stage=拆解,topic≠闭包);结束在 oris。
-- 判定:`edu.shared.getTeaching()` 按 key 校验。注:同一轮 adopt 至多 2 次(护栏),「切回后进度仍在」由 `src/shared-state.test.ts` 单测覆盖。
+- 判定:`edu.shared.getTeaching()` 按 key 校验。注:同一轮 adopt 至多 2 次(护栏),「切回后进度仍在」由 `tests/unit/shared-state.test.ts` 单测覆盖。
 
 ### OPR-03 未激活时 `update_teaching` 报错
 - 维度:教学行为 · 权重:1
@@ -142,6 +143,22 @@
 - 维度:执行后端 · 权重:2
 - 输入:自实现 `ExecClient`(记录调用、返回固定 stdout `INJECTED_OUTPUT`),经 `agentOptions: { exec }` 注入;faux write_file → run_code → 文本。
 - 预期:注入后端恰被调用 1 次且请求 files 完整;run_code 工具结果文本含 `INJECTED_OUTPUT`(不依赖 EXEC_API_BASE / 网络)。
+
+### SNP-01 会话快照导出、恢复与校验（`npm test`）
+- 输入：含 persona、教学进度、VFS 和消息历史的 `EduSessionSnapshotV1` 经 JSON 往返后注入 `createEduSession({ snapshot })`。
+- 预期：状态完整恢复且导出副本不反向修改会话；未知版本、未知 persona、非法路径和损坏消息明确失败。
+
+### CRY-01 AES-256-GCM 加密兼容层（`npm test`）
+- 输入：32 字节主密钥、多 keyId、固定 CryptoContext(AAD)，以及篡改密文/错误 revision/错误密钥。
+- 预期：正常密文可往返；密文不含明文；篡改、AAD 不匹配、错误 key 和非法密钥长度全部失败。
+
+### PGS-01 PostgreSQL 会话生命周期（`npm run test:postgres`）
+- 输入：在随机临时 schema 中重复执行 migration，create/load → beginRun → completeRun → delete。
+- 预期：migration 幂等；快照与审计字段不含明文；active run 拦截并发；完成后 revision +1；旧 revision 冲突；删除级联运行记录。
+
+### PGS-02 PostgreSQL 失败恢复（`npm run test:postgres`）
+- 输入：beginRun 后调用 failRun，再次 beginRun。
+- 预期：运行标记 failed、错误码落库、active_run_id 清空，原 revision 下允许重试；测试结束删除临时 schema。
 
 ---
 
@@ -216,7 +233,8 @@
 ## 4. 运行方式
 
 ```
-npm run test                # 既有:src/shared-state.test.ts(单元)
+npm test                    # 状态、快照、加密组件单测
+npm run test:postgres       # PostgreSQL 集成（读 PILORE_TEST_DATABASE_URL 或 .env DB_*，临时 schema）
 npm run test:agent          # 离线:faux + mock,默认 3 轮
 npm run test:agent:real     # 在线:真实模型,默认 3 轮
 npm run test:agent:all      # 两者都跑

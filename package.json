@@ -13,7 +13,8 @@
     "list-models": "tsx scripts/list-models.ts",
     "example:embed": "tsx examples/embed-minimal.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/shared-state.test.ts",
+    "test": "node --import tsx --test tests/unit/*.test.ts",
+    "test:postgres": "node --import tsx --test tests/integration/postgres-store.test.ts",
     "test:agent": "tsx tests/run.ts",
     "test:agent:real": "tsx tests/run.ts --mode real --iterations 3",
     "test:agent:all": "tsx tests/run.ts --mode all"
@@ -22,10 +23,12 @@
     "@earendil-works/pi-agent-core": "^0.84.1",
     "@earendil-works/pi-ai": "^0.84.1",
     "dotenv": "^17.4.2",
+    "pg": "^8.23.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/pg": "^8.21.0",
     "tsx": "^4.23.10",
     "typescript": "^7.0.2"
   }

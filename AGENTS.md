@@ -46,7 +46,8 @@ PiLore 是一个 **AI 编码教育 agent 的核心组件**，设计目标是**�
 
 ```bash
 npm run typecheck         # tsc --noEmit
-npm test                  # 单元测试（src/shared-state.test.ts）
+npm test                  # 单元测试（状态、快照、加密）
+npm run test:postgres     # PostgreSQL 持久化集成测试（临时 schema）
 npm run test:agent        # Agent 核心离线测试（faux + mock，确定性，无网络，含 OIN 注入用例）
 npm run test:agent:real   # 在线测试（真实模型，行为达成度评分，需 .env key）
 npm run test:agent:all    # 两者

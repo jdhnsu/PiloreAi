@@ -53,7 +53,8 @@ npm run chat
 ```bash
 npm run list-models        # 打印各 provider 可用模型，确认 MODEL_ID
 npm run typecheck          # TypeScript 类型检查（不产出构建文件）
-npm test                   # 单元测试（shared-state）
+npm test                   # 单元测试（状态、快照、加密）
+npm run test:postgres      # PostgreSQL 集成测试（读取 .env 的 DB_*，使用并清理临时 schema）
 npm run test:agent         # Agent 核心离线测试（faux + mock，确定性，默认 3 轮）
 npm run test:agent:real    # Agent 核心在线测试（真实模型，行为达成度评分，默认 3 轮平均值）
 npm run test:agent:all     # 两者都跑
@@ -204,10 +205,47 @@ await session.prompt("什么是闭包？", (event) => {
 });
 session.setPersona("guide");   // 也可直接切换老师（null = 自动路由）
 session.abort(); session.listFiles(); session.readFile("main.py");
+
+// 快照是纯 JSON，可交给独立持久化层；恢复时会校验版本、persona 和消息结构
+const snapshot = session.exportSnapshot();
+const restored = createEduSession({ snapshot });
 ```
 
 完整可运行示例见 [examples/embed-minimal.ts](examples/embed-minimal.ts)（`npm run example:embed`，无需 API key）。
 `src/server.ts` 与 `src/cli.ts` 都只是它的两个适配器——把 `EduEvent` 换成 WebSocket 或嵌入其它 UI 框架即可复用。`adopt_persona` 是内部工具，会话层将其折叠为 `persona` 事件对外暴露，外部消费者无需感知 pi-agent-core。
+
+### PostgreSQL 会话持久化
+
+核心只负责 `EduSessionSnapshotV1` 的导出/恢复，不直接访问数据库。模式 B 部署可用 `PostgresSessionStore` 管理会话与运行记录；默认 schema 为 `pilore`，也可显式注入其它合法 schema。正文与 VFS 快照在写库前通过可替换的 `CryptoProvider` 加密：
+
+```ts
+import { Pool } from "pg";
+import {
+  applyPostgresMigrations,
+  createAes256GcmCryptoProvider,
+  createPostgresSessionStore,
+} from "./src/index.js";
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT ?? 5432),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  ssl: false, // 仅开发环境；生产按平台要求配置
+});
+await applyPostgresMigrations(pool);
+
+const store = createPostgresSessionStore({
+  pool,
+  crypto: createAes256GcmCryptoProvider({
+    primaryKeyId: "dev-v1",
+    keys: { "dev-v1": keyBytes }, // 必须为 32 字节；生产替换为 KMS/Vault 实现
+  }),
+});
+```
+
+`beginRun` 原子占用会话；`completeRun` 通过 `expectedRevision` 防止静默覆盖，并在同一事务中保存新快照、完成运行记录和释放占用；失败路径使用 `failRun`。平台用户、租户和课程 ID 都是不透明字符串，不与平台表建立外键。
 
 ## 模型 API 层（模块化）
 
@@ -232,6 +270,7 @@ session.abort(); session.listFiles(); session.readFile("main.py");
 | `MODEL_ID` | 模型 ID，默认按 provider 取（deepseek → `deepseek-v4-pro`，longcat → `LongCat-2.0`），以 `npm run list-models` 为准 |
 | `THINKING_LEVEL` | 推理级别 `off`~`max`，默认 `off` |
 | `EXEC_API_BASE` | 执行服务地址，默认 `http://192.168.172.134:1313`（真实沙箱） |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | PostgreSQL 连接参数；核心不会自动读取，由宿主构造 `pg.Pool` 后注入 |
 
 ## 执行后端协议（替换真实沙箱）
 

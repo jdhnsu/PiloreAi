@@ -2,6 +2,13 @@ import { createAgent, buildBasePrompt, buildPersonaPrompt } from "./agent.js";
 import type { EduAgentConfig } from "./interfaces.js";
 import { getDefaultPersonas, getPersona, resolveMention, type Persona } from "./personas.js";
 import type { PersonaSource } from "./shared-state.js";
+import {
+	EDU_SESSION_SNAPSHOT_VERSION,
+	cloneSessionSnapshot,
+	validateSessionSnapshot,
+	type EduSessionSnapshot,
+	type EduSessionSnapshotV1,
+} from "./snapshot.js";
 
 /**
  * PiLore 会话组件的对外事件协议（纯 JSON，可跨 SSE/WebSocket/进程边界传输）。
@@ -18,7 +25,7 @@ export type EduEvent =
 	| { type: "error"; message: string }
 	| { type: "done"; errorMessage?: string };
 
-export type EduSessionOptions = EduAgentConfig;
+export type EduSessionOptions = EduAgentConfig & { snapshot?: EduSessionSnapshot };
 
 export interface EduSession {
 	/** 发送一条用户消息；事件通过 onEvent 流式回调，整轮结束后 resolve。 */
@@ -28,6 +35,8 @@ export interface EduSession {
 	setPersona(key: string | null): void;
 	listFiles(): string[];
 	readFile(path: string): string | undefined;
+	/** 导出纯 JSON 会话快照；临时运行状态不会进入快照。 */
+	exportSnapshot(): EduSessionSnapshotV1;
 	readonly busy: boolean;
 	readonly persona: Persona | undefined;
 	readonly modelInfo: string;
@@ -37,9 +46,18 @@ export interface EduSession {
 export function createEduSession(config: EduSessionOptions = {}): EduSession {
 	// personas 只解析一次：createAgent、@ 解析、setPersona 全部以它为准（支持自定义集合）
 	const personas = config.personas ?? getDefaultPersonas();
+	const restored = config.snapshot ? validateSessionSnapshot(config.snapshot, personas) : undefined;
 	const edu = createAgent({ ...config, personas });
 	const { agent, vfs, model } = edu;
 	const basePrompt = config.systemPrompt ?? buildBasePrompt(personas);
+	if (restored) {
+		vfs.clear();
+		for (const [path, content] of Object.entries(restored.files)) vfs.write(path, content);
+		const persona = restored.activePersonaKey ? getPersona(restored.activePersonaKey, personas) : undefined;
+		edu.shared.restore(persona, restored.teachingByPersona);
+		agent.state.messages = restored.messages.slice();
+		agent.state.systemPrompt = persona ? buildPersonaPrompt(persona, edu.shared.getTeaching()) : basePrompt;
+	}
 	let busy = false;
 	let emit: ((event: EduEvent) => void) | undefined;
 
@@ -103,6 +121,15 @@ export function createEduSession(config: EduSessionOptions = {}): EduSession {
 				return undefined;
 			}
 		},
+		exportSnapshot: () =>
+			cloneSessionSnapshot({
+				version: EDU_SESSION_SNAPSHOT_VERSION,
+				revision: restored?.revision ?? 0,
+				activePersonaKey: edu.shared.activePersona?.key ?? null,
+				teachingByPersona: edu.shared.exportTeaching(),
+				files: vfs.toRecord(),
+				messages: agent.state.messages.slice(),
+			}),
 		abort: () => agent.abort(),
 		setPersona: (key) => {
 			// 结构性激活：换入对应 systemPrompt；null = 切回自动路由（基座 prompt）
