@@ -192,8 +192,8 @@ body {
 /* ===== 主布局 ===== */
 .layout {
 	display: grid;
-	/* 宽度由 --ws-w 控制，支持拖拽调整 */
-	grid-template-columns: minmax(0, 1fr) var(--ws-w, 300px);
+	/* 宽度由 --ws-w 控制，支持拖拽调整；min() 防止恢复的持久化大宽度在窄窗口挤死聊天区 */
+	grid-template-columns: minmax(0, 1fr) min(var(--ws-w, 300px), 55vw);
 	gap: 16px;
 	padding: 16px 20px;
 	flex: 1;
@@ -797,14 +797,21 @@ body {
 	height: 16px;
 	border-radius: 4px;
 	cursor: nwse-resize;
+	touch-action: none;
 	opacity: 0;
 	transition: opacity 0.15s;
 	background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath d='M4.5 10.5 L10.5 4.5 M7.5 10.5 L10.5 7.5' stroke='%23a6a6a6' stroke-width='1.6' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") no-repeat center;
 }
 
 .composer-input:hover .resize-grip,
-.resize-grip.dragging {
+.resize-grip.dragging,
+.resize-grip:focus-visible {
 	opacity: 1;
+}
+
+.resize-grip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 .resize-grip.dragging {
@@ -815,6 +822,7 @@ body {
 	display: flex;
 	align-items: center;
 	gap: 12px;
+	flex-wrap: wrap;
 	padding: 2px 12px 10px;
 }
 
@@ -925,6 +933,7 @@ button {
 	width: 10px;
 	cursor: col-resize;
 	z-index: 5;
+	touch-action: none;
 }
 
 .ws-resize::after {
@@ -939,8 +948,13 @@ button {
 }
 
 .ws-resize:hover::after,
+.ws-resize:focus-visible::after,
 body.ws-resizing .ws-resize::after {
 	background: var(--accent);
+}
+
+.ws-resize:focus-visible {
+	outline: none;
 }
 
 body.ws-resizing {
@@ -1116,11 +1130,65 @@ body.ws-resizing {
 	background-clip: content-box;
 }
 
+/* ===== 窄屏工作区抽屉 ===== */
+.ws-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.3);
+	z-index: 80;
+	display: none;
+}
+
+/* 仅窄屏显示的顶栏工作区入口 */
+.ws-mobile-only {
+	display: none;
+}
+
 @media (max-width: 900px) {
 	.layout {
 		grid-template-columns: 1fr;
 	}
 	.workspace {
+		display: none;
+	}
+	.ws-mobile-only {
+		display: flex;
+	}
+	body.ws-mobile-open .ws-backdrop {
+		display: block;
+	}
+	/* 抽屉覆盖层：忽略桌面折叠态，始终展示完整内容 */
+	body.ws-mobile-open .workspace {
+		display: flex;
+		flex-direction: column;
+		position: fixed;
+		top: 12px;
+		right: 12px;
+		bottom: 12px;
+		width: min(86vw, 420px);
+		z-index: 90;
+		padding: 14px;
+	}
+	body.ws-mobile-open .workspace .ws-head {
+		display: flex;
+	}
+	body.ws-mobile-open .workspace .file-list {
+		display: flex;
+		flex: 1;
+		overflow-y: auto;
+		min-height: 0;
+	}
+	body.ws-mobile-open .workspace .ws-resize,
+	body.ws-mobile-open .workspace .ws-rail {
+		display: none;
+	}
+}
+
+@media (max-width: 560px) {
+	.topbar {
+		padding: 0 12px;
+	}
+	.subtitle {
 		display: none;
 	}
 }

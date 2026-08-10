@@ -21,6 +21,7 @@
 				<span id="persona-badge" class="persona-badge hidden"></span>
 				<span class="topbar-sep" aria-hidden="true"></span>
 				<span id="model-info" class="model-info" title=""><span class="model-dot"></span><span id="model-name"></span></span>
+				<button id="ws-mobile-toggle" class="icon-btn ws-mobile-only" type="button" title="工作区" aria-label="打开工作区" aria-expanded="false">▤</button>
 			</div>
 		</header>
 
@@ -48,7 +49,8 @@
 					</div>
 					<div class="composer-input">
 						<textarea id="input" rows="2" placeholder="向 PiLore 提问…"></textarea>
-						<span class="resize-grip" title="拖动调整高度"></span>
+						<span class="resize-grip" role="separator" aria-orientation="horizontal" tabindex="0"
+							aria-label="输入框高度（上下方向键调整，Home 恢复自动增高）" aria-valuenow="66" title="拖动调整高度，双击复位"></span>
 					</div>
 					<div class="composer-footer">
 						<span id="persona-hint" class="persona-hint hidden"></span>
@@ -61,22 +63,25 @@
 				</div>
 			</section>
 
-			<aside class="workspace card">
-				<div id="ws-resize" class="ws-resize" title="拖动调整宽度，双击复位"></div>
+			<aside class="workspace card" id="workspace-panel">
+				<div id="ws-resize" class="ws-resize" role="separator" aria-orientation="vertical" tabindex="0"
+					aria-label="工作区宽度（左右方向键调整，Enter 收起，Home 复位）" aria-valuemin="220" aria-valuenow="300" title="拖动调整宽度，双击复位"></div>
 				<div class="ws-head">
 					<h2>工作区</h2>
-					<button id="ws-toggle" class="icon-btn" title="收起工作区">»</button>
+					<button id="ws-toggle" class="icon-btn" title="收起工作区" aria-controls="workspace-panel" aria-expanded="true">»</button>
 				</div>
 				<ul id="file-list" class="file-list">
 					<li class="empty">暂无文件</li>
 				</ul>
-				<button id="ws-expand" class="ws-rail" title="展开工作区">
+				<button id="ws-expand" class="ws-rail" title="展开工作区" aria-controls="workspace-panel" aria-expanded="false">
 					<span class="ws-rail-icon">«</span>
 					<span class="ws-rail-text">工作区</span>
 				</button>
 			</aside>
 		</main>
 	</div>
+
+	<div id="ws-backdrop" class="ws-backdrop" aria-hidden="true"></div>
 
 	<div id="code-modal" class="modal hidden">
 		<div class="modal-backdrop"></div>

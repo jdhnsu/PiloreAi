@@ -736,9 +736,13 @@ modalCopyBtn.onclick = async () => {
 };
 
 document.addEventListener("keydown", (e) => {
+	if (e.key === "Escape") {
+		if (!modal.classList.contains("hidden")) closeCodeModal();
+		else if (document.body.classList.contains("ws-mobile-open")) setMobileWs(false);
+		return;
+	}
 	if (modal.classList.contains("hidden")) return;
-	if (e.key === "Escape") closeCodeModal();
-	else if (e.key === "ArrowLeft") stepModal(-1);
+	if (e.key === "ArrowLeft") stepModal(-1);
 	else if (e.key === "ArrowRight") stepModal(1);
 });
 
@@ -794,25 +798,67 @@ inputEl.addEventListener("input", () => {
 	updateSend();
 });
 
-/* 自定义拉伸柄：拖动后固定高度（原生 resize 已禁用） */
+/* 自定义拉伸柄：拖动后固定高度并持久化，双击/ Home 恢复自动增高（原生 resize 已禁用） */
 const gripEl = document.querySelector(".resize-grip");
+const COMPOSER_H_KEY = "pilore-composer-h";
+
+function setComposerHeight(h) {
+	autoGrowEnabled = false;
+	inputEl.style.height = `${h}px`;
+	gripEl.setAttribute("aria-valuenow", String(h));
+	localStorage.setItem(COMPOSER_H_KEY, `${h}px`);
+}
+
+function resetComposerHeight() {
+	autoGrowEnabled = true;
+	inputEl.style.height = "";
+	localStorage.removeItem(COMPOSER_H_KEY);
+	autoGrow();
+}
+
 gripEl.addEventListener("pointerdown", (e) => {
 	e.preventDefault();
+	gripEl.setPointerCapture(e.pointerId);
 	autoGrowEnabled = false;
 	gripEl.classList.add("dragging");
 	const startY = e.clientY;
 	const startH = inputEl.offsetHeight;
 	const move = (ev) => {
-		inputEl.style.height = `${Math.max(INITIAL_TA_HEIGHT, Math.min(startH + ev.clientY - startY, window.innerHeight * 0.4))}px`;
+		const h = Math.max(INITIAL_TA_HEIGHT, Math.min(startH + ev.clientY - startY, window.innerHeight * 0.4));
+		inputEl.style.height = `${h}px`;
+		gripEl.setAttribute("aria-valuenow", String(Math.round(h)));
 	};
 	const up = () => {
 		gripEl.classList.remove("dragging");
-		window.removeEventListener("pointermove", move);
-		window.removeEventListener("pointerup", up);
+		localStorage.setItem(COMPOSER_H_KEY, inputEl.style.height);
+		gripEl.removeEventListener("pointermove", move);
+		gripEl.removeEventListener("pointerup", up);
 	};
-	window.addEventListener("pointermove", move);
-	window.addEventListener("pointerup", up);
+	gripEl.addEventListener("pointermove", move);
+	gripEl.addEventListener("pointerup", up);
 });
+
+gripEl.addEventListener("dblclick", resetComposerHeight);
+gripEl.addEventListener("keydown", (e) => {
+	const max = Math.round(window.innerHeight * 0.4);
+	const cur = inputEl.offsetHeight;
+	if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+		setComposerHeight(Math.min(max, Math.max(INITIAL_TA_HEIGHT, cur + (e.key === "ArrowUp" ? 16 : -16))));
+	} else if (e.key === "Home") {
+		resetComposerHeight();
+	} else {
+		return;
+	}
+	e.preventDefault();
+});
+
+const savedComposerH = parseInt(localStorage.getItem(COMPOSER_H_KEY), 10);
+if (savedComposerH >= INITIAL_TA_HEIGHT) {
+	const h = Math.min(savedComposerH, window.innerHeight * 0.4);
+	autoGrowEnabled = false;
+	inputEl.style.height = `${h}px`;
+	gripEl.setAttribute("aria-valuenow", String(Math.round(h)));
+}
 
 inputEl.addEventListener("keydown", (e) => {
 	if (e.key === "Enter" && !e.shiftKey) {
@@ -879,44 +925,128 @@ resetChip.onclick = async () => {
 syncChips();
 updateSend();
 
-/* ---------- 工作区面板：折叠 + 拖拽调宽，偏好存 localStorage ---------- */
+/* ---------- 工作区面板：折叠 + 拖拽/键盘调宽，偏好存 localStorage ---------- */
 const layoutEl = document.querySelector(".layout");
+const workspaceEl = document.querySelector(".workspace");
 const wsResize = $("#ws-resize");
+const wsToggleBtn = $("#ws-toggle");
+const wsExpandBtn = $("#ws-expand");
+
+const WS_DEFAULT_W = 300; // 与 CSS var(--ws-w, 300px) 缺省值一致
+const WS_MIN_W = 220;
+const WS_COLLAPSE_AT = 140; // 拖到该宽度以下松手 → 吸附折叠
+
+let lastGoodWsW = WS_DEFAULT_W;
+
+function wsMaxW() {
+	return Math.min(640, Math.round(layoutEl.clientWidth * 0.6));
+}
+
+function applyWsWidth(w) {
+	layoutEl.style.setProperty("--ws-w", `${w}px`);
+	wsResize.setAttribute("aria-valuenow", String(w));
+}
 
 function setWsCollapsed(on) {
 	layoutEl.classList.toggle("ws-collapsed", on);
 	localStorage.setItem("pilore-ws-collapsed", on ? "1" : "");
+	wsToggleBtn.setAttribute("aria-expanded", String(!on));
+	wsExpandBtn.setAttribute("aria-expanded", String(!on));
 }
 
-$("#ws-toggle").onclick = () => setWsCollapsed(true);
-$("#ws-expand").onclick = () => setWsCollapsed(false);
+/* 窄屏抽屉：顶栏按钮唤出工作区覆盖层（恢复路径） */
+const mobileMq = window.matchMedia("(max-width: 900px)");
+const wsMobileBtn = $("#ws-mobile-toggle");
+const wsBackdrop = $("#ws-backdrop");
+
+function setMobileWs(open) {
+	document.body.classList.toggle("ws-mobile-open", open);
+	wsMobileBtn.setAttribute("aria-expanded", String(open));
+}
+
+wsToggleBtn.onclick = () => {
+	if (mobileMq.matches) setMobileWs(false); // 窄屏下该按钮负责关闭抽屉
+	else setWsCollapsed(true);
+};
+wsExpandBtn.onclick = () => setWsCollapsed(false);
+wsMobileBtn.onclick = () => setMobileWs(!document.body.classList.contains("ws-mobile-open"));
+wsBackdrop.onclick = () => setMobileWs(false);
+mobileMq.addEventListener("change", () => {
+	if (!mobileMq.matches) setMobileWs(false);
+	wsToggleBtn.title = mobileMq.matches ? "关闭工作区" : "收起工作区";
+});
+wsToggleBtn.title = mobileMq.matches ? "关闭工作区" : "收起工作区";
 
 let wsResizing = false;
-wsResize.addEventListener("mousedown", (e) => {
+wsResize.addEventListener("pointerdown", (e) => {
+	if (e.pointerType === "mouse" && e.button !== 0) return;
 	wsResizing = true;
+	wsResize.setPointerCapture(e.pointerId);
 	document.body.classList.add("ws-resizing");
 	e.preventDefault();
 });
-document.addEventListener("mousemove", (e) => {
+wsResize.addEventListener("pointermove", (e) => {
 	if (!wsResizing) return;
 	// 以 aside 右缘为基准，避免 layout 的 padding 造成偏差
-	const right = document.querySelector(".workspace").getBoundingClientRect().right;
-	const w = Math.round(Math.min(520, Math.max(220, right - e.clientX)));
+	const right = workspaceEl.getBoundingClientRect().right;
+	const w = Math.round(Math.min(wsMaxW(), Math.max(60, right - e.clientX)));
 	layoutEl.style.setProperty("--ws-w", `${w}px`);
 });
-document.addEventListener("mouseup", () => {
+function endWsResize(e) {
 	if (!wsResizing) return;
 	wsResizing = false;
 	document.body.classList.remove("ws-resizing");
-	localStorage.setItem("pilore-ws-w", layoutEl.style.getPropertyValue("--ws-w"));
-});
+	try {
+		wsResize.releasePointerCapture(e.pointerId);
+	} catch {
+		/* pointercancel 时捕获可能已失效 */
+	}
+	const w = parseInt(layoutEl.style.getPropertyValue("--ws-w"), 10) || WS_DEFAULT_W;
+	if (w < WS_COLLAPSE_AT) {
+		applyWsWidth(lastGoodWsW); // 拖拽折叠时保留原宽度，展开即恢复
+		setWsCollapsed(true);
+	} else {
+		lastGoodWsW = Math.min(wsMaxW(), Math.max(WS_MIN_W, w));
+		applyWsWidth(lastGoodWsW);
+		localStorage.setItem("pilore-ws-w", `${lastGoodWsW}px`);
+	}
+}
+wsResize.addEventListener("pointerup", endWsResize);
+wsResize.addEventListener("pointercancel", endWsResize);
+
 wsResize.addEventListener("dblclick", () => {
-	layoutEl.style.removeProperty("--ws-w");
+	lastGoodWsW = WS_DEFAULT_W;
+	applyWsWidth(WS_DEFAULT_W);
 	localStorage.removeItem("pilore-ws-w");
 });
 
+wsResize.addEventListener("keydown", (e) => {
+	const cur = Math.round(workspaceEl.getBoundingClientRect().width);
+	const step = 24;
+	if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+		const w = Math.min(wsMaxW(), Math.max(WS_MIN_W, cur + (e.key === "ArrowLeft" ? step : -step)));
+		lastGoodWsW = w;
+		applyWsWidth(w);
+		localStorage.setItem("pilore-ws-w", `${w}px`);
+	} else if (e.key === "Home") {
+		lastGoodWsW = WS_DEFAULT_W;
+		applyWsWidth(WS_DEFAULT_W);
+		localStorage.removeItem("pilore-ws-w");
+	} else if (e.key === "Enter" || e.key === " ") {
+		setWsCollapsed(true);
+		wsExpandBtn.focus(); // 焦点移交到展开按钮，键盘可恢复
+	} else {
+		return;
+	}
+	e.preventDefault();
+});
+
 if (localStorage.getItem("pilore-ws-collapsed") === "1") setWsCollapsed(true);
-const savedWsW = localStorage.getItem("pilore-ws-w");
-if (savedWsW) layoutEl.style.setProperty("--ws-w", savedWsW);
+const savedWsW = parseInt(localStorage.getItem("pilore-ws-w"), 10);
+if (savedWsW >= WS_MIN_W) {
+	lastGoodWsW = Math.min(640, savedWsW);
+	applyWsWidth(lastGoodWsW);
+}
+wsResize.setAttribute("aria-valuemax", String(wsMaxW()));
 
 loadState();
