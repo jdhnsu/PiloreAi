@@ -10,17 +10,18 @@ PiLore 是一个 **AI 编码教育 agent 的核心组件**，设计目标是**�
 - `src/index.ts` — **唯一公开入口**：全部对外 API 从这里导出。仓库内所有消费者（CLI / Web / scripts / tests / examples）一律从 `index.js` 导入，**不要新增深层路径导入**（`./agent.js`、`./personas.js` 等），否则内部重组会破坏嵌入方。
 - `src/interfaces.ts` — 组件边界：`EduAgentConfig` 统一配置对象。models / providerId / modelId / thinkingLevel / systemPrompt / vfs / **personas / exec** / maxTurns 全部可注入，缺省值在 `createAgent` 内部按需解析。**import 核心不产生任何副作用**（不扫磁盘、不读 env、不发请求）——新增依赖时保持这条不变式。
 - `src/agent.ts` — `createAgent(config)` 工厂，核心组装点：
-  - 两套 systemPrompt：`buildBasePrompt(personas?)`（角色+路由规则+目录+执行纪律+环境适配，**不含方法论全文**）与 `buildPersonaPrompt()`（persona 激活后换入方法论全文）。`getSystemPrompt()` 是缺省基座 prompt 的懒求值入口（原 `SYSTEM_PROMPT` 常量已移除，因为它是 import 时求值）。
-  - `prepareNextTurn` 钩子：persona / 教学进度变化时换入或换回 systemPrompt。
+  - systemPrompt 在实例生命周期内固定为 `buildBasePrompt(personas?)`（角色+路由规则+目录+执行纪律+环境适配，**不含方法论全文**）。`buildPersonaPrompt()` 仅作为 deprecated 兼容 API 保留；Runtime 不再使用。
+  - Persona 方法论按需通过追加式 `toolResult` / `PersonaContextMessage` 进入历史；`convertToLlm` 将手动切换上下文与下一条 user 消息确定性合并，禁止为切换老师或进度更新重写历史前缀。
   - `beforeToolCall` 钩子：按 active persona 的 `capabilities` deny-list 拦截工具（`write_file` 细分为 `file.write` 新建 / `file.modify` 覆盖已有）。
   - `maxTurns` 是单次 prompt 的 LLM 回合护栏（测试防烧 token），`agent_start` 时清零。
   - 返回值含 `personas`：该 agent 实际使用的老师集合（自定义或内置默认），@ 解析与 prompt 构建以它为准。
 - `src/session.ts` — 传输无关的会话层，`createEduSession(config)`；personas 只解析一次（createAgent / @ 解析 / setPersona 共享同一数组）。对外只发 `EduEvent` 纯 JSON 事件流（text_delta / tool_start / tool_end / persona / error / done）。`adopt_persona` 是内部工具，对外折叠为 `persona` 事件。`@老师` 前缀与 `setPersona()` 走结构性激活（不计数，不受护栏限制）。
-- `src/shared-state.ts` — persona 状态与教学进度的**唯一事实源**（工具、agent 钩子、session 层都读它，不要另建副本）。含同轮非 auto 切换护栏 `MAX_SWITCHES_PER_TURN = 2`；预算按「一次用户查询」计，`resetUserTurn()` 在每轮 prompt 开始时调用，**不能放 prepareNextTurn**（会在工具回合间被清零）。
+- `src/shared-state.ts` — persona 状态与教学进度的**唯一事实源**（工具、Agent 能力钩子、追加式上下文、session 层都读它，不要另建副本）。含同轮非 auto 切换护栏 `MAX_SWITCHES_PER_TURN = 2`；预算按「一次用户查询」计，`resetUserTurn()` 只在每轮 prompt 开始时调用。
 - `src/tools.ts` — 5 个工具：`write_file` / `read_file` / `run_code` / `adopt_persona` / `update_teaching`。执行后端与老师集合经 `ToolDeps { exec, personas }` **注入**（不硬编码 import）。文件不存在等错误直接 throw → 自动转 isError 工具结果让模型自纠。
 - `src/personas.ts` — 老师登记与解析。**import 时不扫磁盘**：`getDefaultPersonas()` 首次调用才扫 `agent-design/`（懒加载+记忆化）；`parsePersona(source, fileName)` 是纯函数，嵌入方可从字符串/数据库/配置中心构造老师；`loadPersonasFromDir(dir?)` 扫自定义目录。`buildCatalog` / `getPersona` / `resolveMention` 全部接受可选 personas 参数。内置集合目录缺失或文档非法在 `getDefaultPersonas()` 调用时报错，而非 import 时。
 - `src/exec-client.ts` — `ExecClient` 边界接口（`exec(request): Promise<ExecResponse>`）+ codapi 风格 HTTP 缺省实现 `createHttpExecClient(baseUrl?)`。`baseUrl` 省略时每次调用读 `EXEC_API_BASE` env（缺省指向真实沙箱），便于测试/演示动态切换。
 - `src/vfs.ts` — 内存虚拟文件系统（`Map<path, content>`），学习者代码绝不落本地磁盘。
+- `src/telemetry.ts` — 可选的脱敏 LLM 观测：逻辑调用、真实 HTTP attempt / retry、前缀哈希与 usage；默认关闭，observer 异常不得影响教学请求。
 - `src/models/` — 模型 API 层：`registry.ts` 注册表 + `providers/`（deepseek / moonshotai-cn / longcat）。新增 provider = 实现 `ProviderDefinition` + 注册表追加一项 + `.env.example` 登记。
 
 ## 嵌入契约（改公开 API 前必读）

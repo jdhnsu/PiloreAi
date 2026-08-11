@@ -7,7 +7,7 @@ import { createEduSession } from "../../../src/index.js";
 export const personasCases: OfflineCaseDef[] = [
 	{
 		id: "OPR-01",
-		name: "adopt_persona 换入 + 进度块注入",
+		name: "adopt_persona 追加方法论 + 固定 system prompt",
 		dimension: "教学行为",
 		weight: 3,
 		run: async (ctx) => {
@@ -19,8 +19,9 @@ export const personasCases: OfflineCaseDef[] = [
 			});
 			ctx.check("切换成功", evidence.toolCalls.some((t) => t.name === "adopt_persona" && t.args.persona === "socrates"));
 			ctx.check("shared.activePersona == socrates", edu.shared.activePersona?.key === "socrates");
-			ctx.check("systemPrompt 含教学进度块", evidence.systemPrompt.includes("当前教学进度"));
-			ctx.check("systemPrompt 含苏格拉底正文", evidence.systemPrompt.includes("苏格拉底式"));
+			const adopt = evidence.toolResults.find((result) => result.toolName === "adopt_persona");
+			ctx.check("systemPrompt 保持自动路由基座", evidence.systemPrompt.includes("教学方法目录"));
+			ctx.check("方法论由 toolResult 追加", !!adopt && JSON.stringify(adopt.content).includes("苏格拉底式"));
 		},
 	},
 	{

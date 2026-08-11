@@ -41,7 +41,8 @@ export const injectionCases: OfflineCaseDef[] = [
 				agentOptions: { personas },
 			});
 			ctx.check("adopt 自定义 key 成功", edu.shared.activePersona?.key === "guide");
-			ctx.check("systemPrompt 注入自定义方法论", evidence.systemPrompt.includes("Guide 的方法论（注入测试用）"));
+			const adopt = evidence.toolResults.find((result) => result.toolName === "adopt_persona");
+			ctx.check("toolResult 注入自定义方法论", !!adopt && JSON.stringify(adopt.content).includes("Guide 的方法论（注入测试用）"));
 			ctx.check("教学进度写入", edu.shared.getTeaching("guide")?.topic === "注入测试");
 			ctx.check("edu.personas 为注入集合", edu.personas === personas);
 		},

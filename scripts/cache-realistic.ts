@@ -7,8 +7,8 @@
  *   3. 模拟真实用户使用（写代码跑代码、贴大段学习材料、概念问答、改 bug）
  *   4. 上下文控制在 ~512k tokens
  *
- * 缓存命中率观察要点：切换角色会换入新的 systemPrompt → 前缀失效，
- * 命中率出现"下跌-恢复"曲线；切回已用过的角色时前缀重新匹配 → 再度命中。
+ * 缓存命中率观察要点：systemPrompt 固定，角色方法论通过只追加上下文进入历史；
+ * 报告用请求级 telemetry 验证切换轮仍能复用此前公共前缀。
  * 命中率等参数请到 DeepSeek 控制台核对（本脚本只给客户端观测值）。
  *
  * 执行后端：若环境中已设置 EXEC_API_BASE 则直连真实沙箱（还原真实场景）；
@@ -31,6 +31,7 @@ import {
 	getDefaultPersonas,
 	DEFAULT_MODEL_IDS,
 	type EduEvent,
+	type LlmTelemetryEvent,
 	type Persona,
 } from "../src/index.js";
 import { createMockExecServer } from "../mock/exec-server.js";
@@ -48,6 +49,7 @@ const thinkingOverride = argValue("thinking");
 const targetTokens = Number(argValue("target") ?? 512_000) || 512_000;
 const chunkTokens = Number(argValue("chunk-tokens") ?? 20_000) || 20_000;
 const roundCap = Number(argValue("rounds") ?? 70) || 70; // 轮数上限（工具/问答轮不注入材料，增长慢于纯注入）
+const minRounds = Math.max(0, Number(argValue("min-rounds") ?? 0) || 0); // 严格对照时可要求达到目标 token 后继续到指定轮数
 const turnsPerPrompt = Number(argValue("turns") ?? 6) || 6; // 单次 prompt 的 LLM 回合护栏（工具链需要空间）
 const reportDir = argValue("report-dir") ?? "reports";
 
@@ -207,6 +209,15 @@ interface RoundRecord {
 	callPromptTokens: number;
 	/** 本轮的 LLM 调用次数（含轮内工具链多回合）。 */
 	callCount: number;
+	/** 成功写入历史的 assistant 消息数，用于与真实调用数对照。 */
+	assistantCallCount: number;
+	/** provider 层真实 HTTP 请求数与其中的重试数。 */
+	httpRequestCount: number;
+	retryCount: number;
+	/** 本轮是否发生脚本或模型 Persona 切换。 */
+	personaTransition: boolean;
+	/** 本轮首个逻辑调用与上次调用共享的完整消息数。 */
+	commonPrefixMessages: number;
 	/** 本轮累计（所有回合求和）。 */
 	input: number;
 	output: number;
@@ -266,6 +277,7 @@ async function main(): Promise<void> {
 
 	const personas = getDefaultPersonas();
 	const models = createModelCollection();
+	const telemetry: LlmTelemetryEvent[] = [];
 
 	const session = createEduSession({
 		models,
@@ -273,6 +285,7 @@ async function main(): Promise<void> {
 		modelId,
 		thinkingLevel,
 		personas, // 真实老师集合：Oris / Feynman / Socrates
+		llmTelemetry: { onEvent: (event) => telemetry.push(event) },
 		// exec 缺省 = createHttpExecClient()，每次调用读 EXEC_API_BASE（即上面设置的地址）
 		maxTurns: turnsPerPrompt, // 工具链护栏：单次 prompt 内最多 N 个 LLM 回合
 	});
@@ -325,7 +338,10 @@ async function main(): Promise<void> {
 	for (let r = 0; r < roundCap; r++) {
 		roundToolCounts = {};
 
-		// 按计划切换角色（改变 systemPrompt → 缓存前缀失效，这正是要观察的真实行为）
+		const telemetryStart = telemetry.length;
+		const personaEventsBefore = personaEventCount;
+		let scriptSwitchedThisRound = false;
+		// 按计划切换角色；只追加 Persona 上下文，不再改写 systemPrompt。
 		const target = personaFor(r);
 		if (target !== undefined) {
 			const currentKey = session.persona?.key ?? null;
@@ -333,6 +349,7 @@ async function main(): Promise<void> {
 				try {
 					session.setPersona(target);
 					prefixBrokenByScript++;
+					scriptSwitchedThisRound = true;
 				} catch (err) {
 					console.log(`  ⚠ 设置角色 ${String(target)} 失败: ${err instanceof Error ? err.message : String(err)}`);
 				}
@@ -349,7 +366,7 @@ async function main(): Promise<void> {
 			break;
 		}
 
-		// 差分聚合本轮新增 assistant 消息的 usage（工具链多回合也计入）
+		// assistant 消息用于核对历史；usage 与请求计数以 telemetry 为事实源。
 		const msgs = session.exportSnapshot().messages;
 		const newAssistants = msgs
 			.slice(beforeCount)
@@ -359,17 +376,29 @@ async function main(): Promise<void> {
 			console.log(`  ✗ 第 ${rounds.length + 1} 轮结束后未找到 assistant usage，中止。`);
 			break;
 		}
-		const totals = newAssistants.reduce(
+		const roundTelemetry = telemetry.slice(telemetryStart);
+		const logicalStarts = roundTelemetry.filter((event) => event.type === "logical_request_start");
+		const logicalEnds = roundTelemetry.filter((event) => event.type === "logical_request_end");
+		const httpStarts = roundTelemetry.filter((event) => event.type === "http_attempt_start");
+		const attemptsByLogical = new Map<string, number>();
+		for (const event of httpStarts) attemptsByLogical.set(event.logicalRequestId, (attemptsByLogical.get(event.logicalRequestId) ?? 0) + 1);
+		const retryCount = [...attemptsByLogical.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+		if (logicalEnds.length === 0) {
+			stoppedEarly = true;
+			console.log(`  ✗ 第 ${rounds.length + 1} 轮结束后未找到 logical_request_end，中止。`);
+			break;
+		}
+		const totals = logicalEnds.reduce(
 			(a, m) => ({
-				input: a.input + m.usage!.input,
-				output: a.output + m.usage!.output,
-				cacheRead: a.cacheRead + m.usage!.cacheRead,
-				cacheWrite: a.cacheWrite + m.usage!.cacheWrite,
-				cost: a.cost + m.usage!.cost.total,
+				input: a.input + m.usage.input,
+				output: a.output + m.usage.output,
+				cacheRead: a.cacheRead + m.usage.cacheRead,
+				cacheWrite: a.cacheWrite + m.usage.cacheWrite,
+				cost: a.cost + m.usage.cost.total,
 			}),
 			{ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
 		);
-		const lastUsage = newAssistants[newAssistants.length - 1].usage!;
+		const lastUsage = logicalEnds[logicalEnds.length - 1].usage;
 		const record: RoundRecord = {
 			round: rounds.length + 1,
 			persona: personaLabel(session.persona),
@@ -377,7 +406,12 @@ async function main(): Promise<void> {
 			// 真实上下文 = 最后一个 LLM 回合的 prompt（跨回合求和会把轮内多回合重复计入）
 			contextTokens: lastUsage.input + lastUsage.cacheRead + lastUsage.cacheWrite,
 			callPromptTokens: totals.input + totals.cacheRead + totals.cacheWrite,
-			callCount: newAssistants.length,
+			callCount: logicalStarts.length,
+			assistantCallCount: newAssistants.length,
+			httpRequestCount: httpStarts.length,
+			retryCount,
+			personaTransition: scriptSwitchedThisRound || personaEventCount > personaEventsBefore,
+			commonPrefixMessages: logicalStarts[0]?.commonPrefixMessages ?? 0,
 			input: totals.input,
 			output: totals.output,
 			cacheRead: totals.cacheRead,
@@ -390,7 +424,7 @@ async function main(): Promise<void> {
 		const cumulative = rounds.reduce(
 			(a, r) => ({
 				prompt: a.prompt + r.callPromptTokens,
-				cache: a.cache + r.cacheRead + r.cacheWrite,
+				cache: a.cache + r.cacheRead,
 			}),
 			{ prompt: 0, cache: 0 },
 		);
@@ -398,7 +432,7 @@ async function main(): Promise<void> {
 		const toolTag = record.tools.length ? `[tools:${record.tools.join(",")}]` : "[no tool]";
 		console.log(
 			`[R${pad(record.round, 2)}][${padStr(record.persona, 8)}] ${toolTag}  ctx=${fmt(record.contextTokens)}  ` +
-				`calls=${record.callCount}  cacheHit=${fmt(record.cacheRead)}  input=${fmt(record.input)}  ` +
+				`calls=${record.callCount}/http=${record.httpRequestCount}/retry=${record.retryCount}  cacheHit=${fmt(record.cacheRead)}  input=${fmt(record.input)}  ` +
 				`output=${fmt(record.output)}  cum=${(cumHitRate * 100).toFixed(1)}%  cost=$${record.cost.toFixed(5)}`,
 		);
 		if (process.env.CACHE_DEBUG) {
@@ -414,7 +448,7 @@ async function main(): Promise<void> {
 			}
 		}
 
-		if (record.contextTokens >= targetTokens) break;
+		if (record.contextTokens >= targetTokens && rounds.length >= minRounds) break;
 	}
 
 	/* ---------------- 汇总 ---------------- */
@@ -430,21 +464,40 @@ async function main(): Promise<void> {
 	);
 	const last = rounds[rounds.length - 1];
 	const cumulativePrompt = rounds.reduce((a, r) => a + r.callPromptTokens, 0);
-	const cumulativeCache = rounds.reduce((a, r) => a + r.cacheRead + r.cacheWrite, 0);
+	const cumulativeCache = rounds.reduce((a, r) => a + r.cacheRead, 0);
 	const overallHitRate = cumulativePrompt > 0 ? cumulativeCache / cumulativePrompt : 0;
 	const totalCalls = rounds.reduce((a, r) => a + r.callCount, 0);
+	const totalAssistantCalls = rounds.reduce((a, r) => a + r.assistantCallCount, 0);
+	const totalHttpRequests = rounds.reduce((a, r) => a + r.httpRequestCount, 0);
+	const totalRetries = rounds.reduce((a, r) => a + r.retryCount, 0);
 	const toolCalls = rounds.reduce((a, r) => a + r.tools.length, 0);
 	const toolNameCounts: Record<string, number> = {};
 	for (const r of rounds) for (const t of r.tools) toolNameCounts[t] = (toolNameCounts[t] ?? 0) + 1;
+	function groupStats(records: RoundRecord[]) {
+		const prompt = records.reduce((sum, record) => sum + record.callPromptTokens, 0);
+		const cacheRead = records.reduce((sum, record) => sum + record.cacheRead, 0);
+		return {
+			rounds: records.length,
+			calls: records.reduce((sum, record) => sum + record.callCount, 0),
+			input: records.reduce((sum, record) => sum + record.input, 0),
+			cacheRead,
+			promptTokens: prompt,
+			hitRate: prompt > 0 ? cacheRead / prompt : 0,
+		};
+	}
+	const transitionStats = groupStats(rounds.filter((round) => round.personaTransition));
+	const stableStats = groupStats(rounds.filter((round) => !round.personaTransition));
 
 	console.log("\n================ 汇总 ================");
 	console.log(`轮数: ${rounds.length}  角色切换: 脚本主动 ${prefixBrokenByScript} 次，对话内自然切换 ${personaEventCount} 次`);
-	console.log(`LLM 调用: 共 ${totalCalls} 次（含工具链多回合）  工具调用: ${toolCalls} 次 → ${JSON.stringify(toolNameCounts)}`);
+	console.log(`LLM 调用: ${totalCalls} 次；assistant 成功消息: ${totalAssistantCalls}；HTTP: ${totalHttpRequests}（重试 ${totalRetries}）`);
+	console.log(`工具调用: ${toolCalls} 次 → ${JSON.stringify(toolNameCounts)}`);
 	if (last) console.log(`最终上下文(末回合 prompt tokens): ${fmt(last.contextTokens)}  目标: ~${fmt(targetTokens)}${stoppedEarly ? "（提前中止）" : ""}`);
 	console.log(`累计 input: ${fmt(total.input)}  output: ${fmt(total.output)}  cacheRead: ${fmt(total.cacheRead)}  cacheWrite: ${fmt(total.cacheWrite)}`);
 	console.log(`累计缓存命中率: ${(overallHitRate * 100).toFixed(2)}%`);
+	console.log(`切换轮命中率: ${(transitionStats.hitRate * 100).toFixed(2)}%  稳定轮命中率: ${(stableStats.hitRate * 100).toFixed(2)}%`);
 	console.log(`估算成本: $${total.cost.toFixed(6)}（cacheRead 按极低价计费；以 DeepSeek 账单为准）`);
-	console.log("\n提示: 角色切换 / update_teaching 会换入新 systemPrompt → 前缀缓存失效、命中率下跌后恢复；去 DeepSeek 控制台核对服务端命中率与账单。");
+	console.log("\n提示: systemPrompt 应在全程保持同一哈希；通过 HTTP 请求数/重试数与 DeepSeek 独立时间窗口账单核对。");
 
 	/* ---------------- 报告落盘 ---------------- */
 	const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -457,6 +510,7 @@ async function main(): Promise<void> {
 		targetTokens,
 		chunkTokens,
 		roundCap,
+		minRounds,
 		turnsPerPrompt,
 		execBase: process.env.EXEC_API_BASE,
 		stoppedEarly,
@@ -464,8 +518,11 @@ async function main(): Promise<void> {
 		naturalPersonaSwitches: personaEventCount,
 		toolCallCounts: toolNameCounts,
 		total,
+		requestCounts: { logical: totalCalls, assistant: totalAssistantCalls, http: totalHttpRequests, retries: totalRetries },
+		groups: { transition: transitionStats, stable: stableStats },
 		overallHitRate,
 		rounds,
+		telemetry,
 	};
 	const file = join(reportDir, `cache-realistic-${stamp}.json`);
 	writeFileSync(file, JSON.stringify(report, null, 2));

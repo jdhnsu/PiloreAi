@@ -78,6 +78,13 @@ export const sessionCases: OfflineCaseDef[] = [
 				busyError = true;
 			}
 			ctx.check("busy 时第二次抛出", busyError);
+			let personaBusyError = false;
+			try {
+				session.setPersona("socrates");
+			} catch {
+				personaBusyError = true;
+			}
+			ctx.check("busy 时切换 Persona 被拒绝", personaBusyError);
 			await first;
 			ctx.check("结束后 busy=false", session.busy === false);
 		},

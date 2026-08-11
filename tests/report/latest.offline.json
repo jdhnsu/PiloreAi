@@ -1,6 +1,6 @@
 {
   "kind": "offline",
-  "date": "2026-08-10T09:04:19.323Z",
+  "date": "2026-08-10T15:42:58.659Z",
   "iterations": 3,
   "skipped": [],
   "total": 100,
@@ -124,7 +124,7 @@
     },
     {
       "id": "OPR-01",
-      "name": "adopt_persona 换入 + 进度块注入",
+      "name": "adopt_persona 追加方法论 + 固定 system prompt",
       "dimension": "教学行为",
       "weight": 3,
       "score": 1,

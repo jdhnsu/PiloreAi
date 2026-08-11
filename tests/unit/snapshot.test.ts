@@ -4,9 +4,12 @@ import { createModels, fauxProvider, type UserMessage } from "@earendil-works/pi
 import {
 	EDU_SESSION_SNAPSHOT_VERSION,
 	InvalidSessionSnapshotError,
+	createPersonaContextMessage,
 	createEduSession,
+	getPersona,
 	getDefaultPersonas,
 	type EduSessionSnapshotV1,
+	type EduSessionSnapshotV2,
 } from "../../src/index.js";
 
 function modelsForRestore() {
@@ -16,22 +19,22 @@ function modelsForRestore() {
 	return models;
 }
 
-function validSnapshot(): EduSessionSnapshotV1 {
+function validSnapshot(): EduSessionSnapshotV2 {
 	const message: UserMessage = { role: "user", content: "解释闭包", timestamp: 123 };
+	const socrates = getPersona("socrates", getDefaultPersonas())!;
+	const teaching = { stage: "辨析", topic: "闭包", covered: ["定义"], pending: ["变量捕获"] };
 	return {
 		version: EDU_SESSION_SNAPSHOT_VERSION,
 		revision: 7,
 		activePersonaKey: "socrates",
-		teachingByPersona: {
-			socrates: { stage: "辨析", topic: "闭包", covered: ["定义"], pending: ["变量捕获"] },
-		},
+		teachingByPersona: { socrates: teaching },
 		files: { "main.py": "print('snapshot')" },
-		messages: [message],
+		messages: [message, createPersonaContextMessage(socrates, teaching, 124)],
 	};
 }
 
 test("session snapshot JSON 往返并恢复 persona、教学进度、VFS 与消息", () => {
-	const snapshot = JSON.parse(JSON.stringify(validSnapshot())) as EduSessionSnapshotV1;
+	const snapshot = JSON.parse(JSON.stringify(validSnapshot())) as EduSessionSnapshotV2;
 	const session = createEduSession({ models: modelsForRestore(), providerId: "faux", modelId: "faux-1", snapshot });
 	assert.equal(session.persona?.key, "socrates");
 	assert.equal(session.readFile("main.py"), "print('snapshot')");
@@ -46,7 +49,7 @@ test("snapshot 拒绝未知版本、未知 persona 和损坏消息", () => {
 	const models = modelsForRestore();
 	const base = { models, providerId: "faux", modelId: "faux-1", personas: getDefaultPersonas() } as const;
 	assert.throws(
-		() => createEduSession({ ...base, snapshot: { ...validSnapshot(), version: 2 } as unknown as EduSessionSnapshotV1 }),
+		() => createEduSession({ ...base, snapshot: { ...validSnapshot(), version: 99 } as unknown as EduSessionSnapshotV1 }),
 		InvalidSessionSnapshotError,
 	);
 	assert.throws(
@@ -57,6 +60,26 @@ test("snapshot 拒绝未知版本、未知 persona 和损坏消息", () => {
 		() => createEduSession({ ...base, snapshot: { ...validSnapshot(), messages: [{ role: "user" }] as never } }),
 		/timestamp/,
 	);
+	const corrupted = validSnapshot();
+	const context = corrupted.messages.find((message) => message.role === "pilorePersonaContext")!;
+	context.methodology = `${context.methodology}\n被篡改`;
+	assert.throws(() => createEduSession({ ...base, snapshot: corrupted }), /personaHash 与方法论内容不匹配/);
+});
+
+test("V1 snapshot 恢复时惰性迁移为带 Persona 上下文的 V2", () => {
+	const legacy: EduSessionSnapshotV1 = {
+		version: 1,
+		revision: 3,
+		activePersonaKey: "socrates",
+		teachingByPersona: { socrates: { stage: "提问", topic: "闭包", covered: [], pending: ["作用域"] } },
+		files: {},
+		messages: [{ role: "user", content: "继续", timestamp: 10 }],
+	};
+	const session = createEduSession({ models: modelsForRestore(), providerId: "faux", modelId: "faux-1", snapshot: legacy });
+	const migrated = session.exportSnapshot();
+	assert.equal(migrated.version, 2);
+	assert.equal(migrated.revision, 3);
+	assert.equal(migrated.messages.at(-1)?.role, "pilorePersonaContext");
 });
 
 test("exportSnapshot 剥离运行时非序列化字段（deferred）", () => {
@@ -64,7 +87,7 @@ test("exportSnapshot 剥离运行时非序列化字段（deferred）", () => {
 	const session = createEduSession({ models, providerId: "faux", modelId: "faux-1" });
 
 	// 直接断言：exportSnapshot 产物必须可 JSON 序列化，且消息不携带 deferred。
-	const exported = session.exportSnapshot() as EduSessionSnapshotV1 & {
+	const exported = session.exportSnapshot() as EduSessionSnapshotV2 & {
 		messages: Array<{ deferred?: unknown }>;
 	};
 	for (const m of exported.messages) {

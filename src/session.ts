@@ -1,4 +1,4 @@
-import { createAgent, buildBasePrompt, buildPersonaPrompt } from "./agent.js";
+import { createAgent } from "./agent.js";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { EduAgentConfig } from "./interfaces.js";
 import { getDefaultPersonas, getPersona, resolveMention, type Persona } from "./personas.js";
@@ -8,7 +8,7 @@ import {
 	cloneSessionSnapshot,
 	validateSessionSnapshot,
 	type EduSessionSnapshot,
-	type EduSessionSnapshotV1,
+	type EduSessionSnapshotV2,
 } from "./snapshot.js";
 
 /** 递归删除值为 undefined 的属性：运行时临时字段（如 assistant 的 deferred）不进入持久化快照。 */
@@ -51,7 +51,7 @@ export interface EduSession {
 	listFiles(): string[];
 	readFile(path: string): string | undefined;
 	/** 导出纯 JSON 会话快照；临时运行状态不会进入快照。 */
-	exportSnapshot(): EduSessionSnapshotV1;
+	exportSnapshot(): EduSessionSnapshotV2;
 	readonly busy: boolean;
 	readonly persona: Persona | undefined;
 	readonly modelInfo: string;
@@ -64,14 +64,12 @@ export function createEduSession(config: EduSessionOptions = {}): EduSession {
 	const restored = config.snapshot ? validateSessionSnapshot(config.snapshot, personas) : undefined;
 	const edu = createAgent({ ...config, personas });
 	const { agent, vfs, model } = edu;
-	const basePrompt = config.systemPrompt ?? buildBasePrompt(personas);
 	if (restored) {
 		vfs.clear();
 		for (const [path, content] of Object.entries(restored.files)) vfs.write(path, content);
 		const persona = restored.activePersonaKey ? getPersona(restored.activePersonaKey, personas) : undefined;
 		edu.shared.restore(persona, restored.teachingByPersona);
 		agent.state.messages = restored.messages.slice();
-		agent.state.systemPrompt = persona ? buildPersonaPrompt(persona, edu.shared.getTeaching()) : basePrompt;
 	}
 	let busy = false;
 	let emit: ((event: EduEvent) => void) | undefined;
@@ -147,10 +145,10 @@ export function createEduSession(config: EduSessionOptions = {}): EduSession {
 			}),
 		abort: () => agent.abort(),
 		setPersona: (key) => {
-			// 结构性激活：换入对应 systemPrompt；null = 切回自动路由（基座 prompt）
+			if (busy) throw new Error("对话进行中不能切换教学方法，请先等待或中止");
+			// 结构性激活：共享状态 + 追加式内部上下文；system prompt 始终保持基座值。
 			const persona = key ? getPersona(key, personas) : undefined;
 			edu.setActivePersona(persona);
-			agent.state.systemPrompt = persona ? buildPersonaPrompt(persona) : basePrompt;
 		},
 		async prompt(text, onEvent) {
 			if (busy) throw new Error("上一轮对话还在进行，请先等待或中止");
@@ -162,10 +160,9 @@ export function createEduSession(config: EduSessionOptions = {}): EduSession {
 			try {
 				const mention = resolveMention(text, personas);
 				if (mention) {
-					// @指定：结构性激活（换入 systemPrompt），persona 事件由 onPersonaChange 发出
+					// @指定：结构性激活（追加内部上下文），persona 事件由 onPersonaChange 发出
 					const persona = mention.persona ?? undefined;
 					edu.setActivePersona(persona);
-					agent.state.systemPrompt = persona ? buildPersonaPrompt(persona) : basePrompt;
 					message = mention.rest;
 				}
 				onEvent({ type: "start" });

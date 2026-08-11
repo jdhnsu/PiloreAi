@@ -8,9 +8,10 @@ import {
 	SessionNotFoundError,
 	SessionRevisionConflictError,
 	type EduSessionSnapshotV1,
+	type EduSessionSnapshotV2,
 } from "../../src/index.js";
 
-function snapshot(revision = 0, userMessage: string | null = "hello world"): EduSessionSnapshotV1 {
+function snapshot(revision = 0, userMessage: string | null = "hello world"): EduSessionSnapshotV2 {
 	return {
 		version: EDU_SESSION_SNAPSHOT_VERSION,
 		revision,
@@ -18,6 +19,17 @@ function snapshot(revision = 0, userMessage: string | null = "hello world"): Edu
 		teachingByPersona: {},
 		files: { "main.py": "print(1)" },
 		messages: userMessage ? [{ role: "user", content: userMessage, timestamp: 1 }] : [],
+	};
+}
+
+function legacySnapshot(): EduSessionSnapshotV1 {
+	return {
+		version: 1,
+		revision: 0,
+		activePersonaKey: null,
+		teachingByPersona: {},
+		files: { "main.py": "print(1)" },
+		messages: [{ role: "user", content: "hello world", timestamp: 1 }],
 	};
 }
 
@@ -29,7 +41,7 @@ test("deriveSessionTitle：首条用户消息、空白折叠、截断、块内�
 	assert.equal(deriveSessionTitle(snapshot(0, null)), "");
 	assert.equal(deriveSessionTitle(snapshot(0, "x".repeat(60))), "x".repeat(40));
 	const blockContent = { ...snapshot(0, null), messages: [{ role: "user", content: [{ type: "text", text: "block text" }], timestamp: 1 }] };
-	assert.equal(deriveSessionTitle(blockContent as unknown as EduSessionSnapshotV1), "block text");
+	assert.equal(deriveSessionTitle(blockContent as unknown as EduSessionSnapshotV2), "block text");
 });
 
 test("InMemorySessionStore 生命周期：create/load/complete/delete，快照深拷贝隔离", async () => {
@@ -57,6 +69,21 @@ test("InMemorySessionStore 生命周期：create/load/complete/delete，快照�
 
 	await store.delete(created.id);
 	assert.equal(await store.load(created.id), undefined);
+});
+
+test("InMemorySessionStore 可读取 V1，并在 Runtime 提交后保存 V2", async () => {
+	const store = createInMemorySessionStore();
+	const created = await store.create({ identity: { tenantId: "t", userId: "legacy" }, snapshot: legacySnapshot() });
+	assert.equal((await store.load(created.id))?.snapshot.version, 1);
+	const run = await store.beginRun({ sessionId: created.id, expectedRevision: 0, providerId: "p", modelId: "m", audit: { input: "x" } });
+	const completed = await store.completeRun({
+		runId: run.id,
+		sessionId: created.id,
+		expectedRevision: 0,
+		snapshot: snapshot(),
+		audit: { input: "x" },
+	});
+	assert.equal(completed.snapshot.version, 2);
 });
 
 test("InMemorySessionStore 护栏：busy / revision 冲突 / 不存在 / failRun 解锁", async () => {

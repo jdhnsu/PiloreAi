@@ -1,4 +1,4 @@
-import type { EduSessionSnapshotV1 } from "./snapshot.js";
+import type { EduSessionSnapshot } from "./snapshot.js";
 
 export interface SessionIdentity {
 	tenantId: string;
@@ -11,7 +11,7 @@ export interface StoredSession extends SessionIdentity {
 	revision: number;
 	/** 首条用户消息摘要；创建时通常为空，首轮完成后由存储派生。 */
 	title: string;
-	snapshot: EduSessionSnapshotV1;
+	snapshot: EduSessionSnapshot;
 	activeRunId?: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -57,7 +57,7 @@ export interface StoredRun {
 export interface CreateStoredSession {
 	id?: string;
 	identity: SessionIdentity;
-	snapshot: EduSessionSnapshotV1;
+	snapshot: EduSessionSnapshot;
 }
 
 export interface BeginRunInput {
@@ -74,7 +74,7 @@ export interface CompleteRunInput {
 	runId: string;
 	sessionId: string;
 	expectedRevision: number;
-	snapshot: EduSessionSnapshotV1;
+	snapshot: EduSessionSnapshot;
 	audit: RunAuditPayload;
 	metrics?: RunMetrics;
 }
@@ -99,7 +99,7 @@ export interface SessionStore {
 }
 
 /** 从快照的首条用户消息派生会话标题（空白折叠、截断到 maxLength）。 */
-export function deriveSessionTitle(snapshot: EduSessionSnapshotV1, maxLength = 40): string {
+export function deriveSessionTitle(snapshot: EduSessionSnapshot, maxLength = 40): string {
 	for (const message of snapshot.messages) {
 		if (message.role !== "user") continue;
 		const text =

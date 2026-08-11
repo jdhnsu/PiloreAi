@@ -1,6 +1,6 @@
 import "dotenv/config";
 import readline from "node:readline/promises";
-import { createAgent, buildPersonaPrompt, getSystemPrompt, getDefaultPersonas, getPersona, type Persona } from "./index.js";
+import { createAgent, getDefaultPersonas, getPersona, type Persona } from "./index.js";
 import { attachConsoleRenderer, personaBanner } from "./render.js";
 
 const HELP = `命令:
@@ -32,7 +32,6 @@ function bubble(text: string, color: string): void {
 function main(): void {
 	const personas = getDefaultPersonas();
 	const { agent, model, shared, setActivePersona } = createAgent();
-	const basePrompt = getSystemPrompt();
 	let currentPersona: Persona | undefined;
 	attachConsoleRenderer(agent, { onPersonaChange: (p) => (currentPersona = p) });
 	console.log(`PiLore 教育 agent 已就绪（model: ${model.provider}/${model.id}）`);
@@ -75,7 +74,7 @@ function main(): void {
 			console.log("(agent 正在处理上一条消息，输入 /abort 可中断)");
 			return;
 		}
-		// @老师 前缀：结构性激活（换入 systemPrompt），与 session 层同一机制
+		// @老师 前缀：结构性激活（追加内部上下文），与 session 层同一机制
 		let message = text;
 		if (text.startsWith("@")) {
 			const mention = text.match(/^@([a-zA-Z][a-zA-Z0-9_-]*)\s+([\s\S]+)$/);
@@ -89,7 +88,6 @@ function main(): void {
 			if (key === "pilore") {
 				currentPersona = undefined;
 				setActivePersona(undefined);
-				agent.state.systemPrompt = basePrompt;
 				console.log("[老师] 已切回 PiLore 自动路由");
 				message = mention[2];
 			} else {
@@ -101,7 +99,6 @@ function main(): void {
 				}
 				currentPersona = persona;
 				setActivePersona(persona);
-				agent.state.systemPrompt = buildPersonaPrompt(persona);
 				console.log(personaBanner(persona, "用户指定"));
 				message = mention[2];
 			}

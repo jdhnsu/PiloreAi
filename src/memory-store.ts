@@ -23,6 +23,12 @@ interface MemoryRun extends StoredRun {
 	errorCode?: string;
 }
 
+function assertSupportedVersion(snapshot: { version: number }): void {
+	if (snapshot.version !== 1 && snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
+		throw new SessionStoreError(`不支持的快照版本: ${snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
+	}
+}
+
 /**
  * 进程内 SessionStore：与 PostgresSessionStore 同语义（revision/互斥/标题派生），
  * 用于演示与未配置数据库时的回退；进程退出即丢失。
@@ -34,9 +40,7 @@ export class InMemorySessionStore implements SessionStore {
 	async create(input: CreateStoredSession): Promise<StoredSession> {
 		const id = input.id ?? randomUUID();
 		if (this.sessions.has(id)) throw new SessionStoreError(`会话已存在: ${id}`, "SESSION_EXISTS");
-		if (input.snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
-			throw new SessionStoreError(`不支持的快照版本: ${input.snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
-		}
+		assertSupportedVersion(input.snapshot);
 		if (input.snapshot.revision !== 0) throw new SessionStoreError("新会话 snapshot.revision 必须为 0", "INVALID_INITIAL_REVISION");
 		const now = new Date();
 		const stored: StoredSession = {
@@ -107,9 +111,7 @@ export class InMemorySessionStore implements SessionStore {
 		if (stored.activeRunId !== input.runId) throw new SessionStoreError(`run ${input.runId} 不是会话当前活动运行`, "RUN_NOT_ACTIVE");
 		const run = this.runs.get(input.runId);
 		if (!run || run.status !== "running") throw new SessionStoreError(`run ${input.runId} 无法完成`, "RUN_NOT_RUNNING");
-		if (input.snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
-			throw new SessionStoreError(`不支持的快照版本: ${input.snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
-		}
+		assertSupportedVersion(input.snapshot);
 		stored.revision = input.expectedRevision + 1;
 		stored.snapshot = cloneSessionSnapshot({ ...input.snapshot, revision: stored.revision });
 		if (!stored.title) stored.title = deriveSessionTitle(stored.snapshot);

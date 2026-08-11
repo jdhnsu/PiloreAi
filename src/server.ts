@@ -21,7 +21,7 @@ import {
 	type EduEvent,
 	type EduSession,
 	type EduSessionOptions,
-	type EduSessionSnapshotV1,
+	type EduSessionSnapshotV2,
 	type PersonaKey,
 	type SessionIdentity,
 	type SessionStore,
@@ -79,7 +79,7 @@ interface SessionEntry {
 	revision: number;
 }
 
-function emptySnapshot(): EduSessionSnapshotV1 {
+function emptySnapshot(): EduSessionSnapshotV2 {
 	return { version: EDU_SESSION_SNAPSHOT_VERSION, revision: 0, activePersonaKey: null, teachingByPersona: {}, files: {}, messages: [] };
 }
 

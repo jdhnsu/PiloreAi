@@ -18,7 +18,7 @@ import {
 	type StoredRun,
 	type StoredSession,
 } from "./persistence.js";
-import { EDU_SESSION_SNAPSHOT_VERSION, type EduSessionSnapshotV1 } from "./snapshot.js";
+import { EDU_SESSION_SNAPSHOT_VERSION, type EduSessionSnapshot } from "./snapshot.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -146,6 +146,12 @@ function encode(value: unknown): Uint8Array {
 	return encoder.encode(JSON.stringify(value));
 }
 
+function assertSupportedSnapshotVersion(snapshot: { version: number }): void {
+	if (snapshot.version !== 1 && snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
+		throw new SessionStoreError(`不支持的快照版本: ${snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
+	}
+}
+
 function encryptedColumns(payload: EncryptedPayload): [string, Buffer, Buffer, string] {
 	return [payload.algorithm, Buffer.from(payload.ciphertext), Buffer.from(payload.nonce), payload.keyId];
 }
@@ -191,15 +197,16 @@ export class PostgresSessionStore implements SessionStore {
 			},
 			context(row.tenant_id, row.id, revision, "snapshot", row.snapshot_version),
 		);
-		let snapshot: EduSessionSnapshotV1;
+		let snapshot: EduSessionSnapshot;
 		try {
-			snapshot = JSON.parse(decoder.decode(plaintext)) as EduSessionSnapshotV1;
+			snapshot = JSON.parse(decoder.decode(plaintext)) as EduSessionSnapshot;
 		} catch (cause) {
 			throw new SessionStoreError(`会话 ${row.id} 的快照 JSON 已损坏`, "INVALID_SNAPSHOT_JSON", { cause });
 		}
 		if (snapshot.version !== row.snapshot_version || snapshot.revision !== revision) {
 			throw new SessionStoreError(`会话 ${row.id} 的快照元数据不一致`, "SNAPSHOT_METADATA_MISMATCH");
 		}
+		assertSupportedSnapshotVersion(snapshot);
 		return {
 			id: row.id,
 			tenantId: row.tenant_id,
@@ -216,9 +223,7 @@ export class PostgresSessionStore implements SessionStore {
 
 	async create(input: CreateStoredSession): Promise<StoredSession> {
 		const id = input.id ?? randomUUID();
-		if (input.snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
-			throw new SessionStoreError(`不支持的快照版本: ${input.snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
-		}
+		assertSupportedSnapshotVersion(input.snapshot);
 		if (input.snapshot.revision !== 0) throw new SessionStoreError("新会话 snapshot.revision 必须为 0", "INVALID_INITIAL_REVISION");
 		const payload = await this.options.crypto.encrypt(
 			encode(input.snapshot),
@@ -310,10 +315,8 @@ export class PostgresSessionStore implements SessionStore {
 
 			const nextRevision = input.expectedRevision + 1;
 			if (!Number.isSafeInteger(nextRevision)) throw new SessionStoreError("revision 超出安全整数范围", "INVALID_REVISION");
-			const snapshot: EduSessionSnapshotV1 = { ...input.snapshot, revision: nextRevision };
-			if (snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
-				throw new SessionStoreError(`不支持的快照版本: ${snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
-			}
+			const snapshot: EduSessionSnapshot = { ...input.snapshot, revision: nextRevision };
+			assertSupportedSnapshotVersion(snapshot);
 			const [snapshotPayload, auditPayload] = await Promise.all([
 				this.options.crypto.encrypt(encode(snapshot), context(session.tenant_id, input.sessionId, nextRevision, "snapshot", snapshot.version)),
 				this.options.crypto.encrypt(encode(input.audit), context(session.tenant_id, input.sessionId, nextRevision, "run")),

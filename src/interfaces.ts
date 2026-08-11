@@ -11,8 +11,13 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ExecClient } from "./exec-client.js";
 import type { Persona } from "./personas.js";
 import type { VirtualFS } from "./vfs.js";
+import type { LlmTelemetrySink } from "./telemetry.js";
 
 export interface EduAgentConfig {
+	/** 自定义 provider HTTP fetch（代理、测试或请求级观测）；默认使用 globalThis.fetch。 */
+	fetch?: typeof globalThis.fetch;
+	/** 脱敏的逻辑模型调用与真实 HTTP attempt 事件；默认关闭。 */
+	llmTelemetry?: LlmTelemetrySink;
 	/** 注入自定义 models 集合（如 demo 用 fauxProvider）；默认注册内置 provider。 */
 	models?: MutableModels;
 	/** provider id；默认读 PROVIDER 环境变量，缺省取注册表第一项。 */

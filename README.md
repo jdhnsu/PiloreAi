@@ -83,8 +83,9 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 │  │                  #   getDefaultPersonas（懒加载，import 不扫盘）/ @老师 解析 / buildCatalog()
 │  ├─ tools.ts        # AgentTool：write_file / read_file / run_code / adopt_persona / update_teaching
 │  │                  #   （执行后端与老师集合经 ToolDeps 注入，不硬编码）
-│  ├─ agent.ts        # Agent 组装工厂 createAgent(config)：基座/Persona 两套 systemPrompt +
-│  │                  #   prepareNextTurn 换入 + beforeToolCall 权限拦截
+│  ├─ agent.ts        # Agent 组装工厂：固定基座 systemPrompt + Persona 追加上下文 + 权限拦截
+│  ├─ persona-context.ts # 内部 Persona 消息、稳定哈希与 convertToLlm 转换
+│  ├─ telemetry.ts    # 可选的脱敏逻辑调用 / HTTP attempt / usage 观测
 │  ├─ shared-state.ts # 教学状态单一事实源（activePersona / 按老师分桶的教学进度 / 切换护栏）
 │  ├─ session.ts      # 会话组件层：传输无关的 EduEvent 协议（Web / CLI / 其它项目共用）
 │  ├─ render.ts       # 事件流 → 终端渲染（CLI 适配层用）
@@ -167,7 +168,7 @@ capabilities:
 按需加载机制：
 
 1. **目录常驻**：基座 system prompt 只含角色 + 路由规则 + 目录（name+description），不含任何方法论全文
-2. **选中后注入**：模型 `adopt_persona(key)` 或用户 `@key` → `prepareNextTurn` / 会话层把该老师全文换入 system prompt，下一轮 LLM 调用即生效；`adopt_persona("auto")` / `@pilore` 恢复基座
+2. **选中后追加**：模型 `adopt_persona(key)` 将方法论写入 toolResult；用户 `@key` 追加内部 Persona context，并在模型边界与下一条 user 消息合并。system prompt 全程固定，既有历史不重写；`auto` 通过同样的追加事件恢复路由
 3. **权限强制**：active persona 的 `capabilities` deny 命中时 `beforeToolCall` 拦截工具并给出原因（如 Socrates 激活时覆盖已有文件 → 被拦），模型看到拦截原因后自我纠正
 
 ## 组件接口（嵌入到其他项目）
@@ -180,6 +181,8 @@ capabilities:
 | `providerId` / `modelId` | env `PROVIDER` / `MODEL_ID` | 模型选择 |
 | `thinkingLevel` | env `THINKING_LEVEL`，缺省 `off` | 推理级别 |
 | `systemPrompt` | `buildBasePrompt(personas)` | 自定义基座提示词 |
+| `fetch` | `globalThis.fetch` | 自定义 provider HTTP transport，便于代理或测试 |
+| `llmTelemetry` | 关闭 | 脱敏的逻辑调用、HTTP attempt/retry、前缀哈希与 usage 事件 |
 | `vfs` | 新建空实例 | 自定义工作区（可预置学习者文件） |
 | `personas` | `agent-design/` 懒加载 | 自定义老师集合（`parsePersona` 纯函数构造） |
 | `exec` | `createHttpExecClient()` | 自定义执行后端（实现 `ExecClient` 接口） |
@@ -216,7 +219,7 @@ const restored = createEduSession({ snapshot });
 
 ### PostgreSQL 会话持久化
 
-核心只负责 `EduSessionSnapshotV1` 的导出/恢复，不直接访问数据库。模式 B 部署可用 `PostgresSessionStore` 管理会话与运行记录；默认 schema 为 `pilore`，也可显式注入其它合法 schema。正文与 VFS 快照在写库前通过可替换的 `CryptoProvider` 加密：
+核心导出 `EduSessionSnapshotV2`，并可将 V1 恢复为 V2（数据库记录在下一次成功保存时惰性升级），不直接访问数据库。模式 B 部署可用 `PostgresSessionStore` 管理会话与运行记录；默认 schema 为 `pilore`，也可显式注入其它合法 schema。正文与 VFS 快照在写库前通过可替换的 `CryptoProvider` 加密：
 
 ```ts
 import { Pool } from "pg";

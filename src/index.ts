@@ -16,6 +16,12 @@ export {
 	type EduAgent,
 } from "./agent.js";
 export type { EduAgentConfig } from "./interfaces.js";
+export {
+	createObservedStreamFn,
+	type LlmTelemetryEvent,
+	type LlmTelemetrySink,
+	type ObservedStreamOptions,
+} from "./telemetry.js";
 export * from "./models/index.js";
 export {
 	parsePersona,
@@ -39,7 +45,18 @@ export {
 	InvalidSessionSnapshotError,
 	type EduSessionSnapshot,
 	type EduSessionSnapshotV1,
+	type EduSessionSnapshotV2,
 } from "./snapshot.js";
+export {
+	appendPersonaContext,
+	convertPiLoreMessages,
+	createPersonaContextMessage,
+	hashPersona,
+	hashPersonaMethodology,
+	isPersonaContextMessage,
+	renderPersonaContext,
+	type PersonaContextMessage,
+} from "./persona-context.js";
 export {
 	createAes256GcmCryptoProvider,
 	CryptoProviderError,

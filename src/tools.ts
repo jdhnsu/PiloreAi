@@ -2,6 +2,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ExecClient } from "./exec-client.js";
 import { getPersona, getPersonaKeys, type Persona } from "./personas.js";
+import { createPersonaContextMessage, hashPersona, renderPersonaContext } from "./persona-context.js";
 import type { SharedState } from "./shared-state.js";
 import type { VirtualFS } from "./vfs.js";
 
@@ -14,7 +15,7 @@ export interface ToolDeps {
 /** 五个 AgentTool：write_file / read_file / run_code / adopt_persona / update_teaching，全部作用于内存 VFS、注入的执行器与教学状态。 */
 export function createTools(vfs: VirtualFS, shared: SharedState, deps: ToolDeps): AgentTool<any>[] {
 	const personas = deps.personas;
-	// 声明教学方法：写入共享状态（护栏 + 计数）→ prepareNextTurn 换入 systemPrompt；不操作 VFS
+	// 声明教学方法：写入共享状态，并把方法论作为追加式 toolResult 交给下一次模型调用。
 	const adoptParams = Type.Object({
 		persona: Type.Union(
 			[...getPersonaKeys(personas).map((k) => Type.Literal(k)), Type.Literal("auto")],
@@ -33,7 +34,7 @@ export function createTools(vfs: VirtualFS, shared: SharedState, deps: ToolDeps)
 				// 交还是结算点:清零同轮切换预算,让后续可以直接切到新方法
 				shared.resetUserTurn();
 				return {
-					content: [{ type: "text", text: "已交还 PiLore 自动路由，请根据学习者接下来的问题重新判断教学方法或直接回答" }],
+					content: [{ type: "text", text: renderPersonaContext(createPersonaContextMessage(undefined)) }],
 					details: { persona: "auto" },
 				};
 			}
@@ -43,9 +44,11 @@ export function createTools(vfs: VirtualFS, shared: SharedState, deps: ToolDeps)
 			if (!persona) throw new Error(`未知教学方法: ${params.persona}`);
 			shared.recordSwitch();
 			shared.setPersona(persona, "model");
+			const teaching = shared.getTeaching(persona.key);
+			const context = createPersonaContextMessage(persona, teaching);
 			return {
-				content: [{ type: "text", text: `已采用 ${persona.name} 教学方法，请以该方法的风格和流程继续回答` }],
-				details: { persona: persona.key },
+				content: [{ type: "text", text: renderPersonaContext(context) }],
+				details: { persona: persona.key, personaHash: hashPersona(persona) },
 			};
 		},
 	};

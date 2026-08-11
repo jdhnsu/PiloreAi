@@ -65,11 +65,11 @@
 - 前置:写 `a.txt`;faux 依次 `read_file({path:"a.txt"})` → `read_file({path:"missing.txt"})`。
 - 预期:第一个成功且内容一致;第二个 isError 含 `文件不存在`。
 
-### OPR-01 `adopt_persona` 换入 + systemPrompt 注入教学进度
+### OPR-01 `adopt_persona` 追加方法论 + 固定 systemPrompt
 - 维度:教学行为 · 权重:3
 - 输入:faux:1) `adopt_persona({persona:"socrates"})`(toolUse);2) 纯文本。
-- 预期:切换后 `session.persona.key === "socrates"`;下一轮(prepareNextTurn)systemPrompt 含「当前教学进度」块与 "Socrates";persona 事件 source = `model` 且只出现一次。
-- 判定:activePersona、`state.systemPrompt.includes("当前教学进度")`、事件序列中 persona 事件恰 1 次且值 `socrates`。
+- 预期:切换后 `session.persona.key === "socrates"`;systemPrompt 仍为自动路由基座；`adopt_persona` toolResult 含 Persona 方法论与当前进度；persona 事件 source = `model` 且只出现一次。
+- 判定:activePersona、固定 systemPrompt、toolResult 方法论、事件序列中 persona 事件恰 1 次且值 `socrates`。
 
 ### OPR-02 `update_teaching` 维护与跨 persona 隔离
 - 维度:教学行为 · 权重:2
@@ -111,7 +111,7 @@
 ### OSS-03 busy 互斥
 - 维度:会话协议 · 权重:2
 - 输入:一次 prompt 未结束时再次调用 `prompt`。
-- 预期:第二次抛 `上一轮对话还在进行…`;第一轮结束后再调用成功。
+- 预期:第二次 prompt 抛 `上一轮对话还在进行…`；busy 时 `setPersona` 同样拒绝；第一轮结束后再调用成功。
 
 ### OSS-04 abort 后可重发
 - 维度:会话协议 · 权重:2
@@ -136,7 +136,7 @@
 ### OIN-01 自定义 personas 集合可注入
 - 维度:教学行为 · 权重:2
 - 输入:用 `parsePersona` 从内嵌字符串构造自定义老师(`guide`),经 `agentOptions: { personas }` 注入;faux 依次 adopt `guide` → `update_teaching` → 文本。
-- 预期:`edu.shared.activePersona.key === "guide"`;换入的 systemPrompt 含自定义方法论正文;`getTeaching("guide")` 有进度;`edu.personas` 恰为注入的数组。
+- 预期:`edu.shared.activePersona.key === "guide"`;`adopt_persona` toolResult 含自定义方法论正文;`getTeaching("guide")` 有进度;`edu.personas` 恰为注入的数组。
 - 判定:全部断言不经 agent-design/ 磁盘文件,纯内存构造。
 
 ### OIN-02 自定义 ExecClient 可注入
@@ -144,9 +144,17 @@
 - 输入:自实现 `ExecClient`(记录调用、返回固定 stdout `INJECTED_OUTPUT`),经 `agentOptions: { exec }` 注入;faux write_file → run_code → 文本。
 - 预期:注入后端恰被调用 1 次且请求 files 完整;run_code 工具结果文本含 `INJECTED_OUTPUT`(不依赖 EXEC_API_BASE / 网络)。
 
-### SNP-01 会话快照导出、恢复与校验（`npm test`）
-- 输入：含 persona、教学进度、VFS 和消息历史的 `EduSessionSnapshotV1` 经 JSON 往返后注入 `createEduSession({ snapshot })`。
-- 预期：状态完整恢复且导出副本不反向修改会话；未知版本、未知 persona、非法路径和损坏消息明确失败。
+### SNP-01 会话快照 V2 导出、恢复与 V1 惰性迁移（`npm test`）
+- 输入：含 persona context、教学进度、VFS 和消息历史的 `EduSessionSnapshotV2` 经 JSON 往返；另将 V1 注入 `createEduSession({ snapshot })`。
+- 预期：状态完整恢复且导出副本不反向修改会话；V1 规范化为 V2 并补入内部 Persona 上下文；未知版本、未知 persona、非法路径和损坏消息明确失败。
+
+### TEL-01 请求级缓存观测与脱敏（`npm test`）
+- 输入：模拟同一逻辑调用先返回 HTTP 503、再返回 200，并给最终 assistant usage。
+- 预期：记录 1 次 logical request、2 次 HTTP attempt、最终 usage 与成功 request ID；事件不含 system prompt、学生消息、认证信息或 URL query 明文。
+
+### TEL-02 Persona 上下文确定性转换（`npm test`）
+- 输入：内部 Persona context 后跟 user 消息，重复执行 `convertPiLoreMessages`。
+- 预期：两次转换字节语义一致，只生成一个 provider user message；未配对的末尾内部上下文不发送。
 
 ### CRY-01 AES-256-GCM 加密兼容层（`npm test`）
 - 输入：32 字节主密钥、多 keyId、固定 CryptoContext(AAD)，以及篡改密文/错误 revision/错误密钥。

@@ -7,7 +7,7 @@ import type { Persona, PersonaKey } from "./personas.js";
  * - switchCount / 护栏:同一轮内 adopt_persona 的非 auto 切换次数上限
  *
  * 设计要点:这是 persona 相关的唯一事实源。工具(adopt_persona / update_teaching)、
- * agent 钩子(prepareNextTurn / beforeToolCall)、session 层都读它,不再各自维护副本。
+ * agent 能力钩子、追加式上下文与 session 层都读它,不再各自维护副本。
  */
 export interface TeachingProgress {
 	/** 当前教学阶段(由各 persona 的自定义流程决定,如 Oris 的「拆解 / 诊断 / 分层讲解 / 演示 / 收口」) */
