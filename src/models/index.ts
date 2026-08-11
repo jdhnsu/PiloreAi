@@ -17,6 +17,19 @@ export {
 } from "./providers/longcat.js";
 export { DEEPSEEK_DOCS_URL, DEEPSEEK_DEFAULT_MODEL } from "./providers/deepseek.js";
 export { MOONSHOT_CN_DOCS_URL, MOONSHOT_CN_DEFAULT_MODEL } from "./providers/moonshot-cn.js";
+export {
+	OLLAMA_ID,
+	OLLAMA_NAME,
+	OLLAMA_BASE_URL,
+	OLLAMA_API_KEY_ENV,
+	OLLAMA_DOCS_URL,
+	OLLAMA_DEFAULT_MODEL,
+	createOllamaProvider,
+	OllamaClient,
+	type OllamaModelTag,
+	type OllamaEmbedRequest,
+	type OllamaEmbedResponse,
+} from "./providers/ollama.js";
 
 /** 默认 provider（PROVIDER 未配置时，取注册表的第一个）。 */
 export const DEFAULT_PROVIDER_ID = PROVIDERS[0].id;

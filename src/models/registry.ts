@@ -2,6 +2,7 @@ import type { ProviderDefinition } from "./types.js";
 import { deepseekDefinition } from "./providers/deepseek.js";
 import { moonshotCnDefinition } from "./providers/moonshot-cn.js";
 import { longcatDefinition } from "./providers/longcat.js";
+import { ollamaDefinition } from "./providers/ollama.js";
 
 /**
  * 已注册 provider 的注册表（顺序即默认优先级，第一项为默认 provider）。
@@ -12,4 +13,5 @@ export const PROVIDERS: readonly ProviderDefinition[] = [
 	deepseekDefinition,
 	moonshotCnDefinition,
 	longcatDefinition,
+	ollamaDefinition,
 ];
