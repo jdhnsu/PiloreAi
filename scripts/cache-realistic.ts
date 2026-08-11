@@ -52,6 +52,10 @@ const roundCap = Number(argValue("rounds") ?? 70) || 70; // 轮数上限（工�
 const minRounds = Math.max(0, Number(argValue("min-rounds") ?? 0) || 0); // 严格对照时可要求达到目标 token 后继续到指定轮数
 const turnsPerPrompt = Number(argValue("turns") ?? 6) || 6; // 单次 prompt 的 LLM 回合护栏（工具链需要空间）
 const reportDir = argValue("report-dir") ?? "reports";
+// --mini：面向本地小模型（如 qwen2.5-3b）的轻量模式。
+// 完整教学 systemPrompt 对 3B 模型过重，工具触发率极低；精简 prompt 明确指示
+// 写码必须先 write_file + run_code，并把注入量/回合护栏收紧，让 8K 窗口内多跑工具轮。
+const miniMode = process.argv.includes("--mini");
 
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 const thinkingRaw = thinkingOverride ?? process.env.THINKING_LEVEL ?? "off";
@@ -166,6 +170,19 @@ const QUESTIONS = [
 
 type RoundKind = "chunk" | "code" | "question" | "codefix";
 
+/* ---------------- mini 模式：面向小模型的精简 systemPrompt ---------------- */
+
+const MINI_SYSTEM_PROMPT = `You are a Python coding tutor.
+Tools you MUST use when relevant:
+- write_file(path, content): save code to the workspace. Use this whenever the user asks you to write a program.
+- run_code(sandbox, entry): execute a saved file. Use this right after writing a file to show its output.
+- read_file(path): inspect an existing file.
+- adopt_persona(key): switch teaching style. Keys: oris, feynman, socrates. Use it only when the user asks for a different style.
+Rules:
+- When the user asks to write or run code, ALWAYS call write_file then run_code; do not just print the code.
+- After running, reply with a 2-3 sentence explanation.
+- Keep replies under 80 words.`;
+
 /** 每 3 轮切换一次角色（模拟真实用户隔一段时间换教法/切回自由模式），undefined = 保持当前。 */
 const PERSONA_ROTATION = ["oris", "feynman", "socrates", null]; // null = 自动路由（基座）
 function personaFor(index: number): string | null | undefined {
@@ -256,10 +273,11 @@ function personaLabel(p: Persona | undefined): string {
 async function main(): Promise<void> {
 	const providerId = providerOverride ?? resolveProviderId();
 	const def = getProviderDefinition(providerId);
-	if (!def) throw new Error(`未知 provider: ${providerId}(可用: deepseek / moonshotai-cn / longcat)`);
+	if (!def) throw new Error(`未知 provider: ${providerId}(可用: deepseek / moonshotai-cn / longcat / ollama)`);
 	const modelId = modelOverride ?? process.env.MODEL_ID ?? DEFAULT_MODEL_IDS[providerId];
 	if (!modelId) throw new Error(`provider ${providerId} 无默认模型,请用 --model 指定`);
-	if (def.envVar && !process.env[def.envVar]) {
+	// Ollama 本地服务免 key（ambient 占位 key）；其余 provider 需要 API key。
+	if (def.id !== "ollama" && def.envVar && !process.env[def.envVar]) {
 		throw new Error(`缺少 API key: 请设置环境变量 ${def.envVar}(例如写入 .env)`);
 	}
 
@@ -297,6 +315,7 @@ async function main(): Promise<void> {
 		providerId,
 		modelId,
 		thinkingLevel,
+		systemPrompt: miniMode ? MINI_SYSTEM_PROMPT : undefined, // mini 模式：精简指令，提高小模型工具触发率
 		personas, // 真实老师集合：Oris / Feynman / Socrates
 		llmTelemetry: {
 			onEvent: (event) => {
@@ -323,17 +342,19 @@ async function main(): Promise<void> {
 				}
 			},
 		},
-		// exec 缺省 = createHttpExecClient()，每次调用读 EXEC_API_BASE（即上面设置的地址）
-		maxTurns: turnsPerPrompt, // 工具链护栏：单次 prompt 内最多 N 个 LLM 回合
-	});
+			// exec 缺省 = createHttpExecClient()，每次调用读 EXEC_API_BASE（即上面设置的地址）
+			maxTurns: turnsPerPrompt, // 工具链护栏：单次 prompt 内最多 N 个 LLM 回合
+		});
 
 	console.log(`provider: ${providerId}  model: ${modelId}  thinking: ${thinkingLevel}`);
 	console.log(
 		`目标上下文: ~${fmt(targetTokens)} tokens  每轮注入材料: ~${fmt(chunkTokens)} tokens  轮数上限: ${roundCap}  单轮回合护栏: ${turnsPerPrompt}`,
 	);
-	console.log(`老师集合: ${personas.map((p) => p.key).join(" / ")}（自动路由为基座 prompt）\n`);
+	console.log(`老师集合: ${personas.map((p) => p.key).join(" / ")}（自动路由为基座 prompt）${miniMode ? "  模式: mini（精简 prompt，适合小模型）" : ""}\n`);
 
 	const chunkChars = Math.max(1, Math.round(chunkTokens * CHARS_PER_TOKEN));
+	// mini 模式：8K 窗口内工具链多回合消耗快，注入量减半、回合护栏降到 4，避免窗口溢出。
+	const effectiveChunkChars = miniMode ? Math.max(1, Math.round(chunkChars / 2)) : chunkChars;
 	const rounds: RoundRecord[] = [];
 	let lastError: string | undefined;
 	let personaEventCount = 0; // 对话内自然发生的角色切换（模型主动 adopt_persona）
@@ -394,7 +415,7 @@ async function main(): Promise<void> {
 		}
 
 		const beforeCount = session.exportSnapshot().messages.length;
-		const text = buildUserMessage(r, buildChunk(r + 1, chunkChars));
+		const text = buildUserMessage(r, buildChunk(r + 1, effectiveChunkChars));
 
 		const ok = await promptWithRetry(text);
 		if (!ok) {
@@ -565,11 +586,13 @@ async function main(): Promise<void> {
 		provider: providerId,
 		model: modelId,
 		thinkingLevel,
+		mode: miniMode ? "mini" : "full",
 		targetTokens,
 		chunkTokens,
 		roundCap,
 		minRounds,
 		turnsPerPrompt,
+		systemPrompt: miniMode ? MINI_SYSTEM_PROMPT : undefined,
 		execBase: process.env.EXEC_API_BASE,
 		stoppedEarly,
 		personaSwitchCount: prefixBrokenByScript,

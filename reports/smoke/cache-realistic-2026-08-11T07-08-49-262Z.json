@@ -1,0 +1,288 @@
+{
+  "generatedAt": "2026-08-11T07:08:49.268Z",
+  "provider": "ollama",
+  "model": "richardyoung/qwen2.5-3b-instruct-abliterated:latest",
+  "thinkingLevel": "off",
+  "mode": "mini",
+  "targetTokens": 6000,
+  "chunkTokens": 800,
+  "roundCap": 4,
+  "minRounds": 0,
+  "turnsPerPrompt": 6,
+  "systemPrompt": "You are a Python coding tutor.\nTools you MUST use when relevant:\n- write_file(path, content): save code to the workspace. Use this whenever the user asks you to write a program.\n- run_code(sandbox, entry): execute a saved file. Use this right after writing a file to show its output.\n- read_file(path): inspect an existing file.\n- adopt_persona(key): switch teaching style. Keys: oris, feynman, socrates. Use it only when the user asks for a different style.\nRules:\n- When the user asks to write or run code, ALWAYS call write_file then run_code; do not just print the code.\n- After running, reply with a 2-3 sentence explanation.\n- Keep replies under 80 words.",
+  "execBase": "http://192.168.172.134:1313",
+  "stoppedEarly": false,
+  "personaSwitchCount": 2,
+  "naturalPersonaSwitches": 0,
+  "toolCallCounts": {
+    "write_file": 1,
+    "run_code": 1,
+    "update_teaching": 1
+  },
+  "total": {
+    "input": 23726,
+    "output": 1595,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": 0
+  },
+  "requestCounts": {
+    "logical": 7,
+    "assistant": 7,
+    "http": 7,
+    "retries": 0
+  },
+  "groups": {
+    "transition": {
+      "rounds": 2,
+      "calls": 5,
+      "input": 15866,
+      "cacheRead": 0,
+      "promptTokens": 15866,
+      "hitRate": 0
+    },
+    "stable": {
+      "rounds": 2,
+      "calls": 2,
+      "input": 7860,
+      "cacheRead": 0,
+      "promptTokens": 7860,
+      "hitRate": 0
+    }
+  },
+  "overallHitRate": 0,
+  "rounds": [
+    {
+      "round": 1,
+      "persona": "oris",
+      "tools": [
+        "write_file",
+        "run_code",
+        "update_teaching"
+      ],
+      "contextTokens": 2977,
+      "callPromptTokens": 10679,
+      "callCount": 4,
+      "assistantCallCount": 4,
+      "httpRequestCount": 4,
+      "retryCount": 0,
+      "personaTransition": true,
+      "commonPrefixMessages": 0,
+      "input": 10679,
+      "output": 828,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 2,
+      "persona": "oris",
+      "tools": [],
+      "contextTokens": 3811,
+      "callPromptTokens": 3811,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 8,
+      "input": 3811,
+      "output": 214,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 3,
+      "persona": "oris",
+      "tools": [],
+      "contextTokens": 4049,
+      "callPromptTokens": 4049,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 10,
+      "input": 4049,
+      "output": 146,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 4,
+      "persona": "feynman",
+      "tools": [],
+      "contextTokens": 5187,
+      "callPromptTokens": 5187,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": true,
+      "commonPrefixMessages": 12,
+      "input": 5187,
+      "output": 407,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    }
+  ],
+  "requests": [
+    {
+      "callIndex": 1,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 0,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 2426,
+        "output": 107,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2533,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 2,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 1,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 2560,
+        "output": 66,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2626,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 3,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 3,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 2716,
+        "output": 207,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2923,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 4,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 6,
+      "stopReason": "stop",
+      "usage": {
+        "input": 2977,
+        "output": 448,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 3425,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 5,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 8,
+      "stopReason": "stop",
+      "usage": {
+        "input": 3811,
+        "output": 214,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 4025,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 6,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 10,
+      "stopReason": "stop",
+      "usage": {
+        "input": 4049,
+        "output": 146,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 4195,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 7,
+      "personaKey": "feynman",
+      "attempts": 1,
+      "commonPrefixMessages": 12,
+      "stopReason": "stop",
+      "usage": {
+        "input": 5187,
+        "output": 407,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 5594,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,446 @@
+{
+  "generatedAt": "2026-08-11T07:10:10.769Z",
+  "provider": "ollama",
+  "model": "richardyoung/qwen2.5-3b-instruct-abliterated:latest",
+  "thinkingLevel": "off",
+  "mode": "mini",
+  "targetTokens": 7000,
+  "chunkTokens": 800,
+  "roundCap": 40,
+  "minRounds": 0,
+  "turnsPerPrompt": 6,
+  "systemPrompt": "You are a Python coding tutor.\nTools you MUST use when relevant:\n- write_file(path, content): save code to the workspace. Use this whenever the user asks you to write a program.\n- run_code(sandbox, entry): execute a saved file. Use this right after writing a file to show its output.\n- read_file(path): inspect an existing file.\n- adopt_persona(key): switch teaching style. Keys: oris, feynman, socrates. Use it only when the user asks for a different style.\nRules:\n- When the user asks to write or run code, ALWAYS call write_file then run_code; do not just print the code.\n- After running, reply with a 2-3 sentence explanation.\n- Keep replies under 80 words.",
+  "execBase": "http://192.168.172.134:1313",
+  "stoppedEarly": false,
+  "personaSwitchCount": 3,
+  "naturalPersonaSwitches": 0,
+  "toolCallCounts": {
+    "write_file": 1,
+    "run_code": 1
+  },
+  "total": {
+    "input": 50423,
+    "output": 2133,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": 0
+  },
+  "requestCounts": {
+    "logical": 11,
+    "assistant": 11,
+    "http": 11,
+    "retries": 0
+  },
+  "groups": {
+    "transition": {
+      "rounds": 3,
+      "calls": 6,
+      "input": 23477,
+      "cacheRead": 0,
+      "promptTokens": 23477,
+      "hitRate": 0
+    },
+    "stable": {
+      "rounds": 5,
+      "calls": 5,
+      "input": 26946,
+      "cacheRead": 0,
+      "promptTokens": 26946,
+      "hitRate": 0
+    }
+  },
+  "overallHitRate": 0,
+  "rounds": [
+    {
+      "round": 1,
+      "persona": "oris",
+      "tools": [
+        "write_file",
+        "run_code"
+      ],
+      "contextTokens": 3178,
+      "callPromptTokens": 11235,
+      "callCount": 4,
+      "assistantCallCount": 4,
+      "httpRequestCount": 4,
+      "retryCount": 0,
+      "personaTransition": true,
+      "commonPrefixMessages": 0,
+      "input": 11235,
+      "output": 675,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 2,
+      "persona": "oris",
+      "tools": [],
+      "contextTokens": 3757,
+      "callPromptTokens": 3757,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 10,
+      "input": 3757,
+      "output": 136,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 3,
+      "persona": "oris",
+      "tools": [],
+      "contextTokens": 3917,
+      "callPromptTokens": 3917,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 12,
+      "input": 3917,
+      "output": 380,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 4,
+      "persona": "feynman",
+      "tools": [],
+      "contextTokens": 5289,
+      "callPromptTokens": 5289,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": true,
+      "commonPrefixMessages": 14,
+      "input": 5289,
+      "output": 273,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 5,
+      "persona": "feynman",
+      "tools": [],
+      "contextTokens": 5578,
+      "callPromptTokens": 5578,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 16,
+      "input": 5578,
+      "output": 181,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 6,
+      "persona": "feynman",
+      "tools": [],
+      "contextTokens": 6153,
+      "callPromptTokens": 6153,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 18,
+      "input": 6153,
+      "output": 160,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 7,
+      "persona": "socrates",
+      "tools": [],
+      "contextTokens": 6953,
+      "callPromptTokens": 6953,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": true,
+      "commonPrefixMessages": 20,
+      "input": 6953,
+      "output": 203,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    {
+      "round": 8,
+      "persona": "socrates",
+      "tools": [],
+      "contextTokens": 7541,
+      "callPromptTokens": 7541,
+      "callCount": 1,
+      "assistantCallCount": 1,
+      "httpRequestCount": 1,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 22,
+      "input": 7541,
+      "output": 125,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    }
+  ],
+  "requests": [
+    {
+      "callIndex": 1,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 0,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 2426,
+        "output": 150,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2576,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 2,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 1,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 2677,
+        "output": 174,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2851,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 3,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 4,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 2954,
+        "output": 159,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 3113,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 4,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 7,
+      "stopReason": "stop",
+      "usage": {
+        "input": 3178,
+        "output": 192,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 3370,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 5,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 10,
+      "stopReason": "stop",
+      "usage": {
+        "input": 3757,
+        "output": 136,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 3893,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 6,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 12,
+      "stopReason": "stop",
+      "usage": {
+        "input": 3917,
+        "output": 380,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 4297,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 7,
+      "personaKey": "feynman",
+      "attempts": 1,
+      "commonPrefixMessages": 14,
+      "stopReason": "stop",
+      "usage": {
+        "input": 5289,
+        "output": 273,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 5562,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 8,
+      "personaKey": "feynman",
+      "attempts": 1,
+      "commonPrefixMessages": 16,
+      "stopReason": "stop",
+      "usage": {
+        "input": 5578,
+        "output": 181,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 5759,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 9,
+      "personaKey": "feynman",
+      "attempts": 1,
+      "commonPrefixMessages": 18,
+      "stopReason": "stop",
+      "usage": {
+        "input": 6153,
+        "output": 160,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 6313,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 10,
+      "personaKey": "socrates",
+      "attempts": 1,
+      "commonPrefixMessages": 20,
+      "stopReason": "stop",
+      "usage": {
+        "input": 6953,
+        "output": 203,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 7156,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    },
+    {
+      "callIndex": 11,
+      "personaKey": "socrates",
+      "attempts": 1,
+      "commonPrefixMessages": 22,
+      "stopReason": "stop",
+      "usage": {
+        "input": 7541,
+        "output": 125,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 7666,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      }
+    }
+  ]
+}
