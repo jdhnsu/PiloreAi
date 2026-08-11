@@ -199,6 +199,15 @@ function buildUserMessage(index: number, chunkText: string): string {
 
 /* ---------------- 辅助 ---------------- */
 
+/** 按 logicalRequestId 聚合的单个逻辑调用；telemetry 请求级归属的事实源。 */
+interface LogicalRequestState {
+	callIndex: number;
+	personaKey: string | null;
+	start: Extract<LlmTelemetryEvent, { type: "logical_request_start" }>;
+	end?: Extract<LlmTelemetryEvent, { type: "logical_request_end" }>;
+	attempts: number;
+}
+
 interface RoundRecord {
 	round: number;
 	persona: string;
@@ -277,7 +286,11 @@ async function main(): Promise<void> {
 
 	const personas = getDefaultPersonas();
 	const models = createModelCollection();
-	const telemetry: LlmTelemetryEvent[] = [];
+
+	// telemetry 请求级归属：按 logicalRequestId 聚合 start/end/attempts；
+	// callIndex 全局递增，轮归属用 callIndex 边界，不受事件到达顺序（异步 end）影响。
+	const logicalRequests = new Map<string, LogicalRequestState>();
+	let maxCallIndexSeen = 0;
 
 	const session = createEduSession({
 		models,
@@ -285,7 +298,31 @@ async function main(): Promise<void> {
 		modelId,
 		thinkingLevel,
 		personas, // 真实老师集合：Oris / Feynman / Socrates
-		llmTelemetry: { onEvent: (event) => telemetry.push(event) },
+		llmTelemetry: {
+			onEvent: (event) => {
+				switch (event.type) {
+					case "logical_request_start":
+						maxCallIndexSeen = Math.max(maxCallIndexSeen, event.callIndex);
+						logicalRequests.set(event.logicalRequestId, {
+							callIndex: event.callIndex,
+							personaKey: event.personaKey,
+							start: event,
+							attempts: 0,
+						});
+						break;
+					case "http_attempt_start": {
+						const request = logicalRequests.get(event.logicalRequestId);
+						if (request) request.attempts += 1;
+						break;
+					}
+					case "logical_request_end": {
+						const request = logicalRequests.get(event.logicalRequestId);
+						if (request) request.end = event;
+						break;
+					}
+				}
+			},
+		},
 		// exec 缺省 = createHttpExecClient()，每次调用读 EXEC_API_BASE（即上面设置的地址）
 		maxTurns: turnsPerPrompt, // 工具链护栏：单次 prompt 内最多 N 个 LLM 回合
 	});
@@ -338,7 +375,7 @@ async function main(): Promise<void> {
 	for (let r = 0; r < roundCap; r++) {
 		roundToolCounts = {};
 
-		const telemetryStart = telemetry.length;
+		const boundaryCallIndex = maxCallIndexSeen; // 本轮归属边界：callIndex > 该值的请求属于本轮
 		const personaEventsBefore = personaEventCount;
 		let scriptSwitchedThisRound = false;
 		// 按计划切换角色；只追加 Persona 上下文，不再改写 systemPrompt。
@@ -376,29 +413,39 @@ async function main(): Promise<void> {
 			console.log(`  ✗ 第 ${rounds.length + 1} 轮结束后未找到 assistant usage，中止。`);
 			break;
 		}
-		const roundTelemetry = telemetry.slice(telemetryStart);
-		const logicalStarts = roundTelemetry.filter((event) => event.type === "logical_request_start");
-		const logicalEnds = roundTelemetry.filter((event) => event.type === "logical_request_end");
-		const httpStarts = roundTelemetry.filter((event) => event.type === "http_attempt_start");
-		const attemptsByLogical = new Map<string, number>();
-		for (const event of httpStarts) attemptsByLogical.set(event.logicalRequestId, (attemptsByLogical.get(event.logicalRequestId) ?? 0) + 1);
-		const retryCount = [...attemptsByLogical.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
-		if (logicalEnds.length === 0) {
+		// 按 logicalRequestId/callIndex 归属本轮请求：callIndex 全局递增，与事件到达顺序无关。
+		const roundRequests = [...logicalRequests.values()]
+			.filter((request) => request.callIndex > boundaryCallIndex)
+			.sort((a, b) => a.callIndex - b.callIndex);
+		if (roundRequests.length === 0) {
 			stoppedEarly = true;
-			console.log(`  ✗ 第 ${rounds.length + 1} 轮结束后未找到 logical_request_end，中止。`);
+			console.log(`  ✗ 第 ${rounds.length + 1} 轮结束后未归属到任何逻辑调用，中止。`);
 			break;
 		}
-		const totals = logicalEnds.reduce(
-			(a, m) => ({
-				input: a.input + m.usage.input,
-				output: a.output + m.usage.output,
-				cacheRead: a.cacheRead + m.usage.cacheRead,
-				cacheWrite: a.cacheWrite + m.usage.cacheWrite,
-				cost: a.cost + m.usage.cost.total,
+		// logical_request_end 由 streamFn 异步 emit；prompt resolve 前通常已到达，这里做防御性等待。
+		for (let wait = 0; wait < 40 && !roundRequests.every((request) => request.end); wait += 1) {
+			await new Promise((resolve) => setTimeout(resolve, 25));
+		}
+		const completeRequests = roundRequests.filter((request) => request.end);
+		if (completeRequests.length === 0) {
+			stoppedEarly = true;
+			console.log(`  ✗ 第 ${rounds.length + 1} 轮逻辑调用均无 logical_request_end，中止。`);
+			break;
+		}
+		if (completeRequests.length !== roundRequests.length) {
+			console.log(`  ⚠ 第 ${rounds.length + 1} 轮有 ${roundRequests.length - completeRequests.length} 个调用缺少 end，仅统计已完成部分。`);
+		}
+		const totals = completeRequests.reduce(
+			(a, request) => ({
+				input: a.input + request.end!.usage.input,
+				output: a.output + request.end!.usage.output,
+				cacheRead: a.cacheRead + request.end!.usage.cacheRead,
+				cacheWrite: a.cacheWrite + request.end!.usage.cacheWrite,
+				cost: a.cost + request.end!.usage.cost.total,
 			}),
 			{ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
 		);
-		const lastUsage = logicalEnds[logicalEnds.length - 1].usage;
+		const lastUsage = completeRequests[completeRequests.length - 1].end!.usage;
 		const record: RoundRecord = {
 			round: rounds.length + 1,
 			persona: personaLabel(session.persona),
@@ -406,12 +453,12 @@ async function main(): Promise<void> {
 			// 真实上下文 = 最后一个 LLM 回合的 prompt（跨回合求和会把轮内多回合重复计入）
 			contextTokens: lastUsage.input + lastUsage.cacheRead + lastUsage.cacheWrite,
 			callPromptTokens: totals.input + totals.cacheRead + totals.cacheWrite,
-			callCount: logicalStarts.length,
+			callCount: roundRequests.length,
 			assistantCallCount: newAssistants.length,
-			httpRequestCount: httpStarts.length,
-			retryCount,
+			httpRequestCount: roundRequests.reduce((a, request) => a + request.attempts, 0),
+			retryCount: roundRequests.reduce((a, request) => a + Math.max(0, request.attempts - 1), 0),
 			personaTransition: scriptSwitchedThisRound || personaEventCount > personaEventsBefore,
-			commonPrefixMessages: logicalStarts[0]?.commonPrefixMessages ?? 0,
+			commonPrefixMessages: roundRequests[0]?.start.commonPrefixMessages ?? 0,
 			input: totals.input,
 			output: totals.output,
 			cacheRead: totals.cacheRead,
@@ -502,6 +549,17 @@ async function main(): Promise<void> {
 	/* ---------------- 报告落盘 ---------------- */
 	const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 	mkdirSync(reportDir, { recursive: true });
+	// 请求级归属审计：每个逻辑调用一份（start 同步、end 异步到达后按身份补全）
+	const requestsAudit = [...logicalRequests.values()]
+		.sort((a, b) => a.callIndex - b.callIndex)
+		.map((request) => ({
+			callIndex: request.callIndex,
+			personaKey: request.personaKey,
+			attempts: request.attempts,
+			commonPrefixMessages: request.start.commonPrefixMessages,
+			stopReason: request.end?.stopReason ?? null,
+			usage: request.end?.usage ?? null,
+		}));
 	const report = {
 		generatedAt: new Date().toISOString(),
 		provider: providerId,
@@ -522,7 +580,7 @@ async function main(): Promise<void> {
 		groups: { transition: transitionStats, stable: stableStats },
 		overallHitRate,
 		rounds,
-		telemetry,
+		requests: requestsAudit,
 	};
 	const file = join(reportDir, `cache-realistic-${stamp}.json`);
 	writeFileSync(file, JSON.stringify(report, null, 2));

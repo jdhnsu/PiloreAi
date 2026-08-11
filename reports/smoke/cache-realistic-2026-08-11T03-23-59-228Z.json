@@ -1,0 +1,338 @@
+{
+  "generatedAt": "2026-08-11T03:23:59.229Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "thinkingLevel": "off",
+  "targetTokens": 60000,
+  "chunkTokens": 8000,
+  "roundCap": 3,
+  "minRounds": 0,
+  "turnsPerPrompt": 6,
+  "execBase": "http://192.168.172.134:1313",
+  "stoppedEarly": false,
+  "personaSwitchCount": 1,
+  "naturalPersonaSwitches": 0,
+  "toolCallCounts": {
+    "write_file": 3,
+    "run_code": 3
+  },
+  "total": {
+    "input": 7908,
+    "output": 3427,
+    "cacheRead": 82432,
+    "cacheWrite": 0,
+    "cost": 0.0022974896
+  },
+  "requestCounts": {
+    "logical": 10,
+    "assistant": 10,
+    "http": 10,
+    "retries": 0
+  },
+  "groups": {
+    "transition": {
+      "rounds": 1,
+      "calls": 4,
+      "input": 403,
+      "cacheRead": 14464,
+      "promptTokens": 14867,
+      "hitRate": 0.9728929844622318
+    },
+    "stable": {
+      "rounds": 2,
+      "calls": 6,
+      "input": 7505,
+      "cacheRead": 67968,
+      "promptTokens": 75473,
+      "hitRate": 0.900560465331973
+    }
+  },
+  "overallHitRate": 0.912464024795218,
+  "rounds": [
+    {
+      "round": 1,
+      "persona": "oris",
+      "tools": [
+        "write_file",
+        "run_code"
+      ],
+      "contextTokens": 4223,
+      "callPromptTokens": 14867,
+      "callCount": 4,
+      "assistantCallCount": 4,
+      "httpRequestCount": 4,
+      "retryCount": 0,
+      "personaTransition": true,
+      "commonPrefixMessages": 0,
+      "input": 403,
+      "output": 1079,
+      "cacheRead": 14464,
+      "cacheWrite": 0,
+      "cost": 0.00039903919999999997
+    },
+    {
+      "round": 2,
+      "persona": "oris",
+      "tools": [
+        "write_file",
+        "run_code"
+      ],
+      "contextTokens": 12286,
+      "callPromptTokens": 35891,
+      "callCount": 3,
+      "assistantCallCount": 3,
+      "httpRequestCount": 3,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 7,
+      "input": 7091,
+      "output": 1028,
+      "cacheRead": 28800,
+      "cacheWrite": 0,
+      "cost": 0.00136122
+    },
+    {
+      "round": 3,
+      "persona": "oris",
+      "tools": [
+        "write_file",
+        "run_code"
+      ],
+      "contextTokens": 13652,
+      "callPromptTokens": 39582,
+      "callCount": 3,
+      "assistantCallCount": 3,
+      "httpRequestCount": 3,
+      "retryCount": 0,
+      "personaTransition": false,
+      "commonPrefixMessages": 13,
+      "input": 414,
+      "output": 1320,
+      "cacheRead": 39168,
+      "cacheWrite": 0,
+      "cost": 0.0005372304
+    }
+  ],
+  "requests": [
+    {
+      "callIndex": 1,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 0,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 102,
+        "output": 47,
+        "cacheRead": 3200,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 3349,
+        "cost": {
+          "input": 0.00001428,
+          "output": 0.000013160000000000001,
+          "cacheRead": 0.000008959999999999999,
+          "cacheWrite": 0,
+          "total": 0.000036400000000000004
+        }
+      }
+    },
+    {
+      "callIndex": 2,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 1,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 48,
+        "output": 569,
+        "cacheRead": 3328,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 3945,
+        "cost": {
+          "input": 0.00000672,
+          "output": 0.00015932,
+          "cacheRead": 0.000009318399999999999,
+          "cacheWrite": 0,
+          "total": 0.0001753584
+        }
+      }
+    },
+    {
+      "callIndex": 3,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 3,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 126,
+        "output": 179,
+        "cacheRead": 3840,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 4145,
+        "cost": {
+          "input": 0.00001764,
+          "output": 0.00005012,
+          "cacheRead": 0.000010752,
+          "cacheWrite": 0,
+          "total": 0.000078512
+        }
+      }
+    },
+    {
+      "callIndex": 4,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 5,
+      "stopReason": "stop",
+      "usage": {
+        "input": 127,
+        "output": 284,
+        "cacheRead": 4096,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 4507,
+        "cost": {
+          "input": 0.000017780000000000003,
+          "output": 0.00007952000000000001,
+          "cacheRead": 0.0000114688,
+          "cacheWrite": 0,
+          "total": 0.0001087688
+        }
+      }
+    },
+    {
+      "callIndex": 5,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 7,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 6937,
+        "output": 749,
+        "cacheRead": 4480,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 12166,
+        "cost": {
+          "input": 0.0009711800000000001,
+          "output": 0.00020972000000000002,
+          "cacheRead": 0.000012543999999999999,
+          "cacheWrite": 0,
+          "total": 0.001193444
+        }
+      }
+    },
+    {
+      "callIndex": 6,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 9,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 28,
+        "output": 62,
+        "cacheRead": 12160,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 12250,
+        "cost": {
+          "input": 0.000003920000000000001,
+          "output": 0.00001736,
+          "cacheRead": 0.000034047999999999997,
+          "cacheWrite": 0,
+          "total": 0.000055327999999999996
+        }
+      }
+    },
+    {
+      "callIndex": 7,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 11,
+      "stopReason": "stop",
+      "usage": {
+        "input": 126,
+        "output": 217,
+        "cacheRead": 12160,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 12503,
+        "cost": {
+          "input": 0.00001764,
+          "output": 0.00006076,
+          "cacheRead": 0.000034047999999999997,
+          "cacheWrite": 0,
+          "total": 0.000112448
+        }
+      }
+    },
+    {
+      "callIndex": 8,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 13,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 107,
+        "output": 862,
+        "cacheRead": 12416,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 13385,
+        "cost": {
+          "input": 0.00001498,
+          "output": 0.00024136,
+          "cacheRead": 0.000034764799999999996,
+          "cacheWrite": 0,
+          "total": 0.00029110480000000004
+        }
+      }
+    },
+    {
+      "callIndex": 9,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 15,
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 95,
+        "output": 62,
+        "cacheRead": 13312,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 13469,
+        "cost": {
+          "input": 0.000013300000000000001,
+          "output": 0.00001736,
+          "cacheRead": 0.000037273599999999995,
+          "cacheWrite": 0,
+          "total": 0.00006793359999999999
+        }
+      }
+    },
+    {
+      "callIndex": 10,
+      "personaKey": "oris",
+      "attempts": 1,
+      "commonPrefixMessages": 17,
+      "stopReason": "stop",
+      "usage": {
+        "input": 212,
+        "output": 396,
+        "cacheRead": 13440,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 14048,
+        "cost": {
+          "input": 0.00002968,
+          "output": 0.00011088000000000001,
+          "cacheRead": 0.000037631999999999995,
+          "cacheWrite": 0,
+          "total": 0.00017819200000000003
+        }
+      }
+    }
+  ]
+}
