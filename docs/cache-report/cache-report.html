@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<!-- ==================================================================
+     LONG DOCUMENT TEMPLATE · parchment design system
+     多页 A4 白皮书/技术报告/年度总结
+     结构：封面 -> 目录 -> 执行摘要 -> 正文章节 -> 附录
+     ================================================================== -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PiLore 上下文缓存利用率测试报告</title>
+<meta name="author" content="PiLore Team">
+<meta name="description" content="三次模拟真实用户场景的 512K 上下文缓存测试：追加式 persona 上下文使累计命中率从 84.26% 升至 97.11%，估算成本从 0.58 降至 0.12 美元。">
+<meta name="keywords" content="上下文缓存, 缓存命中率, DeepSeek, 512K, persona, PiLore">
+<meta name="generator" content="Kami">
+<style>
+  /* Regular weight */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("fonts/TsangerJinKai02-W04.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W04.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  /* Bold weight - W05 for all bold variants */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("fonts/TsangerJinKai02-W05.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W05.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+  }
+
+  @page {
+    size: A4;
+    margin: 20mm 22mm 22mm 22mm;
+    background: #f5f4ed;
+
+    @top-right {
+      content: string(section-title);
+      font-family: "TsangerJinKai02", "Source Han Serif SC",
+                   "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+      font-size: 8pt;
+      color: #6b6a64;
+    }
+
+    @bottom-center {
+      content: counter(page) "  ·  PiLore 缓存测试报告";
+      font-family: "TsangerJinKai02", "Source Han Serif SC",
+                   "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+      font-size: 9pt;
+      color: #6b6a64;
+    }
+  }
+
+  @page:first {
+    @top-right { content: ""; }
+    @bottom-center { content: ""; }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --parchment: #f5f4ed;
+    --ivory:     #faf9f5;
+    --near-black:#141413;
+    --dark-warm: #3d3d3a;
+    --olive:     #504e49;
+    --stone:     #6b6a64;
+    --brand:     #1B365D;
+    --border:    #e8e6dc;
+    --border-soft:#e5e3d8;
+    --tag-bg:    #E4ECF5;
+    --serif: "TsangerJinKai02", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif;
+    --sans: var(--serif);
+
+    --rhythm-module:  14pt;
+    --rhythm-section: 18pt;
+  }
+
+  html, body { background: var(--parchment); }
+
+  @media screen {
+    body { max-width: 210mm; margin: 0 auto; padding: 20mm 22mm 22mm 22mm; }
+  }
+
+  body {
+    color: var(--near-black);
+    font-family: var(--serif);
+    font-size: 10.5pt;
+    line-height: 1.55;
+    letter-spacing: 0.3pt;
+    widows: 3;
+    orphans: 3;
+  }
+
+  .sans {
+    font-family: var(--sans);
+  }
+
+  /* ========== COVER ========== */
+  .cover {
+    min-height: 240mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40mm 0 0 0;
+    break-after: page;
+  }
+  .cover-eyebrow {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-bottom: 18pt;
+  }
+  .cover-title {
+    font-size: 36pt;
+    font-weight: 500;
+    color: var(--near-black);
+    line-height: 1.15;
+    letter-spacing: 0.3pt;
+    margin-bottom: 16pt;
+  }
+  .cover-sub {
+    font-family: var(--sans);
+    font-size: 14pt;
+    color: var(--olive);
+    line-height: 1.5;
+    max-width: 85%;
+    margin-bottom: 30pt;
+  }
+  .cover-meta {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--stone);
+    line-height: 1.5;
+  }
+  .cover-meta strong {
+    color: var(--dark-warm);
+    font-weight: 500;
+  }
+
+  /* ========== TOC（目录）========== */
+  .toc { break-after: page; }
+  .toc h2 {
+    font-size: 22pt;
+    font-weight: 500;
+    margin-bottom: var(--rhythm-module);
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+  }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6pt 0;
+    border-bottom: 0.3pt dotted var(--border);
+    font-size: 11pt;
+  }
+  .toc-item:last-of-type { border-bottom: none; }
+  .toc-num {
+    color: var(--brand);
+    font-weight: 500;
+    min-width: 30pt;
+  }
+  .toc-title {
+    flex: 1;
+    color: var(--near-black);
+    padding-left: 6pt;
+  }
+  .toc-page {
+    color: var(--stone);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ========== HEADINGS ========== */
+  h1 {
+    font-size: 22pt;
+    font-weight: 500;
+    line-height: 1.2;
+    margin: 0 0 10pt 0;
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+    color: var(--near-black);
+    break-after: avoid;
+  }
+
+  h2 {
+    font-size: 16pt;
+    font-weight: 500;
+    line-height: 1.25;
+    margin: 24pt 0 8pt 0;
+    color: var(--near-black);
+    break-after: avoid;
+    string-set: section-title content();
+  }
+
+  h3 {
+    font-size: 13pt;
+    font-weight: 500;
+    line-height: 1.3;
+    margin: 18pt 0 6pt 0;
+    color: var(--dark-warm);
+    break-after: avoid;
+  }
+
+  .chapter-num {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-bottom: 6pt;
+  }
+
+  /* ========== PARAGRAPHS ========== */
+  p {
+    margin: 0 0 10pt 0;
+    line-height: 1.55;
+    color: var(--near-black);
+    widows: 2;
+    orphans: 2;
+  }
+
+  .lead {
+    font-size: 12pt;
+    line-height: 1.55;
+    color: var(--dark-warm);
+    margin-bottom: var(--rhythm-module);
+  }
+
+  .hl { color: var(--brand); font-weight: 500; }
+  strong { font-weight: 500; }
+
+  /* ========== LISTS ========== */
+  ul, ol {
+    margin: 6pt 0 10pt 0;
+    padding-left: 20pt;
+    line-height: 1.55;
+  }
+  ul li::marker { color: var(--brand); }
+  ol li::marker { color: var(--brand); font-weight: 500; }
+
+  /* ========== QUOTE ========== */
+  blockquote, .quote {
+    border-left: 2pt solid var(--brand);
+    margin: 12pt 0;
+    padding: 4pt 0 4pt 16pt;
+    color: var(--olive);
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  blockquote .cite, .quote .cite {
+    display: block;
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 4pt;
+  }
+
+  /* ========== CODE ========== */
+  /* Mono first for English glyphs, then CJK fallback so Chinese comments
+     inside code/pre render correctly. A mono-only chain causes missing
+     glyphs rendered as "?" or missing-glyph boxes in WeasyPrint when the system lacks
+     a mono font with CJK coverage. */
+  code {
+    font-family: "JetBrains Mono", "SF Mono", Consolas,
+                 "TsangerJinKai02", "Source Han Serif SC",
+                 "Noto Serif CJK SC", "Songti SC", monospace;
+    font-size: 9pt;
+    background: var(--ivory);
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+    color: var(--dark-warm);
+  }
+  pre {
+    font-family: "JetBrains Mono", "SF Mono", Consolas,
+                 "TsangerJinKai02", "Source Han Serif SC",
+                 "Noto Serif CJK SC", "Songti SC", monospace;
+    font-size: 9pt;
+    line-height: 1.5;
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 10pt 0;
+    white-space: pre-wrap;
+    color: var(--near-black);
+    break-inside: avoid;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+
+  /* ========== TABLE (kami-table) ========== */
+  table, .kami-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    margin: 12pt 0;
+    break-inside: avoid;
+  }
+  table th, .kami-table th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--dark-warm);
+    padding: 6pt 8pt;
+    border-bottom: 1pt solid var(--border);
+    background: transparent;
+  }
+  table td, .kami-table td {
+    padding: 5pt 8pt;
+    border-bottom: 0.3pt solid var(--border-soft);
+    vertical-align: top;
+  }
+  table.compact th, .kami-table.compact th { padding: 3pt 6pt; font-size: 8pt; }
+  table.compact td, .kami-table.compact td { padding: 2pt 6pt; font-size: 8pt; line-height: 1.4; }
+  table.financial td:not(:first-child), .kami-table.financial td:not(:first-child) {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  table.financial th:not(:first-child), .kami-table.financial th:not(:first-child) { text-align: right; }
+  table.striped tbody tr:nth-child(even) td, .kami-table.striped tbody tr:nth-child(even) td {
+    background: var(--ivory);
+  }
+  table .total td, .kami-table .total td {
+    font-weight: 500; border-top: 1pt solid var(--brand); border-bottom: none; color: var(--near-black);
+  }
+
+  /* ========== CALLOUT ========== */
+  .callout {
+    background: var(--ivory);
+    border-left: 2pt solid var(--brand);
+    padding: 10pt 14pt;
+    border-radius: 3pt;
+    margin: 12pt 0;
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  .callout blockquote,
+  .callout .quote {
+    border-left: none;
+    padding-left: 0;
+    margin: 6pt 0;
+    color: var(--olive);
+  }
+  .callout blockquote:first-child,
+  .callout .quote:first-child { margin-top: 0; }
+  .callout blockquote:last-child,
+  .callout .quote:last-child  { margin-bottom: 0; }
+
+  .takeaway {
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  .takeaway-label {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--brand);
+    letter-spacing: 0.5pt;
+    text-transform: uppercase;
+    margin-bottom: 4pt;
+  }
+
+  /* ========== TAG ========== */
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--brand);
+    font-family: var(--sans);
+    font-size: 9pt;
+    font-weight: 500;
+    padding: 1pt 6pt;
+    border-radius: 3pt;
+    margin-right: 4pt;
+  }
+
+  /* ========== FIGURE ========== */
+  figure {
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  figure img {
+    max-width: 100%;
+    border-radius: 4pt;
+  }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 6pt;
+    text-align: center;
+  }
+
+  /* ========== EXECUTIVE SUMMARY ========== */
+  .exec-summary {
+    background: var(--ivory);
+    border-left: 1.4pt solid var(--brand);
+    border-radius: 6pt;
+    padding: 16pt 20pt;
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  .exec-summary h2 {
+    margin-top: 0;
+    font-size: 13pt;
+  }
+
+  /* ========== CHAPTER BREAK ========== */
+  .chapter { break-before: page; }
+</style>
+</head>
+<body>
+
+<!-- ═════════════ COVER ═════════════ -->
+<section class="cover">
+  <div>
+    <div class="cover-eyebrow">技术报告 · 性能测试</div>
+    <div class="cover-title">PiLore 上下文缓存<br>利用率测试报告</div>
+    <div class="cover-sub">三次模拟真实用户场景的 512K 上下文压测，验证追加式 persona 上下文对前缀缓存命中率与成本的影响</div>
+  </div>
+  <div class="cover-meta">
+    <strong>PiLore Team</strong><br>
+    V1.0  ·  2026.08<br>
+    基于 DeepSeek API 实测数据
+  </div>
+</section>
+
+<!-- ═════════════ 目录 ═════════════ -->
+<section class="toc">
+  <h2>目录</h2>
+  <div class="toc-item">
+    <span class="toc-num">01</span>
+    <span class="toc-title">执行摘要</span>
+    <span class="toc-page">03</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">02</span>
+    <span class="toc-title">背景与问题定义</span>
+    <span class="toc-page">04</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">03</span>
+    <span class="toc-title">方法与发现</span>
+    <span class="toc-page">05</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">04</span>
+    <span class="toc-title">结论与建议</span>
+    <span class="toc-page">07</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">05</span>
+    <span class="toc-title">附录</span>
+    <span class="toc-page">08</span>
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 01：执行摘要 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">01 · Executive Summary</div>
+  <h1>执行摘要</h1>
+
+  <p class="lead">
+    PiLore 在保持<strong>真实用户使用模式</strong>的前提下，把 persona 方法论从「换入 systemPrompt」改为「追加式内部上下文」，
+    512K 长对话下的累计缓存命中率从 <span class="hl">84.26%</span> 提升至 <span class="hl">97.11%</span>，
+    估算成本从 <span class="hl">$0.58</span> 降至 <span class="hl">$0.12</span>，同时角色切换不再破坏缓存前缀。
+  </p>
+
+  <h2>核心 Takeaways</h2>
+  <ul>
+    <li>命中率跨越：旧框架 84.26% → 新框架 97.11%（+12.9 个百分点），末轮上下文 <span class="hl">512,028 tokens</span>。</li>
+    <li>成本跨越：同样 512K 目标、56 轮左右的对话，估算成本 <span class="hl">$0.58 → $0.12</span>，降幅约 79%。</li>
+    <li>前缀稳定性：切换轮命中率 97.24% 与稳定轮 97.03% 基本持平，追加式 persona 上下文消除了切角色导致的缓存失效。</li>
+  </ul>
+
+  <div class="takeaway">
+    <div class="takeaway-label">本文档回答的问题</div>
+    1. 在「必须调用工具 + 中途切换角色 + 模拟真实用户」的条件下，512K 上下文能维持多高的缓存命中率？<br>
+    2. 追加式 persona 上下文相比旧「换入 systemPrompt」方案，对缓存前缀和成本有多大影响？<br>
+    3. 命中率与成本数据是否可复现、可审计（telemetry 请求级归属）？
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 02：背景 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">02 · Background</div>
+  <h1>背景与问题定义</h1>
+
+  <p class="lead">
+    PiLore 是一个 AI 编码教育 agent 核心：LLM → 工具调用 → 远程沙箱执行 → 基于真实输出的讲解。
+    它面向<strong>长会话教学</strong>，每一轮都会把完整历史重新发给模型，因此<strong>上下文缓存命中率</strong>直接决定单会话成本量级。
+  </p>
+
+  <h2>为什么缓存命中率是关键指标</h2>
+  <p>
+    DeepSeek（deepseek-v4-flash）按前缀缓存计费：请求中与上一请求相同的 prompt 前缀按
+    <span class="hl">cacheRead</span> 超低价计费，未命中的新增部分按正常 <span class="hl">input</span> 计费。
+    在 512K 上下文下，每轮重发完整历史，若前缀稳定则绝大多数 token 命中缓存；若前缀被打断（如 systemPrompt 变化），
+    整段历史重新计费，成本成倍上升。旧框架下未命中 input 累计达 <span class="hl">368 万 tokens</span>，正是前缀被打断的代价。
+  </p>
+
+  <h2>核心问题</h2>
+  <p>
+    教学会话天然包含三类「前缀破坏因素」：<strong>工具链多回合</strong>（write_file / run_code / read_file）、
+    <strong>角色切换</strong>（Oris / Feynman / Socrates / 自动路由）、<strong>教学进度更新</strong>（update_teaching）。
+    旧实现把角色方法论整体换入 systemPrompt，切换一次前缀即失效；新实现改为<strong>追加式 persona 上下文</strong>——
+    方法论作为内部消息与下一条用户消息合并，systemPrompt 全程固定，前缀保持稳定。
+  </p>
+
+  <div class="callout">
+    「切换角色就该掉命中率」并不是必然。前缀缓存只认「请求前缀是否与上次相同」，
+    与语义是否变化无关——把变化移出 systemPrompt、移进消息流，就能在保留角色切换的前提下保住前缀。
+  </div>
+
+  <h2>衡量标准</h2>
+  <table class="kami-table financial striped">
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>旧框架（换入式）</th>
+        <th>新框架（追加式）</th>
+        <th>差距</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>累计缓存命中率</td>
+        <td>84.26%</td>
+        <td>97.11%</td>
+        <td>+12.9 pp</td>
+      </tr>
+      <tr>
+        <td>未命中 input（累计）</td>
+        <td>3,681,581</td>
+        <td>486,880</td>
+        <td>-87%</td>
+      </tr>
+      <tr>
+        <td>估算成本（512K 目标）</td>
+        <td>$0.58</td>
+        <td>$0.12</td>
+        <td>-79%</td>
+      </tr>
+      <tr>
+        <td>HTTP 重试次数</td>
+        <td>0</td>
+        <td>0</td>
+        <td>持平</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═════════════ Chapter 03：方法 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">03 · Methodology</div>
+  <h1>方法与发现</h1>
+
+  <p class="lead">
+    测试不使用纯文字对话，而是完整启用 PiLore Agent 的真实行为：调用工具、中途切换角色、逐轮累积上下文至 512K，
+    并通过请求级 telemetry 记录每次逻辑调用与真实 HTTP 请求的命中数据。
+  </p>
+
+  <h2>研究方法</h2>
+  <p>
+    驱动 <code>createEduSession</code>（Agent 核心会话层），注入默认老师集合与真实沙箱
+    <code>http://192.168.172.134:1313</code>。每轮模拟一种真实用法：写代码跑码（write_file + run_code）、
+    贴学习材料要求讲解、概念问答、贴 bug 代码要求修复并验证。每 3 轮按
+    Oris → Feynman → Socrates → 自动路由 的节奏切换角色；<code>maxTurns</code> 设为 6 给工具链留足回合。
+    上下文度量口径为「最后一回合 LLM 调用的 input + cacheRead + cacheWrite」，达到 512K 目标即停。
+  </p>
+
+  <pre><code class="language-python">session = createEduSession({
+    models, providerId: "deepseek", modelId: "deepseek-v4-flash",
+    thinkingLevel: "off", personas,      # Oris / Feynman / Socrates
+    llmTelemetry: { onEvent },           # 请求级归属：logicalRequestId / callIndex
+    maxTurns: 6,                         # 工具链护栏
+})
+for r in range(rounds):
+    session.setPersona(rotation(r % 3))  # 中途切换角色
+    await session.prompt(buildUserMessage(r), onEvent)</code></pre>
+
+  <h2>三轮测试总览</h2>
+  <p>
+    三次测试的对话模式与工具调用保持一致，差异在框架版本与运行环境：第一次为旧「换入式」实现，
+    后两次为「追加式 persona 上下文」实现，其中第三次为换用新 API key 后的复测，用于验证数据可复现。
+    三次均 0 次 HTTP 重试。
+  </p>
+  <table class="kami-table financial striped">
+    <thead>
+      <tr>
+        <th>轮次</th>
+        <th>框架</th>
+        <th>对话轮数</th>
+        <th>末轮上下文</th>
+        <th>累计命中率</th>
+        <th>未命中 input</th>
+        <th>估算成本</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>第 1 次</td>
+        <td>旧（换入式 systemPrompt）</td>
+        <td>56</td>
+        <td>526,147</td>
+        <td>84.26%</td>
+        <td>3,681,581</td>
+        <td>$0.58</td>
+      </tr>
+      <tr>
+        <td>第 2 次</td>
+        <td>新（追加式 persona 上下文）</td>
+        <td>56</td>
+        <td>549,194</td>
+        <td>98.30%</td>
+        <td>519,607</td>
+        <td>$0.17</td>
+      </tr>
+      <tr>
+        <td>第 3 次</td>
+        <td>新（换新 key 复测）</td>
+        <td>55</td>
+        <td>512,028</td>
+        <td>97.11%</td>
+        <td>486,880</td>
+        <td>$0.12</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>关键发现</h2>
+
+  <h3>发现 1：追加式 persona 上下文把命中率抬升 12.9 个百分点</h3>
+  <p>
+    旧框架下切换角色 = 换入新 systemPrompt = 前缀失效，单轮未命中 input 常飙至 10 万以上（如 114,788 与 92,228）。
+    新框架 systemPrompt 全程哈希不变，切换只追加上下文，命中率稳定在 97% 以上。第 3 次复测
+    （97.11%）与第 2 次（98.30%）基本一致，证明提升来自框架而非单次运行。
+  </p>
+
+  <h3>发现 2：角色切换不再破坏缓存前缀</h3>
+  <p>
+    新框架第 3 次测试中，切换轮命中率 97.24%、稳定轮 97.03%，两者几乎持平；末轮
+    <code>commonPrefixMessages = 136</code>，即最后一次请求与上次共享 136 条完整历史消息。
+    旧框架则无此保证——每次切换后整段历史重新计费。
+  </p>
+
+  <blockquote>
+    前缀缓存只关心「这段前缀我上次是否见过」。把变化从 systemPrompt 挪进消息流，
+    角色切换就从「缓存杀手」变成了「一次普通的新增消息」。
+    <span class="cite">— 本次测试的核心观察</span>
+  </blockquote>
+
+  <h3>发现 3：请求级 telemetry 可审计，计数自洽</h3>
+  <p>
+    第 3 次测试共 <span class="hl">66</span> 次逻辑调用、<span class="hl">66</span> 个 assistant 成功消息、
+    <span class="hl">66</span> 次 HTTP 请求、0 重试，三者完全一致；报告按
+    <code>logicalRequestId</code> / <code>callIndex</code> 归属每个调用，可逐请求核对命中与成本。
+    第 2 次为 109 次调用（工具链更长），同样 0 重试。
+  </p>
+
+  <h3>发现 4：工具调用模式在两次新框架测试中略有差异</h3>
+  <table class="kami-table financial striped">
+    <thead>
+      <tr>
+        <th>工具</th>
+        <th>第 2 次</th>
+        <th>第 3 次</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>write_file</td>
+        <td>14</td>
+        <td>7</td>
+      </tr>
+      <tr>
+        <td>run_code</td>
+        <td>14</td>
+        <td>8</td>
+      </tr>
+      <tr>
+        <td>read_file</td>
+        <td>3</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>update_teaching</td>
+        <td>0</td>
+        <td>1</td>
+      </tr>
+      <tr class="total">
+        <td>合计</td>
+        <td>31</td>
+        <td>17</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═════════════ Chapter 04：结论 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">04 · Conclusions</div>
+  <h1>结论与建议</h1>
+
+  <p class="lead">
+    追加式 persona 上下文是这次命中率与成本改善的核心来源，且在第 2、3 次测试中可复现；
+    512K 真实教学会话下的累计命中率稳定在 97% 以上。
+  </p>
+
+  <h2>核心结论</h2>
+  <ol>
+    <li>追加式 persona 上下文将累计缓存命中率从 84.26% 提升至 97.11%，估算成本从 $0.58 降至 $0.12（降 79%）。</li>
+    <li>角色切换不再破坏缓存前缀：切换轮命中率 97.24% 与稳定轮 97.03% 持平，末轮前缀共享 136 条历史消息。</li>
+    <li>数据可复现、可审计：换新 key 复测命中率 97.11%（前次 98.30%），66 次逻辑调用 = 66 次 HTTP = 0 重试，请求级归属一致。</li>
+  </ol>
+
+  <h2>下一步建议</h2>
+  <p>
+    保持「systemPrompt 固定 + 方法论追加进消息流」的架构不变；后续优化可关注工具链回合数
+    （第 2 次 109 次调用 vs 第 3 次 66 次），因为每个工具回合都是一次完整历史重发，
+    减少不必要的工具调用能进一步压低成本。DeepSeek 控制台的命中率与账单可作为服务端侧核对依据。
+  </p>
+
+  <div class="takeaway">
+    <div class="takeaway-label">Call to Action</div>
+    如果只需记住一件事：把任何会变化的上下文（角色、进度、指令）移出 systemPrompt、
+    以追加式内部消息进入历史，前缀缓存就能在真实多轮使用中保持 97% 以上的命中率。
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 05：附录 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">05 · Appendix</div>
+  <h1>附录</h1>
+
+  <h2>A. 数据来源</h2>
+  <ul>
+    <li>reports/cache-realistic-2026-08-10T14-31-22-668Z.json（第 1 次，旧框架）</li>
+    <li>reports/cache-realistic-2026-08-10T15-41-28-797Z.json（第 2 次，新框架）</li>
+    <li>reports/cache-realistic-2026-08-11T03-04-46-274Z.json（第 3 次，新框架 · 换新 key 复测）</li>
+  </ul>
+
+  <h2>B. 术语表</h2>
+  <p><strong>前缀缓存（prefix caching）</strong>：DeepSeek 服务端对请求前缀的自动缓存；命中的 token 按 cacheRead 超低价计费。</p>
+  <p><strong>cacheRead / cacheWrite / input</strong>：pi-ai usage 字段，分别对应缓存命中、缓存写入、未命中新增部分。</p>
+  <p><strong>追加式 persona 上下文</strong>：方法论作为内部消息与下一条用户消息合并，systemPrompt 全程固定。</p>
+  <p><strong>logicalRequestId / callIndex</strong>：telemetry 中逻辑调用的唯一标识与全局递增序号，用于请求级归属。</p>
+  <p><strong>commonPrefixMessages</strong>：当前请求与上次请求共享的完整历史消息条数。</p>
+
+  <h2>C. 测试条件</h2>
+  <p><strong>模型</strong>：deepseek-v4-flash · thinking off；<strong>执行后端</strong>：192.168.172.134:1313（真实沙箱）；
+  <strong>上下文目标</strong>：~512K tokens；<strong>单轮护栏</strong>：maxTurns=6；<strong>角色节奏</strong>：每 3 轮切换一次。</p>
+</section>
+
+</body>
+</html>
