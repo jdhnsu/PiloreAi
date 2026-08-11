@@ -12,6 +12,7 @@ import type { ExecClient } from "./exec-client.js";
 import type { Persona } from "./personas.js";
 import type { VirtualFS } from "./vfs.js";
 import type { LlmTelemetrySink } from "./telemetry.js";
+import type { CustomModelConfig } from "./models/custom.js";
 
 export interface EduAgentConfig {
 	/** 自定义 provider HTTP fetch（代理、测试或请求级观测）；默认使用 globalThis.fetch。 */
@@ -20,6 +21,8 @@ export interface EduAgentConfig {
 	llmTelemetry?: LlmTelemetrySink;
 	/** 注入自定义 models 集合（如 demo 用 fauxProvider）；默认注册内置 provider。 */
 	models?: MutableModels;
+	/** 单模型自定义连接（URL、协议、模型 ID）；优先于 providerId/modelId，并注册到 models 集合。 */
+	customModel?: CustomModelConfig;
 	/** provider id；默认读 PROVIDER 环境变量，缺省取注册表第一项。 */
 	providerId?: string;
 	/** 模型 id；默认读 MODEL_ID 环境变量，缺省取该 provider 的默认模型。 */

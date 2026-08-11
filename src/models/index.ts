@@ -4,6 +4,15 @@ import type { ProviderDefinition } from "./types.js";
 
 export type { ProviderDefinition } from "./types.js";
 export { PROVIDERS } from "./registry.js";
+export {
+	CUSTOM_MODEL_PROVIDER_ID,
+	CUSTOM_MODEL_PROTOCOLS,
+	createCustomModelProvider,
+	registerCustomModel,
+	resolveCustomModelConfig,
+	type CustomModelConfig,
+	type CustomModelProtocol,
+} from "./custom.js";
 
 export {
 	LONGCAT_ID,

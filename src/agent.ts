@@ -7,7 +7,13 @@ import { appendPersonaContext, convertPiLoreMessages, createPersonaContextMessag
 import { createTools } from "./tools.js";
 import { SharedState, type TeachingProgress } from "./shared-state.js";
 import { VirtualFS } from "./vfs.js";
-import { createModelCollection, DEFAULT_MODEL_IDS, resolveProviderId } from "./models/index.js";
+import {
+	createModelCollection,
+	DEFAULT_MODEL_IDS,
+	registerCustomModel,
+	resolveCustomModelConfig,
+	resolveProviderId,
+} from "./models/index.js";
 import { createObservedStreamFn } from "./telemetry.js";
 
 export { createModelCollection, DEFAULT_MODEL_IDS, resolveProviderId } from "./models/index.js";
@@ -144,9 +150,11 @@ function checkCapability(persona: Persona, toolName: string, args: unknown, vfs:
 }
 
 export function createAgent(config: EduAgentConfig = {}): EduAgent {
+	const customModel = config.customModel ?? resolveCustomModelConfig();
 	const models = config.models ?? createModelCollection();
-	const providerId = config.providerId ?? resolveProviderId();
-	const modelId = config.modelId ?? process.env.MODEL_ID ?? DEFAULT_MODEL_IDS[providerId];
+	const customProviderId = customModel ? registerCustomModel(models, customModel) : undefined;
+	const providerId = customProviderId ?? config.providerId ?? resolveProviderId();
+	const modelId = customModel?.id ?? config.modelId ?? process.env.MODEL_ID ?? DEFAULT_MODEL_IDS[providerId];
 	const model = models.getModel(providerId, modelId);
 	if (!model) {
 		const available = models

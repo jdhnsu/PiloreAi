@@ -3,7 +3,16 @@
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 import { runFauxCase } from "../../harness/faux-driver.js";
 import type { OfflineCaseDef } from "../../harness/score.js";
-import { createEduSession, parsePersona, type ExecClient, type ExecRequest, type ExecResponse } from "../../../src/index.js";
+import {
+	createEduSession,
+	createAgent,
+	createModelCollection,
+	parsePersona,
+	registerCustomModel,
+	type ExecClient,
+	type ExecRequest,
+	type ExecResponse,
+} from "../../../src/index.js";
 
 // 用纯函数 parsePersona 从内嵌字符串构造自定义老师（不碰磁盘）
 function makeCustomPersona(key: string, name: string, body: string) {
@@ -76,6 +85,36 @@ export const injectionCases: OfflineCaseDef[] = [
 			ctx.check("请求带完整 files", calls[0]?.files["main.py"] === "print('hi')");
 			const run = evidence.toolCalls.find((t) => t.name === "run_code");
 			ctx.check("run_code 走注入后端输出", !!run && run.resultText.includes("INJECTED_OUTPUT"), run?.resultText.slice(0, 60));
+		},
+	},
+	{
+		id: "OIN-03",
+		name: "自定义模型可按 URL、协议和 ID 注册",
+		dimension: "边界",
+		weight: 2,
+		run: async (ctx) => {
+			const models = createModelCollection();
+			const providerId = registerCustomModel(models, {
+				url: "http://127.0.0.1:8080/v1/",
+				protocol: "openai-completions",
+				id: "local-model",
+				providerId: "local-test",
+			});
+			const model = models.getModel(providerId, "local-model");
+			ctx.check("providerId 返回配置值", providerId === "local-test");
+			ctx.check("模型按 ID 注册", model?.id === "local-model");
+			ctx.check("URL 规范化", model?.baseUrl === "http://127.0.0.1:8080/v1");
+			ctx.check("协议映射正确", model?.api === "openai-completions");
+
+			const edu = createAgent({
+				customModel: {
+					url: "http://127.0.0.1:8081/v1",
+					protocol: "anthropic-messages",
+					id: "custom-claude",
+				},
+			});
+			ctx.check("Agent 自动选中自定义模型", edu.model.provider === "custom" && edu.model.id === "custom-claude");
+			ctx.check("Agent 保留所选协议", edu.model.api === "anthropic-messages");
 		},
 	},
 ];

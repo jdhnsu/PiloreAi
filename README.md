@@ -35,6 +35,12 @@ npm run demo
 # 2. 有 API key：
 cp .env.example .env   # 填入 DEEPSEEK_API_KEY（首选）、MOONSHOT_API_KEY 或 LONGCAT_API_KEY
 
+# 或配置单个自定义模型（支持 OpenAI Chat Completions / Responses / Anthropic Messages）
+# CUSTOM_MODEL_URL=https://api.example.com/v1
+# CUSTOM_MODEL_PROTOCOL=openai-completions
+# CUSTOM_MODEL_ID=your-model-id
+# CUSTOM_MODEL_API_KEY=your-api-key
+
 # 3. Web 界面（主要测试面，浏览器打开提示的地址；默认 8600 端口，被占用时自动回退 +1；
 #    显式指定用 WEB_PORT=xxxx npm run web）：
 npm run web            # 真实模型
@@ -64,6 +70,18 @@ npm run test:agent:all     # 两者都跑
 
 ```bash
 npx tsx tests/run.ts --mode real --provider moonshotai-cn --model kimi-k2-0905-preview
+```
+
+嵌入时也可通过 `customModel` 直接指定连接信息；该配置会自动注册并选中模型，且不需要新增 provider 源文件：
+
+```ts
+const session = createEduSession({
+  customModel: {
+    url: "http://127.0.0.1:11434/v1",
+    protocol: "openai-completions",
+    id: "qwen2.5",
+  },
+});
 ```
 
 CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
