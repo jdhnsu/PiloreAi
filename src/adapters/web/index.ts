@@ -639,11 +639,11 @@ async function main(): Promise<void> {
 		}
 	};
 
-	// 默认 8600：本机 8100 常被 WSL2/Hyper-V 保留端口段（如 8079-8178）占用导致 EACCES；
+	// 默认 9600：8100/8600 常落在 WSL2/Hyper-V 保留端口段（本机实测 8519-8618 整段 EACCES）；
 	// 未显式指定 WEB_PORT 时自动回退尝试后续端口，保证 npm run web 总能起来
 	const explicitPort = process.env.WEB_PORT !== undefined;
-	const port = Number(process.env.WEB_PORT ?? 8600);
-	const candidates = explicitPort ? [port] : Array.from({ length: 10 }, (_, i) => port + i);
+	const port = Number(process.env.WEB_PORT ?? 9600);
+	const candidates = explicitPort ? [port] : Array.from({ length: 20 }, (_, i) => port + i);
 
 	startServer(handler, candidates, FAUX_DEMO);
 }

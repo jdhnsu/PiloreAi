@@ -17,6 +17,8 @@ const sessionListEl = $("#session-list");
 const storageBadgeEl = $("#storage-badge");
 const welcomeEl = messagesEl.querySelector(".welcome");
 const packSelect = $("#pack-select");
+const packCurrentEl = $("#pack-current");
+const packOptionsEl = $("#pack-options");
 const welcomeTitle = $("#welcome-title");
 const welcomeDesc = $("#welcome-desc");
 const suggestionsEl = $("#suggestions");
@@ -853,7 +855,7 @@ async function loadState() {
 		if (state.pack && state.pack !== currentPack) {
 			currentPack = state.pack;
 			localStorage.setItem("pilore-pack", currentPack);
-			packSelect.value = currentPack;
+			renderPackMenu();
 			renderPackChrome();
 		}
 		if (state.demo) demoBadge.classList.remove("hidden");
@@ -1469,22 +1471,40 @@ async function loadPacks() {
 	} catch {
 		packs = [];
 	}
-	packSelect.innerHTML = "";
-	for (const pack of packs) {
-		const opt = document.createElement("option");
-		opt.value = pack.id;
-		opt.textContent = pack.name;
-		packSelect.appendChild(opt);
-	}
 	const saved = localStorage.getItem("pilore-pack");
 	currentPack = saved && packs.some((p) => p.id === saved) ? saved : (packs[0]?.id ?? "code");
-	packSelect.value = currentPack;
+	renderPackMenu();
+}
+
+function packIcon(pack) {
+	return pack.id === "english" ? "A" : "&lt;/&gt;";
+}
+
+function renderPackMenu() {
+	const current = packInfo();
+	packCurrentEl.textContent = current?.name ?? "学习包";
+	packOptionsEl.innerHTML = "";
+	for (const pack of packs) {
+		const option = document.createElement("button");
+		const selected = pack.id === currentPack;
+		option.type = "button";
+		option.className = selected ? "pack-option active" : "pack-option";
+		option.setAttribute("role", "option");
+		option.setAttribute("aria-selected", String(selected));
+		option.innerHTML = `<span class="pack-option-icon">${packIcon(pack)}</span><span><strong></strong><small></small></span>`;
+		option.querySelector("strong").textContent = pack.name;
+		option.querySelector("small").textContent = pack.tagline;
+		option.onclick = () => switchPack(pack.id);
+		packOptionsEl.appendChild(option);
+	}
 }
 
 async function switchPack(newPack) {
-	if (newPack === currentPack) return;
+	if (newPack === currentPack) {
+		closePackMenu();
+		return;
+	}
 	if (busy) {
-		packSelect.value = currentPack;
 		const note = document.createElement("div");
 		note.className = "system-note";
 		note.textContent = "正在生成回复，暂时无法切换学习包";
@@ -1494,7 +1514,8 @@ async function switchPack(newPack) {
 	}
 	currentPack = newPack;
 	localStorage.setItem("pilore-pack", newPack);
-	packSelect.value = newPack;
+	renderPackMenu();
+	closePackMenu();
 	applyPersona(null);
 	currentProfileKey = null;
 	currentFile = null;
@@ -1504,7 +1525,24 @@ async function switchPack(newPack) {
 	await refreshSessionList();
 }
 
-packSelect.onchange = () => switchPack(packSelect.value);
+function closePackMenu() {
+	packSelect.setAttribute("aria-expanded", "false");
+	packOptionsEl.classList.add("hidden");
+}
+
+packSelect.onclick = () => {
+	const expanded = packSelect.getAttribute("aria-expanded") === "true";
+	packSelect.setAttribute("aria-expanded", String(!expanded));
+	packOptionsEl.classList.toggle("hidden", expanded);
+};
+
+document.addEventListener("click", (event) => {
+	if (!event.target.closest(".pack-menu")) closePackMenu();
+});
+
+document.addEventListener("keydown", (event) => {
+	if (event.key === "Escape") closePackMenu();
+});
 
 (async function init() {
 	await loadPacks();

@@ -51,45 +51,55 @@ body {
 
 /* ===== 顶栏 ===== */
 .topbar {
+	position: relative;
+	z-index: 1;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	height: 60px;
-	padding: 0 20px;
-	/* 极淡冷色渐变 + 轻投影，弱化纯白面板的机械感 */
-	background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-	border-bottom: 1px solid var(--border);
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+	height: 64px;
+	padding: 0 24px;
+	background: var(--card);
+	border-bottom: 1px solid #dedede;
+	box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
 	flex-shrink: 0;
+}
+
+.topbar::after {
+	content: "";
+	position: absolute;
+	bottom: -1px;
+	left: 24px;
+	width: 88px;
+	height: 2px;
+	background: var(--accent);
+	border-radius: 999px;
 }
 
 .brand {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 10px;
 }
 
 .logo {
-	width: 36px;
-	height: 36px;
-	border-radius: 8px;
+	width: 38px;
+	height: 38px;
+	border-radius: 10px;
 	object-fit: cover;
 	display: block;
-	box-shadow: 0 0 0 1px var(--border), 0 2px 6px rgba(0, 0, 0, 0.08);
+	box-shadow: 0 0 0 1px #dfdfdf, 0 2px 5px rgba(0, 0, 0, 0.06);
 	transition: transform 0.2s ease;
 }
 
-/* hover 时吉祥物歪头 */
 .brand:hover .logo {
-	transform: rotate(-6deg) scale(1.06);
+	transform: rotate(-4deg) scale(1.04);
 }
 
-/* 品牌字标：Pi 提为强调蓝，整体加粗收紧 */
 .brand .wordmark {
-	font-size: 17px;
-	font-weight: 700;
-	letter-spacing: -0.3px;
-	line-height: 1.2;
+	font-size: 18px;
+	font-weight: 720;
+	letter-spacing: -0.45px;
+	line-height: 1.1;
 }
 
 .wm-pi {
@@ -97,32 +107,133 @@ body {
 }
 
 .subtitle {
+	margin-top: 2px;
 	font-size: 12px;
-	color: var(--text-secondary);
+	line-height: 1.25;
+	color: #707070;
 }
 
 .topbar-right {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 10px;
 }
 
-/* 学习包切换：与 model-info 同族的轻量控件 */
+.pack-menu {
+	position: relative;
+	padding-right: 10px;
+	border-right: 1px solid var(--border);
+}
+
 .pack-select {
-	font-family: inherit;
-	font-size: 12px;
-	color: var(--text-secondary);
-	background: #f6f6f6;
-	border: 1px solid var(--border);
-	border-radius: 4px;
-	padding: 3px 6px;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 122px;
+	padding: 5px 8px;
+	color: var(--text);
+	background-color: var(--surface-muted);
+	border: 1px solid transparent;
+	border-radius: 5px;
+	font: inherit;
+	font-weight: 600;
 	cursor: pointer;
-	transition: background 0.15s;
-	max-width: 96px;
+	transition: background 0.15s, border-color 0.15s;
 }
 
-.pack-select:hover {
-	background: #efefef;
+.pack-select:hover,
+.pack-select:focus-visible {
+	background-color: var(--card);
+	border-color: #b9d4ee;
+	outline: none;
+}
+
+.pack-select-label {
+	color: var(--text-secondary);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.pack-chevron {
+	width: 7px;
+	height: 7px;
+	margin-left: auto;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: translateY(-2px) rotate(45deg);
+	transition: transform 0.15s ease;
+}
+
+.pack-select[aria-expanded="true"] .pack-chevron {
+	transform: translateY(2px) rotate(225deg);
+}
+
+.pack-options {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 10px;
+	width: 190px;
+	padding: 6px;
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12), 0 2px 5px rgba(0, 0, 0, 0.06);
+}
+
+.pack-option {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 10px;
+	padding: 9px;
+	color: var(--text);
+	text-align: left;
+	background: transparent;
+	border: 0;
+	border-radius: 6px;
+	font: inherit;
+	cursor: pointer;
+}
+
+.pack-option:hover,
+.pack-option:focus-visible {
+	background: var(--accent-light);
+	outline: none;
+}
+
+.pack-option.active {
+	background: #f4f8fc;
+}
+
+.pack-option-icon {
+	display: grid;
+	width: 28px;
+	height: 28px;
+	place-items: center;
+	flex: 0 0 auto;
+	color: var(--accent);
+	background: #e7f1fb;
+	border-radius: 6px;
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 11px;
+	font-weight: 700;
+}
+
+.pack-option strong,
+.pack-option small {
+	display: block;
+}
+
+.pack-option strong {
+	font-size: 13px;
+	line-height: 1.25;
+}
+
+.pack-option small {
+	margin-top: 2px;
+	color: var(--text-secondary);
+	font-size: 11px;
+	line-height: 1.2;
 }
 
 /* 徽标组与模型信息之间的竖向分隔线，无徽标时隐藏 */
@@ -137,50 +248,59 @@ body {
 	display: block;
 }
 
+.demo-badge,
+.persona-badge,
+.model-info {
+	min-height: 28px;
+	border-radius: 5px;
+}
+
 .model-info {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
 	font-family: "Cascadia Code", Consolas, monospace;
 	font-size: 11px;
-	color: var(--text-secondary);
-	background: #f6f6f6;
-	border: 1px solid var(--border);
-	border-radius: 4px;
-	padding: 3px 10px;
-	transition: background 0.15s;
+	padding: 4px 8px;
+	color: #596b5a;
+	background: #f7fbf7;
+	border: 1px solid #dcebdd;
+	transition: background 0.15s, border-color 0.15s;
 }
 
 .model-info:hover {
-	background: #efefef;
+	background: #f0f8f0;
+	border-color: #bfdbbf;
 }
 
-/* 连接状态圆点：loadState 成功=绿，失败=红 */
 .model-dot {
 	width: 7px;
 	height: 7px;
 	border-radius: 50%;
 	background: #0e700e;
+	box-shadow: 0 0 0 3px #eef8ee;
 }
 
 .model-info.error {
-	color: var(--danger);
+	color: #a9372a;
+	background: #fff8f7;
+	border-color: #f0d5d1;
 }
 
 .model-info.error .model-dot {
 	background: var(--danger);
+	box-shadow: 0 0 0 3px #fceeed;
 }
 
-/* 白底小方角 + 方点标识，弱化胶囊感 */
 .persona-badge {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	background: #fff;
+	background: #faf8fe;
 	color: var(--persona);
 	border: 1px solid #e3dbf4;
-	padding: 2px 9px;
-	border-radius: 4px;
+	padding: 4px 8px;
+	border-radius: 5px;
 	font-size: 12px;
 	font-weight: 600;
 }
@@ -194,13 +314,24 @@ body {
 }
 
 .demo-badge {
-	background: #fff8e6;
-	color: #9d5d00;
-	border: 1px solid #f0dcae;
-	padding: 2px 8px;
-	border-radius: 4px;
-	font-size: 11px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px;
+	background: #fffaf0;
+	color: #8a5b09;
+	border: 1px solid #f1dfba;
+	border-radius: 5px;
+	font-size: 12px;
 	font-weight: 600;
+}
+
+.demo-badge::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 2px;
+	background: #d99416;
 }
 
 .hidden {
@@ -1532,9 +1663,21 @@ body.ws-resizing {
 
 @media (max-width: 560px) {
 	.topbar {
-		padding: 0 12px;
+		height: 58px;
+		padding: 0 16px;
+	}
+	.topbar::after {
+		left: 16px;
 	}
 	.subtitle {
 		display: none;
+	}
+	.pack-select-label,
+	.model-info {
+		display: none;
+	}
+	.pack-menu {
+		padding-right: 0;
+		border-right: 0;
 	}
 }

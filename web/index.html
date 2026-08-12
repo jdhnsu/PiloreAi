@@ -17,7 +17,14 @@
 				</div>
 			</div>
 			<div class="topbar-right">
-				<select id="pack-select" class="pack-select" title="切换学习包" aria-label="切换学习包"></select>
+				<div class="pack-menu">
+					<button id="pack-select" class="pack-select" type="button" aria-haspopup="listbox" aria-expanded="false">
+						<span class="pack-select-label">学习包</span>
+						<strong id="pack-current"></strong>
+						<span class="pack-chevron" aria-hidden="true"></span>
+					</button>
+					<div id="pack-options" class="pack-options hidden" role="listbox" aria-label="切换学习包"></div>
+				</div>
 				<button id="ss-mobile-toggle" class="icon-btn ss-mobile-only" type="button" title="会话历史" aria-label="打开会话历史" aria-expanded="false">☰</button>
 				<span id="demo-badge" class="demo-badge hidden">演示</span>
 				<span id="persona-badge" class="persona-badge hidden"></span>
