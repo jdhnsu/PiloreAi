@@ -7,6 +7,7 @@ test("Core snapshot validates namespaced extension JSON", () => {
 		version: CORE_SESSION_SNAPSHOT_VERSION,
 		revision: 0,
 		activeProfileKey: null,
+		activeToolsetKeys: [],
 		messages: [],
 		extensions: { example: { enabled: true } },
 	});
@@ -14,7 +15,7 @@ test("Core snapshot validates namespaced extension JSON", () => {
 });
 
 test("Core snapshot rejects unsupported version", () => {
-	assert.throws(() => validateCoreSnapshot({ version: 2, revision: 0, activeProfileKey: null, messages: [], extensions: {} }), /不支持/);
+	assert.throws(() => validateCoreSnapshot({ version: 2, revision: 0, activeProfileKey: null, activeToolsetKeys: [], messages: [], extensions: {} }), /不支持/);
 });
 
 test("Core source does not depend on domain or code-pack modules", async () => {

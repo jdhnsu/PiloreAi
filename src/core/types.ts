@@ -1,61 +1,29 @@
 import type { AgentTool, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model, MutableModels } from "@earendil-works/pi-ai";
+import type { ProfileContextMessage } from "./router/index.js";
 
-/** JSON value accepted by Core state and snapshot extension boundaries. */
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-
-/** A domain-neutral strategy/profile which may be activated during a session. */
-export interface Profile {
-	key: string;
-	name: string;
-	description: string;
-	methodology: string;
-	capabilities?: Record<string, "allow" | "deny">;
+export interface ProfileDefinition { key: string; name: string; description: string; methodology: string; capabilities?: Record<string, "allow" | "deny"> }
+export type Profile = ProfileDefinition;
+export interface RouterConfig {
+	profiles: ProfileDefinition[];
+	maxSwitchesPerTurn?: number;
+	parseMention?(text: string): { profile: ProfileDefinition | null; rest: string } | undefined;
+	getProfileState?(key: string): JsonValue | undefined;
+	updateProfileState?(key: string, patch: Record<string, JsonValue>): JsonValue;
+	renderContext?(message: ProfileContextMessage): string;
 }
-
-/** A domain contributes tools and optional profile-driven behaviour to one Core session. */
+export interface ToolGroup { key: string; description: string; eager?: boolean; load(): AgentTool<any>[] }
+export interface ToolManifest { groups: ToolGroup[]; resolveCapability(toolName: string, args: unknown): string | undefined }
+export interface SnapshotExtension<T extends JsonValue = JsonValue> { key: string; export(): T; validate(value: unknown): T; restore(value: T): void; migrate?(value: unknown, version: number): T }
 export interface DomainPack {
-	id: string;
-	basePrompt?: string;
-	profiles?: Profile[];
-	tools?: AgentTool<any>[];
-	/** Domain-owned, validated data stored under extensions[pack.id]. */
-	createExtension?(): JsonValue;
-	validateExtension?(value: unknown): JsonValue;
+	id: string; basePrompt?: string; router?: RouterConfig; toolManifest?: ToolManifest; snapshotExtension?: SnapshotExtension; tools?: AgentTool<any>[]; profiles?: ProfileDefinition[];
 }
-
-/** A reusable unit of tools. Domain packs compose these rather than Core knowing their business meaning. */
-export interface ToolPack {
-	id: string;
-	tools: AgentTool<any>[];
-}
-
+export interface ToolPack { id: string; tools: AgentTool<any>[] }
 export interface RuntimeConfig {
-	model: Model<string>;
-	models: MutableModels;
-	thinkingLevel?: ThinkingLevel;
-	systemPrompt?: string;
-	tools?: AgentTool<any>[];
-	domain?: DomainPack;
-	maxTurns?: number;
+	model: Model<string>; models: MutableModels; thinkingLevel?: ThinkingLevel; systemPrompt?: string; tools?: AgentTool<any>[]; domain?: DomainPack; maxTurns?: number;
+	fetch?: typeof globalThis.fetch; llmTelemetry?: import("../telemetry.js").LlmTelemetrySink;
 }
-
-export type SessionEvent =
-	| { type: "start" }
-	| { type: "text_delta"; delta: string }
-	| { type: "message_end" }
-	| { type: "tool_start"; toolName: string; args: unknown }
-	| { type: "tool_end"; toolName: string; isError: boolean; text: string }
-	| { type: "profile"; profile: string | null; name: string | null; source: "model" | "user" }
-	| { type: "error"; message: string }
-	| { type: "done"; errorMessage?: string };
-
-export interface SessionSnapshotV1 {
-	version: 1;
-	revision: number;
-	activeProfileKey: string | null;
-	messages: unknown[];
-	extensions: Record<string, JsonValue>;
-}
-
+export interface SessionSnapshotV1 { version: 1; revision: number; activeProfileKey: string | null; activeToolsetKeys: string[]; messages: unknown[]; extensions: Record<string, JsonValue> }
 export type SessionSnapshot = SessionSnapshotV1;
+export type { SessionEvent } from "./events/index.js";

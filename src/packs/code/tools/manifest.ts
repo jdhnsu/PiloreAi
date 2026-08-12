@@ -1,0 +1,6 @@
+import type { ToolManifest } from "../../../core/types.js"; import type { VirtualFS } from "../vfs.js"; import type { ExecClient } from "../exec-client.js"; import type { CodeEvaluator } from "../evaluator.js"; import { createWorkspaceTools } from "./workspace.js"; import { createExecutionTools } from "./execution.js"; import { createEvaluationTools } from "./evaluation.js";
+export function createCodeToolManifest(vfs: VirtualFS, exec: ExecClient, evaluator?: CodeEvaluator): ToolManifest { return { groups: [
+	{ key: "workspace", description: "读取和写入虚拟代码工作区", load: () => createWorkspaceTools(vfs) },
+	{ key: "execution", description: "在远程沙箱运行代码", load: () => createExecutionTools(vfs, exec) },
+	...(evaluator ? [{ key: "evaluation", description: "评估当前代码", load: () => createEvaluationTools(vfs, evaluator) }] : []),
+], resolveCapability(toolName, args) { if (toolName === "read_file") return "file.read"; if (toolName === "run_code") return "exec.run"; if (toolName === "evaluate_code") return "code.evaluate"; if (toolName === "write_file") { const path = (args as { path?: unknown })?.path; return typeof path === "string" && vfs.has(path) ? "file.modify" : "file.write"; } return undefined; } }; }
