@@ -7,6 +7,8 @@
   "scripts": {
     "mock": "tsx mock/exec-server.ts",
     "chat": "tsx src/cli.ts",
+    "chat:english": "tsx src/cli.ts --pack english",
+    "chat:list": "tsx src/cli.ts --list",
     "web": "tsx src/server.ts",
     "web:demo": "tsx scripts/web-demo.ts",
     "demo": "tsx scripts/demo.ts",
