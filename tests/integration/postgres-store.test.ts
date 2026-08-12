@@ -4,14 +4,13 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import {
-	EDU_SESSION_SNAPSHOT_VERSION,
+	CORE_SESSION_SNAPSHOT_VERSION,
 	SessionBusyError,
 	SessionRevisionConflictError,
 	applyPostgresMigrations,
 	createAes256GcmCryptoProvider,
 	createPostgresSessionStore,
-	type EduSessionSnapshotV1,
-	type EduSessionSnapshotV2,
+	type SessionSnapshotV1,
 	type SessionStore,
 } from "../../src/index.js";
 
@@ -31,24 +30,13 @@ const schema = `pilore_test_${process.pid}_${Date.now()}`;
 let pool: Pool;
 let store: SessionStore;
 
-function snapshot(revision = 0): EduSessionSnapshotV2 {
+function snapshot(revision = 0): SessionSnapshotV1 {
 	return {
-		version: EDU_SESSION_SNAPSHOT_VERSION,
+		version: CORE_SESSION_SNAPSHOT_VERSION,
 		revision,
-		activePersonaKey: null,
-		teachingByPersona: {},
-		files: { "main.py": "print('PLAINTEXT_SENTINEL')" },
-		messages: [{ role: "user", content: "PLAINTEXT_STUDENT_MESSAGE", timestamp: 1 }],
-	};
-}
-
-function legacySnapshot(): EduSessionSnapshotV1 {
-	return {
-		version: 1,
-		revision: 0,
-		activePersonaKey: null,
-		teachingByPersona: {},
-		files: { "main.py": "print('PLAINTEXT_SENTINEL')" },
+		activeProfileKey: null,
+		activeToolsetKeys: [],
+		extensions: { code: { files: { "main.py": "print('PLAINTEXT_SENTINEL')" } } },
 		messages: [{ role: "user", content: "PLAINTEXT_STUDENT_MESSAGE", timestamp: 1 }],
 	};
 }
@@ -113,27 +101,6 @@ test("PostgreSQL create/load/complete/delete、加密与 revision 冲突", { ski
 	assert.equal(await store.load(created.id), undefined);
 });
 
-test("PostgreSQL 使用原 V1 AAD 解密，并在后续 completeRun 写入 V2", { skip: !databaseConfig }, async () => {
-	const created = await store.create({ identity: { tenantId: "t1", userId: "legacy" }, snapshot: legacySnapshot() });
-	assert.equal((await store.load(created.id))?.snapshot.version, 1);
-	const run = await store.beginRun({
-		sessionId: created.id,
-		expectedRevision: 0,
-		providerId: "faux",
-		modelId: "faux-1",
-		audit: { input: "legacy" },
-	});
-	await store.completeRun({
-		runId: run.id,
-		sessionId: created.id,
-		expectedRevision: 0,
-		snapshot: snapshot(),
-		audit: { input: "legacy" },
-	});
-	const row = await pool.query<{ snapshot_version: number }>(`SELECT snapshot_version FROM "${schema}".sessions WHERE id = $1`, [created.id]);
-	assert.equal(row.rows[0].snapshot_version, 2);
-});
-
 test("PostgreSQL failRun 解除会话占用", { skip: !databaseConfig }, async () => {
 	const created = await store.create({ identity: { tenantId: "t1", userId: "u2" }, snapshot: snapshot() });
 	const run = await store.beginRun({
@@ -163,7 +130,7 @@ test("PostgreSQL list：按身份过滤、updatedAt 降序、标题派生两条�
 	assert.equal(b.title, "PLAINTEXT_STUDENT_MESSAGE");
 
 	// a：空快照创建（标题为空），首轮 completeRun 后由首条用户消息派生
-	const a = await store.create({ identity, snapshot: { ...snapshot(), files: {}, messages: [] } });
+	const a = await store.create({ identity, snapshot: { ...snapshot(), extensions: {}, messages: [] } });
 	assert.equal(a.title, "");
 	const run = await store.beginRun({ sessionId: a.id, expectedRevision: 0, providerId: "faux", modelId: "faux-1", audit: { input: "x" } });
 	await new Promise((r) => setTimeout(r, 5)); // 保证 updatedAt 严格递增

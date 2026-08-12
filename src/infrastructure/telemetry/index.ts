@@ -24,7 +24,7 @@ export type LlmTelemetryEvent =
 			callIndex: number;
 			providerId: string;
 			modelId: string;
-			personaKey: string | null;
+			profileKey: string | null;
 			commonPrefixMessages: number;
 			timestamp: number;
 		} & PromptHashes)
@@ -77,7 +77,7 @@ export interface ObservedStreamOptions {
 	models: MutableModels;
 	fetch?: FetchFunction;
 	telemetry?: LlmTelemetrySink;
-	getPersonaKey(): string | null;
+	getProfileKey(): string | null;
 }
 
 const EMPTY_USAGE: Usage = {
@@ -206,7 +206,7 @@ export function createObservedStreamFn(options: ObservedStreamOptions): StreamFn
 			callIndex: currentCallIndex,
 			providerId: model.provider,
 			modelId: model.id,
-			personaKey: options.getPersonaKey(),
+			profileKey: options.getProfileKey(),
 			...hashes,
 			commonPrefixMessages: commonPrefixLength(previousMessageHashes, hashes.messageHashes),
 			timestamp: startedAt,

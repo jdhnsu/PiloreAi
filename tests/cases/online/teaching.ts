@@ -18,30 +18,30 @@ export const teachingCases: OnlineCaseDef[] = [
 				name: "第 1 轮正确路由到 oris",
 				weight: 1,
 				judge: (ev) => {
-					const adopt = ev.personaEvents.find((p) => p.source === "model");
-					return adopt?.persona === "oris" ? 1 : adopt?.persona ? 0.5 : 0;
+					const adopt = ev.profileEvents.find((p) => p.source === "model");
+					return adopt?.profile === "oris" ? 1 : adopt?.profile ? 0.5 : 0;
 				},
 			},
 			{
 				name: "多轮内没有反复换人",
 				weight: 2,
 				judge: (ev) => {
-					// 3 轮里 persona 事件数 <= 2(开始一次 + 可能的收尾交还)
-					const adopt = ev.personaEvents.filter((p) => p.source === "model");
+					// 3 轮里 profile 事件数 <= 2（开始一次 + 可能的收尾交还）
+					const adopt = ev.profileEvents.filter((p) => p.source === "model");
 					return adopt.length <= 2 ? 1 : 0.5;
 				},
 			},
 			{
-				name: "调用过 update_teaching",
+				name: "更新过 profile state",
 				weight: 2,
-				judge: (ev) => (ev.teachingCalls.length > 0 ? 1 : 0),
+				judge: (ev) => (ev.profileStateUpdates.length > 0 ? 1 : 0),
 			},
 			{
 				name: "教学阶段推进后 auto 交还",
 				weight: 2,
 				judge: (ev) => {
-					const last = ev.personaEvents[ev.personaEvents.length - 1];
-					return last?.persona === null ? 1 : 0.5;
+					const last = ev.profileEvents[ev.profileEvents.length - 1];
+					return last?.profile === null ? 1 : 0.5;
 				},
 			},
 		],
@@ -65,7 +65,7 @@ export const teachingCases: OnlineCaseDef[] = [
 				name: "一路维持同一方法",
 				weight: 1,
 				judge: (ev) => {
-					const adopt = ev.personaEvents.filter((p) => p.source === "model");
+					const adopt = ev.profileEvents.filter((p) => p.source === "model");
 					return adopt.length <= 2 ? 1 : 0.5;
 				},
 			},

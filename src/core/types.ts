@@ -17,12 +17,11 @@ export interface ToolGroup { key: string; description: string; eager?: boolean; 
 export interface ToolManifest { groups: ToolGroup[]; resolveCapability(toolName: string, args: unknown): string | undefined }
 export interface SnapshotExtension<T extends JsonValue = JsonValue> { key: string; export(): T; validate(value: unknown): T; restore(value: T): void; migrate?(value: unknown, version: number): T }
 export interface DomainPack {
-	id: string; basePrompt?: string; router?: RouterConfig; toolManifest?: ToolManifest; snapshotExtension?: SnapshotExtension; tools?: AgentTool<any>[]; profiles?: ProfileDefinition[];
+	id: string; basePrompt?: string; router?: RouterConfig; toolManifest?: ToolManifest; snapshotExtension?: SnapshotExtension;
 }
-export interface ToolPack { id: string; tools: AgentTool<any>[] }
 export interface RuntimeConfig {
 	model: Model<string>; models: MutableModels; thinkingLevel?: ThinkingLevel; systemPrompt?: string; tools?: AgentTool<any>[]; domain?: DomainPack; maxTurns?: number;
-	fetch?: typeof globalThis.fetch; llmTelemetry?: import("../telemetry.js").LlmTelemetrySink;
+	fetch?: typeof globalThis.fetch; llmTelemetry?: import("../infrastructure/telemetry/index.js").LlmTelemetrySink;
 }
 export interface SessionSnapshotV1 { version: 1; revision: number; activeProfileKey: string | null; activeToolsetKeys: string[]; messages: unknown[]; extensions: Record<string, JsonValue> }
 export type SessionSnapshot = SessionSnapshotV1;

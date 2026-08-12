@@ -19,20 +19,21 @@
  *   npx tsx scripts/cache-realistic.ts --target 512000 --chunk-tokens 20000 --rounds 40
  */
 import "dotenv/config";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
-	createEduSession,
+	createCodeMentorSession,
 	createModelCollection,
 	getProviderDefinition,
 	resolveProviderId,
-	getDefaultPersonas,
+	getDefaultCodeProfiles,
 	DEFAULT_MODEL_IDS,
-	type EduEvent,
+	type SessionEvent,
+	type SessionSnapshot,
 	type LlmTelemetryEvent,
-	type Persona,
+	type ProfileDefinition,
 } from "../src/index.js";
 import { createMockExecServer } from "../mock/exec-server.js";
 
@@ -52,6 +53,7 @@ const roundCap = Number(argValue("rounds") ?? 70) || 70; // 轮数上限（工�
 const minRounds = Math.max(0, Number(argValue("min-rounds") ?? 0) || 0); // 严格对照时可要求达到目标 token 后继续到指定轮数
 const turnsPerPrompt = Number(argValue("turns") ?? 6) || 6; // 单次 prompt 的 LLM 回合护栏（工具链需要空间）
 const reportDir = argValue("report-dir") ?? "reports";
+const resumeArg = argValue("resume"); // 断点续传：--resume <前次报告.json>，从保存的快照继续
 // --mini：面向本地小模型（如 qwen2.5-3b）的轻量模式。
 // 完整教学 systemPrompt 对 3B 模型过重，工具触发率极低；精简 prompt 明确指示
 // 写码必须先 write_file + run_code，并把注入量/回合护栏收紧，让 8K 窗口内多跑工具轮。
@@ -174,19 +176,20 @@ type RoundKind = "chunk" | "code" | "question" | "codefix";
 
 const MINI_SYSTEM_PROMPT = `You are a Python coding tutor.
 Tools you MUST use when relevant:
+- activate_toolset(key): load a tool group before using its tools. Groups: workspace (read/write files), execution (run code).
 - write_file(path, content): save code to the workspace. Use this whenever the user asks you to write a program.
 - run_code(sandbox, entry): execute a saved file. Use this right after writing a file to show its output.
 - read_file(path): inspect an existing file.
-- adopt_persona(key): switch teaching style. Keys: oris, feynman, socrates. Use it only when the user asks for a different style.
+- adopt_profile(key): switch teaching style. Keys: oris, feynman, socrates. Use it only when the user asks for a different style.
 Rules:
-- When the user asks to write or run code, ALWAYS call write_file then run_code; do not just print the code.
+- When the user asks to write or run code, ALWAYS call activate_toolset first, then write_file then run_code; do not just print the code.
 - After running, reply with a 2-3 sentence explanation.
 - Keep replies under 80 words.`;
 
-/** 每 3 轮切换一次角色（模拟真实用户隔一段时间换教法/切回自由模式），undefined = 保持当前。 */
-const PERSONA_ROTATION = ["oris", "feynman", "socrates", null]; // null = 自动路由（基座）
-function personaFor(index: number): string | null | undefined {
-	if (index % 3 === 0) return PERSONA_ROTATION[(index / 3) % PERSONA_ROTATION.length];
+/** 每 3 轮切换一次 Profile（模拟真实用户隔一段时间换教法/切回自由模式），undefined = 保持当前。 */
+const PROFILE_ROTATION = ["oris", "feynman", "socrates", null]; // null = 自动路由（基座）
+function profileFor(index: number): string | null | undefined {
+	if (index % 3 === 0) return PROFILE_ROTATION[(index / 3) % PROFILE_ROTATION.length];
 	return undefined;
 }
 
@@ -219,7 +222,7 @@ function buildUserMessage(index: number, chunkText: string): string {
 /** 按 logicalRequestId 聚合的单个逻辑调用；telemetry 请求级归属的事实源。 */
 interface LogicalRequestState {
 	callIndex: number;
-	personaKey: string | null;
+	profileKey: string | null;
 	start: Extract<LlmTelemetryEvent, { type: "logical_request_start" }>;
 	end?: Extract<LlmTelemetryEvent, { type: "logical_request_end" }>;
 	attempts: number;
@@ -227,8 +230,10 @@ interface LogicalRequestState {
 
 interface RoundRecord {
 	round: number;
-	persona: string;
+	profile: string;
 	tools: string[];
+	/** 本轮激活的工具集（activate_toolset 触发）。 */
+	toolsets: string[];
 	/** 本轮结束时的真实上下文 = 最后一个 LLM 回合的 input+cacheRead+cacheWrite。 */
 	contextTokens: number;
 	/** 本轮全部 LLM 调用的 prompt 之和（含轮内工具链多回合；累计命中率的分母）。 */
@@ -240,8 +245,8 @@ interface RoundRecord {
 	/** provider 层真实 HTTP 请求数与其中的重试数。 */
 	httpRequestCount: number;
 	retryCount: number;
-	/** 本轮是否发生脚本或模型 Persona 切换。 */
-	personaTransition: boolean;
+	/** 本轮是否发生脚本或模型 Profile 切换。 */
+	profileTransition: boolean;
 	/** 本轮首个逻辑调用与上次调用共享的完整消息数。 */
 	commonPrefixMessages: number;
 	/** 本轮累计（所有回合求和）。 */
@@ -262,10 +267,6 @@ function pad(n: number, width: number): string {
 
 function padStr(s: string, width: number): string {
 	return s.length >= width ? s : `${s}${" ".repeat(width - s.length)}`;
-}
-
-function personaLabel(p: Persona | undefined): string {
-	return p ? p.key : "auto";
 }
 
 /* ---------------- 主流程 ---------------- */
@@ -302,21 +303,33 @@ async function main(): Promise<void> {
 	}
 	console.log(`执行后端: ${process.env.EXEC_API_BASE}${mockServer ? "（进程内 mock，模拟 run_code 输出）" : "（直连沙箱）"}`);
 
-	const personas = getDefaultPersonas();
+	const profiles: ProfileDefinition[] = getDefaultCodeProfiles();
 	const models = createModelCollection();
+
+	// --resume：从上次报告恢复快照与已跑轮次，续跑到目标 token（DeepSeek 前缀缓存可继续命中）
+	let previousReport: { rounds: RoundRecord[]; requests: unknown[]; snapshot?: SessionSnapshot } | undefined;
+	if (resumeArg) {
+		previousReport = JSON.parse(readFileSync(resumeArg, "utf8")) as { rounds: RoundRecord[]; requests: unknown[]; snapshot?: SessionSnapshot };
+		if (!previousReport.snapshot) throw new Error(`--resume 报告缺少 snapshot 字段，无法续跑`);
+		console.log(
+			`续跑模式: 已跑 ${previousReport.rounds.length} 轮（上下文 ${fmt(previousReport.rounds.at(-1)?.contextTokens ?? 0)} tokens），从第 ${previousReport.rounds.length + 1} 轮继续`,
+		);
+	}
+	const resumeRounds = previousReport?.rounds.length ?? 0;
 
 	// telemetry 请求级归属：按 logicalRequestId 聚合 start/end/attempts；
 	// callIndex 全局递增，轮归属用 callIndex 边界，不受事件到达顺序（异步 end）影响。
 	const logicalRequests = new Map<string, LogicalRequestState>();
 	let maxCallIndexSeen = 0;
 
-	const session = createEduSession({
+	const session = createCodeMentorSession({
 		models,
 		providerId,
 		modelId,
 		thinkingLevel,
 		systemPrompt: miniMode ? MINI_SYSTEM_PROMPT : undefined, // mini 模式：精简指令，提高小模型工具触发率
-		personas, // 真实老师集合：Oris / Feynman / Socrates
+		profiles, // code pack 默认 Profile：Oris / Feynman / Socrates
+		snapshot: resumeRounds > 0 ? previousReport!.snapshot : undefined, // 续跑恢复：消息历史 / 激活 profile / 工具集
 		llmTelemetry: {
 			onEvent: (event) => {
 				switch (event.type) {
@@ -324,7 +337,7 @@ async function main(): Promise<void> {
 						maxCallIndexSeen = Math.max(maxCallIndexSeen, event.callIndex);
 						logicalRequests.set(event.logicalRequestId, {
 							callIndex: event.callIndex,
-							personaKey: event.personaKey,
+							profileKey: event.profileKey,
 							start: event,
 							attempts: 0,
 						});
@@ -350,28 +363,30 @@ async function main(): Promise<void> {
 	console.log(
 		`目标上下文: ~${fmt(targetTokens)} tokens  每轮注入材料: ~${fmt(chunkTokens)} tokens  轮数上限: ${roundCap}  单轮回合护栏: ${turnsPerPrompt}`,
 	);
-	console.log(`老师集合: ${personas.map((p) => p.key).join(" / ")}（自动路由为基座 prompt）${miniMode ? "  模式: mini（精简 prompt，适合小模型）" : ""}\n`);
+	console.log(`code pack profiles: ${profiles.map((p) => p.key).join(" / ")}（自动路由为基座 prompt）${miniMode ? "  模式: mini（精简 prompt，适合小模型）" : ""}\n`);
 
 	const chunkChars = Math.max(1, Math.round(chunkTokens * CHARS_PER_TOKEN));
 	// mini 模式：8K 窗口内工具链多回合消耗快，注入量减半、回合护栏降到 4，避免窗口溢出。
 	const effectiveChunkChars = miniMode ? Math.max(1, Math.round(chunkChars / 2)) : chunkChars;
-	const rounds: RoundRecord[] = [];
+	const rounds: RoundRecord[] = previousReport?.rounds.slice() ?? []; // 续跑时合并已跑轮次（累计统计为完整会话）
 	let lastError: string | undefined;
-	let personaEventCount = 0; // 对话内自然发生的角色切换（模型主动 adopt_persona）
-	let prefixBrokenByScript = 0; // 脚本主动切换角色的次数
+	let profileEventCount = 0; // 对话内自然发生的 Profile 切换（模型主动 adopt_profile）
+	let prefixBrokenByScript = 0; // 脚本主动切换 Profile 的次数
 	let stoppedEarly = false;
 	let roundToolCounts: Record<string, number> = {};
+	let roundToolsetActive: string[] = [];
 
-	const onEvent = (ev: EduEvent): void => {
-		if (ev.type === "persona") personaEventCount++;
+	const onEvent = (ev: SessionEvent): void => {
+		if (ev.type === "profile") profileEventCount++;
+		if (ev.type === "toolset" && ev.active && !roundToolsetActive.includes(ev.toolset)) roundToolsetActive.push(ev.toolset);
 		if (ev.type === "tool_start") {
 			roundToolCounts[ev.toolName] = (roundToolCounts[ev.toolName] ?? 0) + 1;
 		}
 		if (ev.type === "done") lastError = ev.errorMessage;
 	};
 
-	/** 发送一轮；若失败且历史未被污染（消息数未变）则重试一次。 */
-	async function promptWithRetry(text: string): Promise<boolean> {
+	/** 发送一轮；失败且历史未被污染（消息数未变）则重试一次；污染则回滚本轮消息并跳过（不中止）。 */
+	async function promptWithRetry(text: string): Promise<"ok" | "skip" | "abort"> {
 		for (let attempt = 0; attempt < 2; attempt++) {
 			lastError = undefined;
 			const before = session.exportSnapshot().messages.length;
@@ -380,36 +395,39 @@ async function main(): Promise<void> {
 			} catch (err) {
 				lastError = err instanceof Error ? err.message : String(err);
 			}
-			if (!lastError) return true;
+			if (!lastError) return "ok";
 			const after = session.exportSnapshot().messages.length;
 			if (after !== before) {
-				// 失败时已写入部分 assistant 消息，重发会破坏消息序列与缓存前缀 → 中止
-				return false;
+				// 失败时已写入部分 assistant 消息：回滚本轮新增（含注入文本），跳过本轮继续，不破坏前缀
+				session.runtime.agent.state.messages = (session.exportSnapshot().messages as AgentMessage[]).slice(0, before);
+				console.log(`  ⚠ 第 ${rounds.length + 1} 轮失败(${lastError})且历史已污染，已回滚本轮消息，跳过本轮继续。`);
+				return "skip";
 			}
 			if (attempt === 0) {
 				console.log(`  ⚠ 第 ${rounds.length + 1} 轮请求失败(${lastError})，重试一次…`);
 			}
 		}
-		return false;
+		return "abort";
 	}
 
-	for (let r = 0; r < roundCap; r++) {
+	for (let r = resumeRounds; r < roundCap; r++) {
 		roundToolCounts = {};
+		roundToolsetActive = [];
 
 		const boundaryCallIndex = maxCallIndexSeen; // 本轮归属边界：callIndex > 该值的请求属于本轮
-		const personaEventsBefore = personaEventCount;
+		const profileEventsBefore = profileEventCount;
 		let scriptSwitchedThisRound = false;
-		// 按计划切换角色；只追加 Persona 上下文，不再改写 systemPrompt。
-		const target = personaFor(r);
+		// 按计划切换 Profile；只追加 Profile 上下文，不再改写 systemPrompt。
+		const target = profileFor(r);
 		if (target !== undefined) {
-			const currentKey = session.persona?.key ?? null;
+			const currentKey = session.profile;
 			if (currentKey !== target) {
 				try {
-					session.setPersona(target);
+					session.setProfile(target);
 					prefixBrokenByScript++;
 					scriptSwitchedThisRound = true;
 				} catch (err) {
-					console.log(`  ⚠ 设置角色 ${String(target)} 失败: ${err instanceof Error ? err.message : String(err)}`);
+					console.log(`  ⚠ 设置 Profile ${String(target)} 失败: ${err instanceof Error ? err.message : String(err)}`);
 				}
 			}
 		}
@@ -417,15 +435,16 @@ async function main(): Promise<void> {
 		const beforeCount = session.exportSnapshot().messages.length;
 		const text = buildUserMessage(r, buildChunk(r + 1, effectiveChunkChars));
 
-		const ok = await promptWithRetry(text);
-		if (!ok) {
+		const result = await promptWithRetry(text);
+		if (result === "abort") {
 			stoppedEarly = true;
-			console.log(`  ✗ 第 ${rounds.length + 1} 轮失败且历史已污染，中止。最后错误: ${lastError}`);
+			console.log(`  ✗ 第 ${rounds.length + 1} 轮失败且重试无效，中止。最后错误: ${lastError}`);
 			break;
 		}
+		if (result === "skip") continue; // 失败轮已回滚，不统计，下一轮继续
 
 		// assistant 消息用于核对历史；usage 与请求计数以 telemetry 为事实源。
-		const msgs = session.exportSnapshot().messages;
+		const msgs = session.exportSnapshot().messages as AgentMessage[];
 		const newAssistants = msgs
 			.slice(beforeCount)
 			.filter((m) => m.role === "assistant" && m.usage) as Extract<(typeof msgs)[number], { role: "assistant" }>[];
@@ -469,8 +488,9 @@ async function main(): Promise<void> {
 		const lastUsage = completeRequests[completeRequests.length - 1].end!.usage;
 		const record: RoundRecord = {
 			round: rounds.length + 1,
-			persona: personaLabel(session.persona),
+			profile: session.profile ?? "auto",
 			tools: Object.keys(roundToolCounts),
+			toolsets: roundToolsetActive,
 			// 真实上下文 = 最后一个 LLM 回合的 prompt（跨回合求和会把轮内多回合重复计入）
 			contextTokens: lastUsage.input + lastUsage.cacheRead + lastUsage.cacheWrite,
 			callPromptTokens: totals.input + totals.cacheRead + totals.cacheWrite,
@@ -478,7 +498,7 @@ async function main(): Promise<void> {
 			assistantCallCount: newAssistants.length,
 			httpRequestCount: roundRequests.reduce((a, request) => a + request.attempts, 0),
 			retryCount: roundRequests.reduce((a, request) => a + Math.max(0, request.attempts - 1), 0),
-			personaTransition: scriptSwitchedThisRound || personaEventCount > personaEventsBefore,
+			profileTransition: scriptSwitchedThisRound || profileEventCount > profileEventsBefore,
 			commonPrefixMessages: roundRequests[0]?.start.commonPrefixMessages ?? 0,
 			input: totals.input,
 			output: totals.output,
@@ -498,8 +518,9 @@ async function main(): Promise<void> {
 		);
 		const cumHitRate = cumulative.prompt > 0 ? cumulative.cache / cumulative.prompt : 0;
 		const toolTag = record.tools.length ? `[tools:${record.tools.join(",")}]` : "[no tool]";
+		const toolsetTag = record.toolsets.length ? `[ts:${record.toolsets.join(",")}]` : "";
 		console.log(
-			`[R${pad(record.round, 2)}][${padStr(record.persona, 8)}] ${toolTag}  ctx=${fmt(record.contextTokens)}  ` +
+			`[R${pad(record.round, 2)}][${padStr(record.profile, 8)}] ${toolTag}${toolsetTag}  ctx=${fmt(record.contextTokens)}  ` +
 				`calls=${record.callCount}/http=${record.httpRequestCount}/retry=${record.retryCount}  cacheHit=${fmt(record.cacheRead)}  input=${fmt(record.input)}  ` +
 				`output=${fmt(record.output)}  cum=${(cumHitRate * 100).toFixed(1)}%  cost=$${record.cost.toFixed(5)}`,
 		);
@@ -541,6 +562,8 @@ async function main(): Promise<void> {
 	const toolCalls = rounds.reduce((a, r) => a + r.tools.length, 0);
 	const toolNameCounts: Record<string, number> = {};
 	for (const r of rounds) for (const t of r.tools) toolNameCounts[t] = (toolNameCounts[t] ?? 0) + 1;
+	const toolsetNameCounts: Record<string, number> = {};
+	for (const r of rounds) for (const t of r.toolsets) toolsetNameCounts[t] = (toolsetNameCounts[t] ?? 0) + 1;
 	function groupStats(records: RoundRecord[]) {
 		const prompt = records.reduce((sum, record) => sum + record.callPromptTokens, 0);
 		const cacheRead = records.reduce((sum, record) => sum + record.cacheRead, 0);
@@ -553,40 +576,47 @@ async function main(): Promise<void> {
 			hitRate: prompt > 0 ? cacheRead / prompt : 0,
 		};
 	}
-	const transitionStats = groupStats(rounds.filter((round) => round.personaTransition));
-	const stableStats = groupStats(rounds.filter((round) => !round.personaTransition));
+	const transitionStats = groupStats(rounds.filter((round) => round.profileTransition));
+	const stableStats = groupStats(rounds.filter((round) => !round.profileTransition));
 
 	console.log("\n================ 汇总 ================");
-	console.log(`轮数: ${rounds.length}  角色切换: 脚本主动 ${prefixBrokenByScript} 次，对话内自然切换 ${personaEventCount} 次`);
+	console.log(`轮数: ${rounds.length}  Profile 切换: 脚本主动 ${prefixBrokenByScript} 次，对话内自然切换 ${profileEventCount} 次`);
 	console.log(`LLM 调用: ${totalCalls} 次；assistant 成功消息: ${totalAssistantCalls}；HTTP: ${totalHttpRequests}（重试 ${totalRetries}）`);
 	console.log(`工具调用: ${toolCalls} 次 → ${JSON.stringify(toolNameCounts)}`);
+	console.log(`工具集激活: ${JSON.stringify(toolsetNameCounts)}`);
 	if (last) console.log(`最终上下文(末回合 prompt tokens): ${fmt(last.contextTokens)}  目标: ~${fmt(targetTokens)}${stoppedEarly ? "（提前中止）" : ""}`);
 	console.log(`累计 input: ${fmt(total.input)}  output: ${fmt(total.output)}  cacheRead: ${fmt(total.cacheRead)}  cacheWrite: ${fmt(total.cacheWrite)}`);
 	console.log(`累计缓存命中率: ${(overallHitRate * 100).toFixed(2)}%`);
 	console.log(`切换轮命中率: ${(transitionStats.hitRate * 100).toFixed(2)}%  稳定轮命中率: ${(stableStats.hitRate * 100).toFixed(2)}%`);
 	console.log(`估算成本: $${total.cost.toFixed(6)}（cacheRead 按极低价计费；以 DeepSeek 账单为准）`);
-	console.log("\n提示: systemPrompt 应在全程保持同一哈希；通过 HTTP 请求数/重试数与 DeepSeek 独立时间窗口账单核对。");
+	console.log("\n提示: systemPrompt 应全程保持同一哈希；activate_toolset 会改变激活工具集（tools 定义），关注其对前缀缓存的影响；去 DeepSeek 控制台核对服务端命中率与账单。");
 
 	/* ---------------- 报告落盘 ---------------- */
 	const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 	mkdirSync(reportDir, { recursive: true });
-	// 请求级归属审计：每个逻辑调用一份（start 同步、end 异步到达后按身份补全）
-	const requestsAudit = [...logicalRequests.values()]
-		.sort((a, b) => a.callIndex - b.callIndex)
-		.map((request) => ({
-			callIndex: request.callIndex,
-			personaKey: request.personaKey,
-			attempts: request.attempts,
-			commonPrefixMessages: request.start.commonPrefixMessages,
-			stopReason: request.end?.stopReason ?? null,
-			usage: request.end?.usage ?? null,
-		}));
+	// 请求级归属审计：每个逻辑调用一份（start 同步、end 异步到达后按身份补全）；续跑时合并前次报告
+	const requestsAudit = [
+		...(previousReport?.requests ?? []),
+		...[...logicalRequests.values()]
+			.sort((a, b) => a.callIndex - b.callIndex)
+			.map((request) => ({
+				callIndex: request.callIndex,
+				profileKey: request.start.profileKey,
+				attempts: request.attempts,
+				commonPrefixMessages: request.start.commonPrefixMessages,
+				stopReason: request.end?.stopReason ?? null,
+				usage: request.end?.usage ?? null,
+			})),
+	];
 	const report = {
 		generatedAt: new Date().toISOString(),
+		pack: "code",
 		provider: providerId,
 		model: modelId,
 		thinkingLevel,
 		mode: miniMode ? "mini" : "full",
+		resumed: resumeRounds > 0,
+		resumeFrom: resumeRounds,
 		targetTokens,
 		chunkTokens,
 		roundCap,
@@ -595,15 +625,18 @@ async function main(): Promise<void> {
 		systemPrompt: miniMode ? MINI_SYSTEM_PROMPT : undefined,
 		execBase: process.env.EXEC_API_BASE,
 		stoppedEarly,
-		personaSwitchCount: prefixBrokenByScript,
-		naturalPersonaSwitches: personaEventCount,
+		profileSwitchCount: prefixBrokenByScript,
+		naturalProfileSwitches: profileEventCount,
 		toolCallCounts: toolNameCounts,
+		toolsetActivationCounts: toolsetNameCounts,
 		total,
 		requestCounts: { logical: totalCalls, assistant: totalAssistantCalls, http: totalHttpRequests, retries: totalRetries },
 		groups: { transition: transitionStats, stable: stableStats },
 		overallHitRate,
 		rounds,
 		requests: requestsAudit,
+		// 完整会话快照：供 --resume 续跑（含消息历史 / 激活 profile / 工具集 / 扩展状态）
+		snapshot: session.exportSnapshot(),
 	};
 	const file = join(reportDir, `cache-realistic-${stamp}.json`);
 	writeFileSync(file, JSON.stringify(report, null, 2));

@@ -19,7 +19,6 @@ import {
 	type StoredSession,
 } from "./persistence.js";
 import type { StoredSnapshot } from "./persistence.js";
-import { EDU_SESSION_SNAPSHOT_VERSION, type EduSessionSnapshot } from "./snapshot.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -138,7 +137,7 @@ function context(
 	sessionId: string,
 	revision: number,
 	purpose: CryptoContext["purpose"],
-	schemaVersion: number = EDU_SESSION_SNAPSHOT_VERSION,
+	schemaVersion = 1,
 ): CryptoContext {
 	return { tenantId, sessionId, revision, schemaVersion, purpose };
 }
@@ -148,7 +147,7 @@ function encode(value: unknown): Uint8Array {
 }
 
 function assertSupportedSnapshotVersion(snapshot: { version: number }): void {
-	if (snapshot.version !== 1 && snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
+	if (snapshot.version !== 1) {
 		throw new SessionStoreError(`不支持的快照版本: ${snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
 	}
 }
@@ -299,7 +298,7 @@ export class PostgresSessionStore implements SessionStore {
 				 (id, session_id, status, provider_id, model_id, persona_key, audit_algorithm, audit_ciphertext, audit_nonce, audit_key_id)
 				 VALUES ($1, $2, 'running', $3, $4, $5, $6, $7, $8, $9)
 				 RETURNING id, session_id, status, provider_id, model_id, persona_key, started_at, completed_at`,
-				[runId, input.sessionId, input.providerId, input.modelId, input.personaKey ?? null, algorithm, ciphertext, nonce, keyId],
+				[runId, input.sessionId, input.providerId, input.modelId, input.profileKey ?? null, algorithm, ciphertext, nonce, keyId],
 			);
 			await client.query(`UPDATE ${this.schema}.sessions SET active_run_id = $2, updated_at = now() WHERE id = $1`, [input.sessionId, runId]);
 			return this.mapRun(runResult.rows[0]);
@@ -398,7 +397,7 @@ export class PostgresSessionStore implements SessionStore {
 			status: row.status,
 			providerId: row.provider_id,
 			modelId: row.model_id,
-			...(row.persona_key ? { personaKey: row.persona_key } : {}),
+			...(row.persona_key ? { profileKey: row.persona_key } : {}),
 			startedAt: row.started_at,
 			...(row.completed_at ? { completedAt: row.completed_at } : {}),
 		};

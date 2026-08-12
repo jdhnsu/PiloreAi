@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CoreState, createCodeToolManifest, getDefaultCodeProfiles, toolsForState } from "../../src/index.js";
-import { VirtualFS } from "../../src/packs/code/vfs.js";
+import { CoreState, createCodeToolManifest, getDefaultCodeProfiles, toolsForState, VirtualFS } from "../../src/index.js";
 
 test("Code Pack owns its three default profiles", () => {
 	assert.deepEqual(getDefaultCodeProfiles().map((profile) => profile.key), ["feynman", "oris", "socrates"]);

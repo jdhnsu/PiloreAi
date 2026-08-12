@@ -14,9 +14,9 @@ export const routerCases: OnlineCaseDef[] = [
 				name: "采用 feynman",
 				weight: 2,
 				judge: (ev) => {
-					const adopt = ev.personaEvents.find((p) => p.source === "model");
+					const adopt = ev.profileEvents.find((p) => p.source === "model");
 					if (!adopt) return 0;
-					return adopt.persona === "feynman" ? 1 : adopt.persona ? 0.5 : 0;
+					return adopt.profile === "feynman" ? 1 : adopt.profile ? 0.5 : 0;
 				},
 			},
 			{
@@ -34,8 +34,8 @@ export const routerCases: OnlineCaseDef[] = [
 				name: "结束未乱交还(auto)",
 				weight: 1,
 				judge: (ev) => {
-					const last = ev.personaEvents[ev.personaEvents.length - 1];
-					return last && last.persona === null ? 0 : 1; // 简单问答不应该自己交还
+					const last = ev.profileEvents[ev.profileEvents.length - 1];
+					return last && last.profile === null ? 0 : 1; // 简单问答不应该自己交还
 				},
 			},
 		],
@@ -51,9 +51,9 @@ export const routerCases: OnlineCaseDef[] = [
 				name: "采用 socrates",
 				weight: 2,
 				judge: (ev) => {
-					const adopt = ev.personaEvents.find((p) => p.source === "model");
+					const adopt = ev.profileEvents.find((p) => p.source === "model");
 					if (!adopt) return 0;
-					return adopt.persona === "socrates" ? 1 : adopt.persona ? 0.5 : 0;
+					return adopt.profile === "socrates" ? 1 : adopt.profile ? 0.5 : 0;
 				},
 			},
 			{
@@ -88,9 +88,9 @@ export const routerCases: OnlineCaseDef[] = [
 				name: "采用 oris",
 				weight: 2,
 				judge: (ev) => {
-					const adopt = ev.personaEvents.find((p) => p.source === "model");
+					const adopt = ev.profileEvents.find((p) => p.source === "model");
 					if (!adopt) return 0;
-					return adopt.persona === "oris" ? 1 : adopt.persona ? 0.5 : 0;
+					return adopt.profile === "oris" ? 1 : adopt.profile ? 0.5 : 0;
 				},
 			},
 			{
@@ -116,7 +116,7 @@ export const routerCases: OnlineCaseDef[] = [
 	},
 	{
 		id: "ORT-04",
-		name: "事实问答不触发 persona",
+		name: "事实问答不触发 profile",
 		dimension: "在线路由",
 		weight: 2,
 		prompts: ["Python 里怎么读一个 txt 文件？"],
@@ -125,7 +125,7 @@ export const routerCases: OnlineCaseDef[] = [
 				name: "不调用任何方法",
 				weight: 2,
 				judge: (ev) => {
-					const adopt = ev.personaEvents.find((p) => p.source === "model");
+					const adopt = ev.profileEvents.find((p) => p.source === "model");
 					return adopt ? 0 : 1;
 				},
 			},

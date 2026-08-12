@@ -1,5 +1,7 @@
 import "dotenv/config";
+import path from "node:path";
 import readline from "node:readline/promises";
+import { fileURLToPath } from "node:url";
 import {
 	createCodeMentorSession,
 	createEnglishMentorSession,
@@ -24,7 +26,7 @@ function mentorHelp(profiles: ProfileDefinition[]): string {
 	return `导师:\n${profiles.map((p) => `  @${p.key} 问题  指定 ${p.name}`).join("\n")}\n  @pilore 问题  自动路由`;
 }
 function usage(): string {
-	return `用法: npx tsx src/cli.ts [--pack <id>] [--list]\n\n可用包:\n${PACKS.map((p) => `  ${p.id.padEnd(10)} ${p.name}`).join("\n")}`;
+	return `用法: npm run chat -- [--pack <id>] [--list]\n\n可用包:\n${PACKS.map((p) => `  ${p.id.padEnd(10)} ${p.name}`).join("\n")}`;
 }
 function resolvePack(args: string[]): CliPack | { exit: string } {
 	if (args.includes("--list") || args.includes("--help") || args.includes("-h")) return { exit: usage() };
@@ -49,4 +51,4 @@ export function main(argv: string[] = process.argv.slice(2)): void {
 	ask();
 	rl.on("line", (line) => { const text = line.trim(); if (!text) return ask(); if (text === "/quit") { rl.close(); return; } if (text === "/help") { console.log(help); return ask(); } if (text === "/abort") { session.abort(); return; } if (session.busy) { console.log("正在处理上一条消息"); return; } void session.prompt(text, render).finally(ask); });
 }
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`) main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) main();

@@ -16,7 +16,7 @@ import {
 	type StoredRun,
 	type StoredSession,
 } from "./persistence.js";
-import { cloneSessionSnapshot, EDU_SESSION_SNAPSHOT_VERSION } from "./snapshot.js";
+import { cloneCoreSnapshot } from "../../core/snapshot/index.js";
 
 interface MemoryRun extends StoredRun {
 	audit: RunAuditPayload;
@@ -24,7 +24,7 @@ interface MemoryRun extends StoredRun {
 }
 
 function assertSupportedVersion(snapshot: { version: number }): void {
-	if (snapshot.version !== 1 && snapshot.version !== EDU_SESSION_SNAPSHOT_VERSION) {
+	if (snapshot.version !== 1) {
 		throw new SessionStoreError(`不支持的快照版本: ${snapshot.version}`, "UNSUPPORTED_SNAPSHOT_VERSION");
 	}
 }
@@ -50,7 +50,7 @@ export class InMemorySessionStore implements SessionStore {
 			...(input.identity.courseId ? { courseId: input.identity.courseId } : {}),
 			revision: 0,
 			title: deriveSessionTitle(input.snapshot),
-			snapshot: cloneSessionSnapshot(input.snapshot),
+			snapshot: cloneCoreSnapshot(input.snapshot),
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -94,7 +94,7 @@ export class InMemorySessionStore implements SessionStore {
 			status: "running",
 			providerId: input.providerId,
 			modelId: input.modelId,
-			...(input.personaKey ? { personaKey: input.personaKey } : {}),
+			...(input.profileKey ? { profileKey: input.profileKey } : {}),
 			startedAt: new Date(),
 			audit: input.audit,
 		};
@@ -113,7 +113,7 @@ export class InMemorySessionStore implements SessionStore {
 		if (!run || run.status !== "running") throw new SessionStoreError(`run ${input.runId} 无法完成`, "RUN_NOT_RUNNING");
 		assertSupportedVersion(input.snapshot);
 		stored.revision = input.expectedRevision + 1;
-		stored.snapshot = cloneSessionSnapshot({ ...input.snapshot, revision: stored.revision });
+		stored.snapshot = cloneCoreSnapshot({ ...input.snapshot, revision: stored.revision });
 		if (!stored.title) stored.title = deriveSessionTitle(stored.snapshot);
 		stored.activeRunId = undefined;
 		stored.updatedAt = new Date();
@@ -152,7 +152,7 @@ export class InMemorySessionStore implements SessionStore {
 			...(stored.courseId ? { courseId: stored.courseId } : {}),
 			revision: stored.revision,
 			title: stored.title,
-			snapshot: cloneSessionSnapshot(stored.snapshot),
+			snapshot: cloneCoreSnapshot(stored.snapshot),
 			...(stored.activeRunId ? { activeRunId: stored.activeRunId } : {}),
 			createdAt: new Date(stored.createdAt),
 			updatedAt: new Date(stored.updatedAt),
@@ -166,7 +166,7 @@ export class InMemorySessionStore implements SessionStore {
 			status: run.status,
 			providerId: run.providerId,
 			modelId: run.modelId,
-			...(run.personaKey ? { personaKey: run.personaKey } : {}),
+			...(run.profileKey ? { profileKey: run.profileKey } : {}),
 			startedAt: new Date(run.startedAt),
 			...(run.completedAt ? { completedAt: new Date(run.completedAt) } : {}),
 		};

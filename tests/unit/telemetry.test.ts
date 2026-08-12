@@ -42,7 +42,7 @@ test("telemetry 记录逻辑调用、每次 HTTP attempt、usage 与脱敏哈希
 		models,
 		fetch: fakeFetch,
 		telemetry: { onEvent: (event) => events.push(event) },
-		getPersonaKey: () => "socrates",
+		getProfileKey: () => "socrates",
 	});
 	const stream = await streamFn(model, {
 		systemPrompt: "system secret",
@@ -73,7 +73,7 @@ test("telemetry sink 抛错不会中断模型调用", async () => {
 	const streamFn = createObservedStreamFn({
 		models,
 		telemetry: { onEvent: () => { throw new Error("observer failed"); } },
-		getPersonaKey: () => null,
+		getProfileKey: () => null,
 	});
 	const stream = await streamFn(model, { messages: [{ role: "user", content: "hi", timestamp: 1 }] });
 	for await (const _event of stream) {

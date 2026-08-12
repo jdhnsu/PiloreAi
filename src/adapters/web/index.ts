@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type MutableModels } from "@earendil-works/pi-ai";
-import { simulate } from "../mock/exec-server.js";
+import { simulate } from "../../../mock/exec-server.js";
 import {
 	applyPostgresMigrations,
 	createAes256GcmCryptoProvider,
@@ -29,7 +29,7 @@ import {
 	type SessionStore,
 	type StoredRun,
 	type WordEntry,
-} from "./index.js";
+} from "../../index.js";
 
 /**
  * Web 适配层：把 Domain Pack（code / english）暴露为 HTTP 接口（多会话，pack 可切换）。
@@ -51,7 +51,7 @@ import {
 
 const FAUX_DEMO = process.env.FAUX_DEMO === "1";
 // path.resolve 去掉 fileURLToPath 目录 URL 的尾部斜杠，保证前缀守卫一致
-const WEB_ROOT = path.resolve(fileURLToPath(new URL("../web/", import.meta.url)));
+const WEB_ROOT = path.resolve(fileURLToPath(new URL("../../../web/", import.meta.url)));
 const MIME: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
 	".js": "text/javascript; charset=utf-8",
@@ -564,7 +564,7 @@ async function main(): Promise<void> {
 						expectedRevision: entry.revision,
 						providerId,
 						modelId,
-						personaKey: entry.session.profile ?? undefined,
+						profileKey: entry.session.profile ?? undefined,
 						audit: { input: message },
 					});
 				} catch (err) {
@@ -648,7 +648,9 @@ async function main(): Promise<void> {
 	startServer(handler, candidates, FAUX_DEMO);
 }
 
-main().catch((err) => {
+export { main };
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) main().catch((err) => {
 	console.error("[web] 启动失败:", err);
 	process.exit(1);
 });

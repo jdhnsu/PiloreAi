@@ -1,11 +1,5 @@
 import type { SessionSnapshot } from "../../core/types.js";
-import type { EduSessionSnapshot } from "./snapshot.js";
-
-/**
- * 存储层可持久化的快照：core 会话快照（版本 1，含 pack 扩展）或旧的 Web 兼容快照（V1/V2）。
- * 存储按 opaque JSON 保存，不解析内容；恢复时由对应 pack 的 createXxxMentorSession 校验。
- */
-export type StoredSnapshot = EduSessionSnapshot | SessionSnapshot;
+export type StoredSnapshot = SessionSnapshot;
 
 export interface SessionIdentity {
 	tenantId: string;
@@ -56,7 +50,7 @@ export interface StoredRun {
 	status: "running" | "completed" | "failed";
 	providerId: string;
 	modelId: string;
-	personaKey?: string;
+	profileKey?: string;
 	startedAt: Date;
 	completedAt?: Date;
 }
@@ -73,7 +67,7 @@ export interface BeginRunInput {
 	expectedRevision: number;
 	providerId: string;
 	modelId: string;
-	personaKey?: string;
+	profileKey?: string;
 	audit: RunAuditPayload;
 }
 

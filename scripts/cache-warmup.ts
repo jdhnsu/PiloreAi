@@ -1,7 +1,7 @@
 /**
  * 在线上下文缓存利用率测试脚本。
  *
- * 用本项目 Agent 核心（createEduSession）驱动 DeepSeek 在线 API 的多轮对话，
+ * 用通用 Core Session 驱动在线模型的多轮对话，
  * 把单次请求的 prompt 上下文逐步增长到 ~512k tokens，每轮打印 usage
  * （input / output / cacheRead / cacheWrite / cost），结束后输出汇总表。
  * 缓存命中率等参数请到 DeepSeek 控制台 / 账单核对（本脚本只给客户端观测值）。
@@ -10,8 +10,7 @@
  * - 会话层跨轮累积完整历史，agent-loop 每轮把 context.messages 全量重发，
  *   核心循环不触发 compaction，因此前缀逐轮原样重复 → 命中上下文缓存。
  * - 本脚本刻意关闭一切会破坏前缀的因素：固定 systemPrompt（禁止工具）、
- *   personas: []（adopt_persona 无可用老师必然报错、systemPrompt 不变）、
- *   exec 用 stub（防 run_code 造成噪音）、maxTurns: 1。
+ *   不加载 Domain Pack（没有 profile 和工具）、maxTurns: 1。
  *
  * 用法（需 DEEPSEEK_API_KEY，见 .env）：
  *   npm run cache:warmup
@@ -23,13 +22,13 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
-	createEduSession,
+	createSession,
 	createModelCollection,
 	getProviderDefinition,
 	resolveProviderId,
 	DEFAULT_MODEL_IDS,
-	type EduEvent,
-	type ExecClient,
+	type Session,
+	type SessionEvent,
 } from "../src/index.js";
 
 /* ---------------- CLI 参数 ---------------- */
@@ -140,13 +139,13 @@ function pad(n: number, width: number): string {
 }
 
 /** 从快照取最后一条 assistant 消息的 usage（pi-ai 已把 prompt_cache_hit_tokens 折叠进 cacheRead）。 */
-function lastAssistantUsage(session: ReturnType<typeof createEduSession>): {
+function lastAssistantUsage(session: Session): {
 	usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number } | undefined;
 	messageCount: number;
 } {
 	const messages = session.exportSnapshot().messages;
 	for (let i = messages.length - 1; i >= 0; i--) {
-		const m = messages[i];
+		const m = messages[i] as { role?: string; usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } };
 		if (m.role === "assistant") {
 			return {
 				usage: m.usage
@@ -179,19 +178,13 @@ async function main(): Promise<void> {
 
 	const models = createModelCollection();
 
-	// exec 用 stub：任何意外的 run_code 直接失败，不产生网络噪音也不破坏上下文
-	const stubExec: ExecClient = {
-		exec: async () => ({ id: "cache-warmup:stub", ok: false, duration: 0, stdout: "", stderr: "exec disabled for cache warmup" }),
-	};
-
-	const session = createEduSession({
+	const model = models.getModel(providerId, modelId);
+	if (!model) throw new Error(`找不到模型 ${providerId}/${modelId}`);
+	const session = createSession({
 		models,
-		providerId,
-		modelId,
+		model,
 		thinkingLevel,
 		systemPrompt: SYSTEM_PROMPT,
-		personas: [], // 空老师集合：adopt_persona 必然失败，systemPrompt 全程不变 → 缓存前缀稳定
-		exec: stubExec,
 		maxTurns: 1, // 系统提示禁止工具，1 回合即结束；护栏防意外多回合
 	});
 
@@ -205,8 +198,8 @@ async function main(): Promise<void> {
 	let prefixBroken = false;
 	let stoppedEarly = false;
 
-	const onEvent = (ev: EduEvent): void => {
-		if (ev.type === "persona") prefixBroken = true; // 不应发生；发生了说明前缀被破坏
+	const onEvent = (ev: SessionEvent): void => {
+		if (ev.type === "profile") prefixBroken = true; // 不应发生；发生了说明前缀被破坏
 		if (ev.type === "done") lastError = ev.errorMessage;
 	};
 
@@ -294,7 +287,7 @@ async function main(): Promise<void> {
 	const overallHitRate = total.cacheRead + total.cacheWrite > 0 ? total.cacheRead / (total.cacheRead + total.cacheWrite + total.input) : 0;
 
 	console.log("\n================ 汇总 ================");
-	console.log(`轮数: ${rounds.length}${stoppedEarly ? "（提前中止）" : ""}${prefixBroken ? "（⚠ 检测到 persona 事件，缓存前缀可能被破坏）" : ""}`);
+	console.log(`轮数: ${rounds.length}${stoppedEarly ? "（提前中止）" : ""}${prefixBroken ? "（⚠ 检测到 profile 事件，缓存前缀可能被破坏）" : ""}`);
 	if (last) console.log(`最终上下文(prompt tokens): ${fmt(last.promptTokens)}  目标: ~${fmt(targetTokens)}`);
 	console.log(`累计 input: ${fmt(total.input)}  output: ${fmt(total.output)}`);
 	console.log(`累计 cacheRead: ${fmt(total.cacheRead)}  cacheWrite: ${fmt(total.cacheWrite)}`);
