@@ -7,3 +7,5 @@ design/
 .vscode/settings.json
 docs/cache-report/fonts/
 .env.bak
+pdf-verify-1.png
+.playwright-mcp/*

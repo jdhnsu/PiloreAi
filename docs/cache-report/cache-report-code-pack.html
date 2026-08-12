@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<!-- ==================================================================
+     LONG DOCUMENT TEMPLATE · parchment design system
+     多页 A4 白皮书/技术报告/年度总结
+     结构：封面 -> 目录 -> 执行摘要 -> 正文章节 -> 附录
+     ================================================================== -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PiLore 上下文缓存利用率测试报告 · 多 Pack 架构（Code Pack）</title>
+<meta name="author" content="PiLore Team">
+<meta name="description" content="多 Pack 架构 code pack 的 512K 真实对话缓存测试：累计命中率 97.82%，动态工具集一次加载后前缀稳定，估算成本 0.145 美元。">
+<meta name="keywords" content="上下文缓存, 缓存命中率, DeepSeek, 512K, DomainPack, activate_toolset, PiLore">
+<meta name="generator" content="Kami">
+<style>
+  /* Regular weight */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("fonts/TsangerJinKai02-W04.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W04.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  /* Bold weight - W05 for all bold variants */
+  @font-face {
+    font-family: "TsangerJinKai02";
+    src: url("fonts/TsangerJinKai02-W05.ttf") format("truetype"),
+       url("https://cdn.jsdelivr.net/gh/tw93/Kami@main/assets/fonts/TsangerJinKai02-W05.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+  }
+
+  @page {
+    size: A4;
+    margin: 20mm 22mm 22mm 22mm;
+    background: #f5f4ed;
+
+    @top-right {
+      content: string(section-title);
+      font-family: "TsangerJinKai02", "Source Han Serif SC",
+                   "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+      font-size: 8pt;
+      color: #6b6a64;
+    }
+
+    @bottom-center {
+      content: counter(page) "  ·  PiLore 缓存测试报告";
+      font-family: "TsangerJinKai02", "Source Han Serif SC",
+                   "Noto Serif CJK SC", "Songti SC", Georgia, serif;
+      font-size: 9pt;
+      color: #6b6a64;
+    }
+  }
+
+  @page:first {
+    @top-right { content: ""; }
+    @bottom-center { content: ""; }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --parchment: #f5f4ed;
+    --ivory:     #faf9f5;
+    --near-black:#141413;
+    --dark-warm: #3d3d3a;
+    --olive:     #504e49;
+    --stone:     #6b6a64;
+    --brand:     #1B365D;
+    --border:    #e8e6dc;
+    --border-soft:#e5e3d8;
+    --tag-bg:    #E4ECF5;
+    --serif: "TsangerJinKai02", "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", Georgia, serif;
+    --sans: var(--serif);
+
+    --rhythm-module:  14pt;
+    --rhythm-section: 18pt;
+  }
+
+  html, body { background: var(--parchment); }
+
+  @media screen {
+    body { max-width: 210mm; margin: 0 auto; padding: 20mm 22mm 22mm 22mm; }
+  }
+
+  body {
+    color: var(--near-black);
+    font-family: var(--serif);
+    font-size: 10.5pt;
+    line-height: 1.55;
+    letter-spacing: 0.3pt;
+    widows: 3;
+    orphans: 3;
+  }
+
+  .sans {
+    font-family: var(--sans);
+  }
+
+  /* ========== COVER ========== */
+  .cover {
+    min-height: 240mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40mm 0 0 0;
+    break-after: page;
+  }
+  .cover-eyebrow {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-bottom: 18pt;
+  }
+  .cover-title {
+    font-size: 36pt;
+    font-weight: 500;
+    color: var(--near-black);
+    line-height: 1.15;
+    letter-spacing: 0.3pt;
+    margin-bottom: 16pt;
+  }
+  .cover-sub {
+    font-family: var(--sans);
+    font-size: 14pt;
+    color: var(--olive);
+    line-height: 1.5;
+    max-width: 85%;
+    margin-bottom: 30pt;
+  }
+  .cover-meta {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--stone);
+    line-height: 1.5;
+  }
+  .cover-meta strong {
+    color: var(--dark-warm);
+    font-weight: 500;
+  }
+
+  /* ========== TOC（目录）========== */
+  .toc { break-after: page; }
+  .toc h2 {
+    font-size: 22pt;
+    font-weight: 500;
+    margin-bottom: var(--rhythm-module);
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+  }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6pt 0;
+    border-bottom: 0.3pt dotted var(--border);
+    font-size: 11pt;
+  }
+  .toc-item:last-of-type { border-bottom: none; }
+  .toc-num {
+    color: var(--brand);
+    font-weight: 500;
+    min-width: 30pt;
+  }
+  .toc-title {
+    flex: 1;
+    color: var(--near-black);
+    padding-left: 6pt;
+  }
+  .toc-page {
+    color: var(--stone);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ========== HEADINGS ========== */
+  h1 {
+    font-size: 22pt;
+    font-weight: 500;
+    line-height: 1.2;
+    margin: 0 0 10pt 0;
+    border-left: 2.5pt solid var(--brand);
+    border-radius: 1.5pt;
+    padding-left: 8pt;
+    color: var(--near-black);
+    break-after: avoid;
+  }
+
+  h2 {
+    font-size: 16pt;
+    font-weight: 500;
+    line-height: 1.25;
+    margin: 24pt 0 8pt 0;
+    color: var(--near-black);
+    break-after: avoid;
+    string-set: section-title content();
+  }
+
+  h3 {
+    font-size: 13pt;
+    font-weight: 500;
+    line-height: 1.3;
+    margin: 18pt 0 6pt 0;
+    color: var(--dark-warm);
+    break-after: avoid;
+  }
+
+  .chapter-num {
+    font-family: var(--sans);
+    font-size: 10pt;
+    color: var(--brand);
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-bottom: 6pt;
+  }
+
+  /* ========== PARAGRAPHS ========== */
+  p {
+    margin: 0 0 10pt 0;
+    line-height: 1.55;
+    color: var(--near-black);
+    widows: 2;
+    orphans: 2;
+  }
+
+  .lead {
+    font-size: 12pt;
+    line-height: 1.55;
+    color: var(--dark-warm);
+    margin-bottom: var(--rhythm-module);
+  }
+
+  .hl { color: var(--brand); font-weight: 500; }
+  strong { font-weight: 500; }
+
+  /* ========== LISTS ========== */
+  ul, ol {
+    margin: 6pt 0 10pt 0;
+    padding-left: 20pt;
+    line-height: 1.55;
+  }
+  ul li::marker { color: var(--brand); }
+  ol li::marker { color: var(--brand); font-weight: 500; }
+
+  /* ========== QUOTE ========== */
+  blockquote, .quote {
+    border-left: 2pt solid var(--brand);
+    margin: 12pt 0;
+    padding: 4pt 0 4pt 16pt;
+    color: var(--olive);
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  blockquote .cite, .quote .cite {
+    display: block;
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 4pt;
+  }
+
+  /* ========== CODE ========== */
+  code {
+    font-family: "JetBrains Mono", "SF Mono", Consolas,
+                 "TsangerJinKai02", "Source Han Serif SC",
+                 "Noto Serif CJK SC", "Songti SC", monospace;
+    font-size: 9pt;
+    background: var(--ivory);
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+    color: var(--dark-warm);
+  }
+  pre {
+    font-family: "JetBrains Mono", "SF Mono", Consolas,
+                 "TsangerJinKai02", "Source Han Serif SC",
+                 "Noto Serif CJK SC", "Songti SC", monospace;
+    font-size: 9pt;
+    line-height: 1.5;
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 10pt 0;
+    white-space: pre-wrap;
+    color: var(--near-black);
+    break-inside: avoid;
+  }
+  pre code { background: transparent; padding: 0; font-size: inherit; }
+
+  /* ========== TABLE (kami-table) ========== */
+  table, .kami-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    margin: 12pt 0;
+    break-inside: avoid;
+  }
+  table th, .kami-table th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--dark-warm);
+    padding: 6pt 8pt;
+    border-bottom: 1pt solid var(--border);
+    background: transparent;
+  }
+  table td, .kami-table td {
+    padding: 5pt 8pt;
+    border-bottom: 0.3pt solid var(--border-soft);
+    vertical-align: top;
+  }
+  table.compact th, .kami-table.compact th { padding: 3pt 6pt; font-size: 8pt; }
+  table.compact td, .kami-table.compact td { padding: 2pt 6pt; font-size: 8pt; line-height: 1.4; }
+  table.financial td:not(:first-child), .kami-table.financial td:not(:first-child) {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  table.financial th:not(:first-child), .kami-table.financial th:not(:first-child) { text-align: right; }
+  table.striped tbody tr:nth-child(even) td, .kami-table.striped tbody tr:nth-child(even) td {
+    background: var(--ivory);
+  }
+  table .total td, .kami-table .total td {
+    font-weight: 500; border-top: 1pt solid var(--brand); border-bottom: none; color: var(--near-black);
+  }
+
+  /* ========== CALLOUT ========== */
+  .callout {
+    background: var(--ivory);
+    border-left: 2pt solid var(--brand);
+    padding: 10pt 14pt;
+    border-radius: 3pt;
+    margin: 12pt 0;
+    line-height: 1.55;
+    break-inside: avoid;
+  }
+  .callout blockquote,
+  .callout .quote {
+    border-left: none;
+    padding-left: 0;
+    margin: 6pt 0;
+    color: var(--olive);
+  }
+  .callout blockquote:first-child,
+  .callout .quote:first-child { margin-top: 0; }
+  .callout blockquote:last-child,
+  .callout .quote:last-child  { margin-bottom: 0; }
+
+  .takeaway {
+    background: var(--ivory);
+    border-radius: 4pt;
+    padding: 10pt 14pt;
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  .takeaway-label {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--brand);
+    letter-spacing: 0.5pt;
+    text-transform: uppercase;
+    margin-bottom: 4pt;
+  }
+
+  /* ========== TAG ========== */
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--brand);
+    font-family: var(--sans);
+    font-size: 9pt;
+    font-weight: 500;
+    padding: 1pt 6pt;
+    border-radius: 3pt;
+    margin-right: 4pt;
+  }
+
+  /* ========== FIGURE ========== */
+  figure {
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  figure img, figure svg {
+    max-width: 100%;
+    border-radius: 4pt;
+  }
+  figcaption {
+    font-family: var(--sans);
+    font-size: 9pt;
+    color: var(--stone);
+    margin-top: 6pt;
+    text-align: center;
+  }
+
+  /* ========== EXECUTIVE SUMMARY ========== */
+  .exec-summary {
+    background: var(--ivory);
+    border-left: 1.4pt solid var(--brand);
+    border-radius: 6pt;
+    padding: 16pt 20pt;
+    margin: 14pt 0;
+    break-inside: avoid;
+  }
+  .exec-summary h2 {
+    margin-top: 0;
+    font-size: 13pt;
+  }
+
+  /* ========== CHAPTER BREAK ========== */
+  .chapter { break-before: page; }
+</style>
+</head>
+<body>
+
+<!-- ═════════════ COVER ═════════════ -->
+<section class="cover">
+  <div>
+    <div class="cover-eyebrow">技术报告 · 性能测试 · 第四次</div>
+    <div class="cover-title">PiLore 上下文缓存<br>利用率测试报告</div>
+    <div class="cover-sub">多 Pack 架构下的 512K 真实对话压测：Code Pack 动态加载工具集，追加式 Profile 上下文，累计命中率 97.82%</div>
+  </div>
+  <div class="cover-meta">
+    <strong>PiLore Team</strong><br>
+    V2.0  ·  2026.08<br>
+    基于 DeepSeek API 实测数据
+  </div>
+</section>
+
+<!-- ═════════════ 目录 ═════════════ -->
+<section class="toc">
+  <h2>目录</h2>
+  <div class="toc-item">
+    <span class="toc-num">01</span>
+    <span class="toc-title">执行摘要</span>
+    <span class="toc-page">03</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">02</span>
+    <span class="toc-title">背景与问题定义</span>
+    <span class="toc-page">04</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">03</span>
+    <span class="toc-title">方法与发现</span>
+    <span class="toc-page">05</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">04</span>
+    <span class="toc-title">结论与建议</span>
+    <span class="toc-page">08</span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">05</span>
+    <span class="toc-title">附录</span>
+    <span class="toc-page">09</span>
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 01：执行摘要 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">01 · Executive Summary</div>
+  <h1>执行摘要</h1>
+
+  <p class="lead">
+    PiLore 重构为<strong>多 Pack 架构</strong>（领域无关 Core + 动态加载的 DomainPack）后，
+    本次仅启用 <strong>Code Pack</strong> 重跑 512K 真实对话测试：累计缓存命中率 <span class="hl">97.82%</span>，
+    末轮上下文 <span class="hl">522,741 tokens</span>，估算成本 <span class="hl">$0.145</span>，
+    动态工具集仅引入一次性的前缀成本，此后保持稳定。
+  </p>
+
+  <h2>核心 Takeaways</h2>
+  <ul>
+    <li>命中率：累计 <span class="hl">97.82%</span>，切换轮 97.83% 与稳定轮 97.82% 差距小于 0.01 个百分点——Profile 切换零衰减。</li>
+    <li>动态工具集：workspace / execution 两个工具组在第 1 轮由 <code>activate_toolset</code> 一次加载，
+        此后 100 次调用的 tools 定义不再变化，缓存前缀全程稳定。</li>
+    <li>真实负载：54 轮对话、101 次 LLM 调用、<span class="hl">40 次工具调用</span>（write_file 17 · run_code 20 · read_file 3）、
+        18 次 Profile 主动切换，全程 0 次 HTTP 重试、0 次失败回滚。</li>
+  </ul>
+
+  <div class="takeaway">
+    <div class="takeaway-label">本文档回答的问题</div>
+    1. 多 Pack 架构下，动态加载工具集（activate_toolset）会不会反复破坏前缀缓存？<br>
+    2. Code Pack 的真实教学负载（工具链 + Profile 切换）在 512K 上下文下能维持多高的命中率？<br>
+    3. 重构后的数据与追加式架构的前三次测试是否可比、可复现？
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 02：背景 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">02 · Background</div>
+  <h1>背景与问题定义</h1>
+
+  <p class="lead">
+    PiLore 在前三次测试后完成了一次架构重构：从单一教育会话（createEduSession）演进为
+    <strong>领域无关的 Core 运行时 + 可组合的 DomainPack</strong>。本次测试验证重构没有破坏
+    已经确立的缓存行为，并回答动态工具包带来的新问题。
+  </p>
+
+  <h2>多 Pack 架构的三个关键变化</h2>
+  <ul>
+    <li><strong>Core 与领域分离</strong>：运行时（createRuntime / createSession）不再绑定任何领域；
+        Code Pack 以 <code>DomainPack</code> 形式注入 Profile 集合、工具清单与快照扩展。</li>
+    <li><strong>工具按需动态加载</strong>：Code Pack 的工具不再常驻，而是分成 workspace（读写工作区）与
+        execution（沙箱运行）两个工具组，模型首次需要时调用 <code>activate_toolset</code> 加载，
+        加载后在整个会话中保持激活。</li>
+    <li><strong>Profile 上下文延续追加式设计</strong>：教学 Profile（Oris / Feynman / Socrates）的方法论
+        仍以追加式内部消息进入历史，systemPrompt 全程固定——这是前三次测试确立的缓存友好模式。</li>
+  </ul>
+
+  <h2>本次的核心疑问</h2>
+  <p>
+    前缀缓存对请求的每一个组成部分敏感：systemPrompt、tools 定义、消息历史。追加式 Profile 上下文已经解决了
+    「角色切换破坏前缀」的问题，但<strong>动态工具集引入了新的变量</strong>——
+    <code>activate_toolset</code> 会改变请求携带的 tools 定义。如果工具组在会话中途反复加载、卸载，
+    每次变化都会使前缀失效。本次测试要验证的是：真实教学负载下，这个变化究竟发生几次、代价多大。
+  </p>
+
+  <div class="callout">
+    工具集变化与角色切换的缓存代价性质相同：都只发生在「定义改变的那一次请求」。
+    只要加载是一次性的、此后保持稳定，动态工具包对前缀缓存的影响就是一次性的。
+  </div>
+
+  <h2>衡量口径（与前三次一致）</h2>
+  <table class="kami-table financial striped">
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>口径</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>累计缓存命中率</td>
+        <td>累计 cacheRead ÷ 累计（input + cacheRead + cacheWrite），全部 LLM 调用求和</td>
+      </tr>
+      <tr>
+        <td>末轮上下文</td>
+        <td>最后一个 LLM 回合的 input + cacheRead + cacheWrite</td>
+      </tr>
+      <tr>
+        <td>轮归属</td>
+        <td>telemetry 按 logicalRequestId / callIndex 归属，不受事件到达顺序影响</td>
+      </tr>
+      <tr>
+        <td>切换轮 / 稳定轮</td>
+        <td>本轮是否发生 Profile 切换（脚本主动或模型自然 adopt）</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═════════════ Chapter 03：方法与发现 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">03 · Methodology</div>
+  <h1>方法与发现</h1>
+
+  <p class="lead">
+    测试驱动 Code Pack 会话入口 <code>createCodeMentorSession</code>，完整启用真实行为：
+    动态加载工具集、调用工具、中途切换 Profile、逐轮累积上下文至 512K，
+    并以请求级 telemetry 记录每次逻辑调用的命中数据。
+  </p>
+
+  <h2>研究方法</h2>
+  <p>
+    每轮按 code → 学习材料 → 概念问答 → 学习材料 → 修 bug → 学习材料 → 问答 → 学习材料 的循环模拟真实用法；
+    每 3 轮按 Oris → Feynman → Socrates → 自动路由 的节奏切换 Profile；
+    每轮注入约 20K tokens 的确定性学习材料推动上下文增长。
+    执行后端为真实沙箱 <code>192.168.172.134:1313</code>；单轮工具链护栏 maxTurns = 6；
+    达到 512K 目标即停。测试脚本同时具备失败轮回滚与 <code>--resume</code> 快照续跑能力（本次全程未触发）。
+  </p>
+
+  <pre><code class="language-python">session = createCodeMentorSession({
+    models, providerId: "deepseek", modelId: "deepseek-v4-flash",
+    thinkingLevel: "off",
+    profiles,                    # Oris / Feynman / Socrates（code pack）
+    llmTelemetry: { onEvent },   # 请求级归属：logicalRequestId / callIndex
+    maxTurns: 6,                 # 工具链护栏
+})
+for r in range(rounds):
+    session.setProfile(rotation(r % 3))   # 中途切换 Profile
+    await session.prompt(buildUserMessage(r), onEvent)
+    # 第 1 轮模型自动 activate_toolset → workspace + execution</code></pre>
+
+  <h2>本次运行总览</h2>
+  <table class="kami-table financial striped">
+    <thead>
+      <tr>
+        <th>指标</th>
+        <th>数值</th>
+        <th>指标</th>
+        <th>数值</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>最终上下文</td>
+        <td>522,741 tokens</td>
+        <td>对话轮数</td>
+        <td>54 轮</td>
+      </tr>
+      <tr>
+        <td>LLM 逻辑调用</td>
+        <td>101 次</td>
+        <td>HTTP 请求 / 重试</td>
+        <td>101 次 / 0</td>
+      </tr>
+      <tr>
+        <td>累计 cacheRead</td>
+        <td>22,270,976</td>
+        <td>累计未命中 input</td>
+        <td>496,073</td>
+      </tr>
+      <tr>
+        <td>工具调用</td>
+        <td>40 次</td>
+        <td>Profile 切换（主动）</td>
+        <td>18 次</td>
+      </tr>
+      <tr>
+        <td>累计缓存命中率</td>
+        <td>97.82%</td>
+        <td>估算成本</td>
+        <td>$0.145</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <figure>
+    <svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#f5f4ed"/>
+
+      <!-- Horizontal grid lines（左轴 60/70/80/90/100%） -->
+      <line x1="60" y1="320" x2="620" y2="320" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="250" x2="620" y2="250" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="180" x2="620" y2="180" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="110" x2="620" y2="110" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="40"  x2="620" y2="40"  stroke="#e8e7e1" stroke-width="0.8"/>
+
+      <!-- Left Y-axis labels（命中率 %） -->
+      <text x="52" y="324" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">60</text>
+      <text x="52" y="254" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">70</text>
+      <text x="52" y="184" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">80</text>
+      <text x="52" y="114" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">90</text>
+      <text x="52" y="44"  fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">100</text>
+      <text x="16" y="184" fill="#6b6a64" font-size="9" font-family="'JetBrains Mono', monospace" letter-spacing="0.12em" transform="rotate(-90 16 184)" text-anchor="middle">HIT RATE %</text>
+
+      <!-- Right Y-axis labels（上下文 · 千 tokens） -->
+      <text x="628" y="324" fill="#6b6a64" font-size="9" font-family="inherit">0</text>
+      <text x="628" y="273" fill="#6b6a64" font-size="9" font-family="inherit">100</text>
+      <text x="628" y="222" fill="#6b6a64" font-size="9" font-family="inherit">200</text>
+      <text x="628" y="171" fill="#6b6a64" font-size="9" font-family="inherit">300</text>
+      <text x="628" y="120" fill="#6b6a64" font-size="9" font-family="inherit">400</text>
+      <text x="628" y="70"  fill="#6b6a64" font-size="9" font-family="inherit">500</text>
+
+      <!-- X-axis baseline -->
+      <line x1="60" y1="320" x2="620" y2="320" stroke="#141413" stroke-width="0.8"/>
+
+      <!-- Line 2（olive · 上下文大小，右轴 0–550 千 tokens） -->
+      <polyline
+        points="60,318.4 110.9,299.2 161.8,268.8 212.7,248.3 263.6,218.0 314.5,197.6 365.5,168.6 416.4,149.1 467.3,120.7 518.2,100.9 569.1,72.6 620,53.9"
+        fill="none" stroke="#504e49" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 3"/>
+
+      <!-- Line 1（brand · 累计命中率，左轴 60–100%） -->
+      <polyline
+        points="60,271.6 110.9,252.1 161.8,95.5 212.7,73.8 263.6,66.4 314.5,61.0 365.5,58.6 416.4,57.4 467.3,57.8 518.2,56.3 569.1,55.5 620,55.3"
+        fill="none" stroke="#1B365D" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+      <!-- Dots · Line 1 -->
+      <circle cx="60"    cy="271.6" r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="110.9" cy="252.1" r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="161.8" cy="95.5"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="212.7" cy="73.8"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="263.6" cy="66.4"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="314.5" cy="61.0"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="365.5" cy="58.6"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="416.4" cy="57.4"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="467.3" cy="57.8"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="518.2" cy="56.3"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="569.1" cy="55.5"  r="3.5" fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+      <circle cx="620"   cy="55.3"  r="5"   fill="#1B365D" stroke="#f5f4ed" stroke-width="1.5"/>
+
+      <!-- Dots · Line 2 -->
+      <circle cx="60"    cy="318.4" r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+      <circle cx="161.8" cy="268.8" r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+      <circle cx="263.6" cy="218.0" r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+      <circle cx="365.5" cy="168.6" r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+      <circle cx="467.3" cy="120.7" r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+      <circle cx="569.1" cy="72.6"  r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+      <circle cx="620"   cy="53.9"  r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+
+      <!-- End-of-line value labels -->
+      <text x="612" y="48"  fill="#1B365D" font-size="11" font-family="inherit" font-weight="500" text-anchor="end">97.82%</text>
+      <text x="612" y="70"  fill="#504e49" font-size="10" font-family="inherit" text-anchor="end">523K</text>
+
+      <!-- X-axis labels -->
+      <text x="60"    y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R1</text>
+      <text x="110.9" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R5</text>
+      <text x="161.8" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R10</text>
+      <text x="212.7" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R15</text>
+      <text x="263.6" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R20</text>
+      <text x="314.5" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R25</text>
+      <text x="365.5" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R30</text>
+      <text x="416.4" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R35</text>
+      <text x="467.3" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R40</text>
+      <text x="518.2" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R45</text>
+      <text x="569.1" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R50</text>
+      <text x="620"   y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">R54</text>
+
+      <!-- Legend -->
+      <line x1="60" y1="368" x2="620" y2="368" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="386" x2="84" y2="386" stroke="#1B365D" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="72" cy="386" r="3.5" fill="#1B365D"/>
+      <text x="92" y="390" fill="#504e49" font-size="10" font-family="inherit">累计缓存命中率（左轴 %）</text>
+      <line x1="290" y1="386" x2="314" y2="386" stroke="#504e49" stroke-width="1.5" stroke-dasharray="5 3" stroke-linecap="round"/>
+      <circle cx="302" cy="386" r="3" fill="#f5f4ed" stroke="#504e49" stroke-width="1.5"/>
+      <text x="322" y="390" fill="#504e49" font-size="10" font-family="inherit">上下文大小（右轴 · 千 tokens）</text>
+    </svg>
+    <figcaption>命中率在 R10 越过 92% 后贴顶缓行；上下文线性增长至 523K 期间，命中率没有随规模扩大而衰减。</figcaption>
+  </figure>
+
+  <h2>关键发现</h2>
+
+  <h3>发现 1：动态工具集的缓存代价是一次性的</h3>
+  <p>
+    第 1 轮模型调用 <code>activate_toolset</code> 加载 workspace 与 execution 两个工具组（该轮 6 次调用、
+    命中率 66.9% 为全程唯一低点）；此后 <span class="hl">100 次调用中 tools 定义再未变化</span>，
+    工具集激活计数 workspace 1 次、execution 1 次。R10 起累计命中率站上 92%，R25 起稳定在 97% 以上。
+    换言之，「按需加载」没有变成「反复加载」——这是本次架构对缓存最友好的地方。
+  </p>
+
+  <h3>发现 2：Profile 切换依旧零衰减</h3>
+  <p>
+    18 次脚本主动切换（Oris / Feynman / Socrates / 自动路由循环）之下，切换轮命中率
+    <span class="hl">97.83%</span>、稳定轮 <span class="hl">97.82%</span>，差距小于 0.01 个百分点；
+    末轮 <code>commonPrefixMessages = 202</code>，即最后一次请求与上次共享 202 条完整历史消息。
+    追加式 Profile 上下文在多 Pack 架构中被完整保留。
+  </p>
+
+  <h3>发现 3：未命中部分约等于新增内容本身</h3>
+  <p>
+    全程最大单轮未命中 input 为 <span class="hl">18,288 tokens</span>，与一轮注入的学习材料
+    （约 20K tokens）同量级；累计未命中 496,073 tokens 主要由 54 轮新增材料、
+    模型输出回填与第 1 轮冷启动构成。缓存失效没有出现在任何一次切换或工具调用上。
+  </p>
+
+  <h3>发现 4：四次测试横向对比</h3>
+  <table class="kami-table financial striped">
+    <thead>
+      <tr>
+        <th>轮次</th>
+        <th>框架</th>
+        <th>对话轮数</th>
+        <th>末轮上下文</th>
+        <th>累计命中率</th>
+        <th>未命中 input</th>
+        <th>估算成本</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>第 1 次</td>
+        <td>旧框架（换入式 systemPrompt）</td>
+        <td>56</td>
+        <td>526,147</td>
+        <td>84.26%</td>
+        <td>3,681,581</td>
+        <td>$0.58</td>
+      </tr>
+      <tr>
+        <td>第 2 次</td>
+        <td>追加式 persona 上下文</td>
+        <td>56</td>
+        <td>549,194</td>
+        <td>98.30%</td>
+        <td>519,607</td>
+        <td>$0.17</td>
+      </tr>
+      <tr>
+        <td>第 3 次</td>
+        <td>追加式 · 换新 key 复测</td>
+        <td>55</td>
+        <td>512,028</td>
+        <td>97.11%</td>
+        <td>486,880</td>
+        <td>$0.12</td>
+      </tr>
+      <tr class="total">
+        <td>第 4 次</td>
+        <td>多 Pack 架构 · Code Pack</td>
+        <td>54</td>
+        <td>522,741</td>
+        <td>97.82%</td>
+        <td>496,073</td>
+        <td>$0.145</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <figure>
+    <svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#f5f4ed"/>
+
+      <!-- Horizontal grid lines（0–100%，2.8px/%） -->
+      <line x1="60" y1="320" x2="620" y2="320" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="264" x2="620" y2="264" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="208" x2="620" y2="208" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="152" x2="620" y2="152" stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="96"  x2="620" y2="96"  stroke="#e8e7e1" stroke-width="0.8"/>
+      <line x1="60" y1="40"  x2="620" y2="40"  stroke="#e8e7e1" stroke-width="0.8"/>
+
+      <!-- Y-axis labels -->
+      <text x="52" y="324" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">0</text>
+      <text x="52" y="268" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">20</text>
+      <text x="52" y="212" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">40</text>
+      <text x="52" y="156" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">60</text>
+      <text x="52" y="100" fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">80</text>
+      <text x="52" y="44"  fill="#6b6a64" font-size="10" font-family="inherit" text-anchor="end">100</text>
+      <text x="16" y="184" fill="#6b6a64" font-size="9" font-family="'JetBrains Mono', monospace" letter-spacing="0.12em" transform="rotate(-90 16 184)" text-anchor="middle">HIT RATE %</text>
+
+      <!-- X-axis baseline -->
+      <line x1="60" y1="320" x2="620" y2="320" stroke="#141413" stroke-width="0.8"/>
+
+      <!-- Bars：84.26 / 98.30 / 97.11 / 97.82 -->
+      <rect x="110" y="84.1" width="40" height="235.9" fill="#504e49" rx="2"/>
+      <rect x="250" y="44.8" width="40" height="275.2" fill="#504e49" rx="2"/>
+      <rect x="390" y="48.1" width="40" height="271.9" fill="#504e49" rx="2"/>
+      <rect x="530" y="46.1" width="40" height="273.9" fill="#1B365D" rx="2"/>
+
+      <!-- Data labels -->
+      <text x="130" y="78.1" fill="#141413" font-size="10" font-family="inherit" font-weight="500" text-anchor="middle">84.26%</text>
+      <text x="270" y="38.8" fill="#141413" font-size="10" font-family="inherit" font-weight="500" text-anchor="middle">98.30%</text>
+      <text x="410" y="42.1" fill="#141413" font-size="10" font-family="inherit" font-weight="500" text-anchor="middle">97.11%</text>
+      <text x="550" y="40.1" fill="#1B365D" font-size="10" font-family="inherit" font-weight="500" text-anchor="middle">97.82%</text>
+
+      <!-- X-axis category labels -->
+      <text x="130" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">第 1 次 · 旧框架</text>
+      <text x="270" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">第 2 次 · 追加式</text>
+      <text x="410" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">第 3 次 · 复测</text>
+      <text x="550" y="340" fill="#141413" font-size="9.5" font-family="inherit" text-anchor="middle">第 4 次 · Code Pack</text>
+
+      <!-- Legend -->
+      <line x1="60" y1="368" x2="620" y2="368" stroke="#e8e7e1" stroke-width="0.8"/>
+      <rect x="60" y="380" width="12" height="12" fill="#504e49" rx="2"/>
+      <text x="78" y="391" fill="#504e49" font-size="10" font-family="inherit">单一会话架构（第 1–3 次）</text>
+      <rect x="260" y="380" width="12" height="12" fill="#1B365D" rx="2"/>
+      <text x="278" y="391" fill="#504e49" font-size="10" font-family="inherit">多 Pack 架构 · Code Pack（本次）</text>
+    </svg>
+    <figcaption>重构没有带来命中率回归：多 Pack 架构（97.82%）与追加式架构持平，显著高于旧框架（84.26%）。</figcaption>
+  </figure>
+
+  <h3>发现 5：成本差异来自输出量，而非缓存</h3>
+  <p>
+    本次估算成本 $0.145 略高于第 3 次的 $0.12，两者缓存命中率相近（97.82% vs 97.11%）。
+    差异主要来自输出 tokens：本次 <span class="hl">47,138</span> vs 第 3 次 33,939——
+    本次工具链更活跃（40 次工具调用 vs 17 次），代码讲解更详尽。
+    cacheRead 计费占比极低的结构没有变化。
+  </p>
+
+  <blockquote>
+    动态加载不等于动态变化。工具组一次加载、全程保持，前缀缓存看到的就是一个稳定前缀——
+    这与「追加式 Profile 上下文」是同一条设计原则：把变化收敛为一次性事件。
+    <span class="cite">— 本次测试的核心观察</span>
+  </blockquote>
+</section>
+
+<!-- ═════════════ Chapter 04：结论 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">04 · Conclusions</div>
+  <h1>结论与建议</h1>
+
+  <p class="lead">
+    多 Pack 重构通过了 512K 真实负载的缓存考验：命中率 97.82% 与追加式架构持平，
+    动态工具集只产生一次性前缀成本，Profile 切换依旧零衰减。
+  </p>
+
+  <h2>核心结论</h2>
+  <ol>
+    <li>多 Pack 架构下累计缓存命中率 <span class="hl">97.82%</span>（末轮上下文 522,741 tokens），
+        与追加式架构的第 2、3 次测试（98.30% / 97.11%）持平，比重构前（84.26%）高 13.6 个百分点。</li>
+    <li>动态工具集是缓存友好的：workspace / execution 在第 1 轮一次加载后，
+        后续 100 次调用 tools 定义不变；切换轮与稳定轮命中率差距小于 0.01 个百分点。</li>
+    <li>数据可复现、可审计：101 次逻辑调用 = 101 次 HTTP = 0 重试，
+        telemetry 按 logicalRequestId / callIndex 逐请求归属，末轮前缀共享 202 条历史消息。</li>
+  </ol>
+
+  <h2>下一步建议</h2>
+  <ul>
+    <li>保持「systemPrompt 固定 + Profile 方法论追加 + 工具集一次加载」的架构不变。</li>
+    <li>若未来引入更多工具组（如 english pack 的 evaluation），应在会话早期一次性加载完毕，
+        避免会话中段再变更 tools 定义——那是唯一会重新付出前缀代价的操作。</li>
+    <li>工具链回合数是下一个优化点：本次 101 次调用中每个工具回合都重发完整历史，
+        压缩单次任务的工具往返次数可进一步降低成本。</li>
+    <li>以 DeepSeek 控制台的缓存命中率与账单作为服务端侧的最终核对依据。</li>
+  </ul>
+
+  <div class="takeaway">
+    <div class="takeaway-label">Call to Action</div>
+    如果只需记住一件事：缓存友好不是「没有变化」，而是「变化只发生一次」。
+    角色方法论追加进消息流、工具组首次使用时加载，512K 真实对话就能稳定维持 97% 以上的命中率。
+  </div>
+</section>
+
+<!-- ═════════════ Chapter 05：附录 ═════════════ -->
+<section class="chapter">
+  <div class="chapter-num">05 · Appendix</div>
+  <h1>附录</h1>
+
+  <h2>A. 数据来源</h2>
+  <ul>
+    <li>reports/cache-realistic-2026-08-12T07-59-30-457Z.json（第 4 次 · 多 Pack 架构 · Code Pack，本次报告）</li>
+    <li>reports/cache-realistic-2026-08-10T14-31-22-668Z.json（第 1 次 · 旧框架）</li>
+    <li>reports/cache-realistic-2026-08-10T15-41-28-797Z.json（第 2 次 · 追加式）</li>
+    <li>reports/cache-realistic-2026-08-11T03-04-46-274Z.json（第 3 次 · 追加式 · 复测）</li>
+  </ul>
+
+  <h2>B. 术语表</h2>
+  <p><strong>前缀缓存（prefix caching）</strong>：DeepSeek 服务端对请求前缀的自动缓存；命中的 token 按 cacheRead 超低价计费。</p>
+  <p><strong>DomainPack</strong>：领域能力包，向 Core 运行时注入 Profile 集合、工具清单与快照扩展；code pack 为编程教学领域实现。</p>
+  <p><strong>activate_toolset</strong>：内部工具，按需加载 DomainPack 声明的工具组（如 workspace / execution），加载后持久激活。</p>
+  <p><strong>追加式 Profile 上下文</strong>：Profile 方法论作为内部消息与下一条用户消息合并，systemPrompt 全程固定。</p>
+  <p><strong>logicalRequestId / callIndex</strong>：telemetry 中逻辑调用的唯一标识与全局递增序号，用于请求级归属。</p>
+  <p><strong>commonPrefixMessages</strong>：当前请求与上次请求共享的完整历史消息条数。</p>
+
+  <h2>C. 测试条件</h2>
+  <p><strong>模型</strong>：deepseek-v4-flash · thinking off；<strong>执行后端</strong>：192.168.172.134:1313（真实沙箱）；
+  <strong>上下文目标</strong>：~512K tokens；<strong>注入节奏</strong>：每轮约 20K tokens 确定性学习材料；
+  <strong>单轮护栏</strong>：maxTurns=6；<strong>Profile 节奏</strong>：每 3 轮切换一次（Oris → Feynman → Socrates → 自动路由）；
+  <strong>容错</strong>：失败轮回滚 + --resume 快照续跑（本次全程未触发）。</p>
+</section>
+
+</body>
+</html>
