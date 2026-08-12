@@ -16,6 +16,7 @@ export { appendProfileContext, convertProfileMessages, createProfileContext, cre
 export { INTERNAL_TOOL_NAMES, createActivateToolsetTool, toolsForState, validateToolManifest } from "./core/tool-runtime/index.js";
 export { createRouterTool } from "./core/router/index.js";
 export * from "./packs/code/index.js";
+export * from "./packs/english/index.js";
 export {
 	createAgent,
 	buildBasePrompt,
