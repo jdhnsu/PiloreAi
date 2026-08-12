@@ -29,6 +29,7 @@ function stripUndefined(value: unknown): unknown {
  * PiLore 会话组件的对外事件协议（纯 JSON，可跨 SSE/WebSocket/进程边界传输）。
  * 适配层（CLI / Web / 其它项目）只需消费这些事件即可渲染 UI。
  */
+/** @deprecated Compatibility event protocol. New integrations consume Core SessionEvent. */
 export type EduEvent =
 	| { type: "start" }
 	| { type: "text_delta"; delta: string }
@@ -42,6 +43,7 @@ export type EduEvent =
 
 export type EduSessionOptions = EduAgentConfig & { snapshot?: EduSessionSnapshot };
 
+/** @deprecated Compatibility session for the Education + Code default composition. */
 export interface EduSession {
 	/** 发送一条用户消息；事件通过 onEvent 流式回调，整轮结束后 resolve。 */
 	prompt(text: string, onEvent: (event: EduEvent) => void): Promise<void>;
@@ -58,6 +60,7 @@ export interface EduSession {
 }
 
 /** 创建一个教学会话。不依赖任何传输层，可直接嵌入其它项目。 */
+/** @deprecated Prefer Core `createSession()` with a DomainPack. */
 export function createEduSession(config: EduSessionOptions = {}): EduSession {
 	// personas 只解析一次：createAgent、@ 解析、setPersona 全部以它为准（支持自定义集合）
 	const personas = config.personas ?? getDefaultPersonas();

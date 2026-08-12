@@ -104,8 +104,10 @@ export function buildPiLorePrompt(): string {
 	return buildBasePrompt();
 }
 
+/** @deprecated Prefer Core `createRuntime()` plus an Education/Code domain composition. */
 export interface CreateAgentOptions extends EduAgentConfig {}
 
+/** @deprecated Compatibility facade for the Education + Code default composition. */
 export interface EduAgent {
 	agent: Agent;
 	vfs: VirtualFS;
@@ -149,6 +151,7 @@ function checkCapability(persona: Persona, toolName: string, args: unknown, vfs:
 	return undefined;
 }
 
+/** @deprecated Prefer Core `createRuntime()` / `createSession()` for new integrations. */
 export function createAgent(config: EduAgentConfig = {}): EduAgent {
 	const customModel = config.customModel ?? resolveCustomModelConfig();
 	const models = config.models ?? createModelCollection();

@@ -14,6 +14,7 @@ import type { VirtualFS } from "./vfs.js";
 import type { LlmTelemetrySink } from "./telemetry.js";
 import type { CustomModelConfig } from "./models/custom.js";
 
+/** @deprecated Education + Code compatibility configuration. New integrations use Core RuntimeConfig/SessionConfig. */
 export interface EduAgentConfig {
 	/** 自定义 provider HTTP fetch（代理、测试或请求级观测）；默认使用 globalThis.fetch。 */
 	fetch?: typeof globalThis.fetch;

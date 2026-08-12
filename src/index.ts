@@ -6,6 +6,16 @@
  * 内置老师目录与执行后端在创建会话/agent 时按需解析。
  */
 export { createEduSession, type EduEvent, type EduSession, type EduSessionOptions } from "./session.js";
+export { createRuntime, type Runtime } from "./core/runtime.js";
+export { createSession, type Session, type SessionConfig } from "./core/session.js";
+export { CoreState } from "./core/state.js";
+export { CORE_SESSION_SNAPSHOT_VERSION, validateCoreSnapshot, cloneCoreSnapshot } from "./core/snapshot.js";
+export type { JsonValue, Profile, DomainPack, ToolPack, RuntimeConfig, SessionEvent, SessionSnapshot, SessionSnapshotV1 } from "./core/types.js";
+export { createEducationDomainPack, createEducationToolPack } from "./domains/education/pack.js";
+export type { EducationDomainPack, LearnerModel, Assessment, ProgressTracker } from "./domains/education/types.js";
+export { createCodeDomainPack, createCodeToolPack } from "./packs/code/pack.js";
+export { createCodeTools } from "./packs/code/tools.js";
+export type { CodeDomainPack, CodeEvaluator } from "./packs/code/types.js";
 export {
 	createAgent,
 	buildBasePrompt,
