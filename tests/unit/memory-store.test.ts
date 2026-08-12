@@ -53,8 +53,9 @@ test("InMemorySessionStore 生命周期：create/load/complete/delete，快照�
 	const loaded = await store.load(created.id);
 	assert.deepEqual(loaded?.snapshot, snapshot());
 	// 修改返回值不应污染存储内部状态
-	loaded!.snapshot.files["main.py"] = "HACKED";
-	assert.equal((await store.load(created.id))?.snapshot.files["main.py"], "print(1)");
+	(loaded!.snapshot as EduSessionSnapshotV2).files["main.py"] = "HACKED";
+	const storedSnapshot = (await store.load(created.id))?.snapshot as EduSessionSnapshotV2 | undefined;
+	assert.equal(storedSnapshot?.files["main.py"], "print(1)");
 
 	const run = await store.beginRun({ sessionId: created.id, expectedRevision: 0, providerId: "p", modelId: "m", audit: { input: "hi" } });
 	const completed = await store.completeRun({

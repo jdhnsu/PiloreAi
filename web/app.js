@@ -16,13 +16,41 @@ const personaHintEl = $("#persona-hint");
 const sessionListEl = $("#session-list");
 const storageBadgeEl = $("#storage-badge");
 const welcomeEl = messagesEl.querySelector(".welcome");
+const packSelect = $("#pack-select");
+const welcomeTitle = $("#welcome-title");
+const welcomeDesc = $("#welcome-desc");
+const suggestionsEl = $("#suggestions");
+const chipsEl = $("#chips");
+const wsTitle = $("#ws-title");
 
 let busy = false;
-let currentPersona = null; // 当前老师名；null = PiLore 自动路由
+let packs = []; // 可用学习包：{ id, name, tagline, suggestions, profiles }
+let currentPack = "code"; // 当前学习包 id
+let currentProfileKey = null; // 当前 profile key；null = 自动路由
+let currentPersona = null; // 当前老师名（展示用）；null = PiLore 自动路由
 let currentFile = null; // 工作区当前展开的文件 { path, content }
 
-const TOOL_GLYPHS = { write_file: "✎", read_file: "≡", run_code: "▶" };
-const TOOL_LABELS = { write_file: "写入", read_file: "读取", run_code: "运行", adopt_persona: "切换老师" };
+const TOOL_GLYPHS = {
+	write_file: "✎",
+	read_file: "≡",
+	run_code: "▶",
+	learn_word: "✚",
+	list_words: "☰",
+	forget_word: "✕",
+	start_practice: "✍",
+	submit_answer: "✓",
+};
+const TOOL_LABELS = {
+	write_file: "写入",
+	read_file: "读取",
+	run_code: "运行",
+	adopt_persona: "切换老师",
+	learn_word: "收录",
+	list_words: "查看词汇",
+	forget_word: "移除",
+	start_practice: "发起练习",
+	submit_answer: "提交答案",
+};
 
 function esc(text) {
 	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -472,7 +500,9 @@ function handleEvent(ev, block) {
 			break;
 		}
 		case "persona":
+		case "profile":
 			closeTextSegment(block);
+			currentProfileKey = ev.profile ?? null;
 			applyPersona(ev.name);
 			setBlockBadge(block, ev.name);
 			{
@@ -484,6 +514,16 @@ function handleEvent(ev, block) {
 				appendBlock(block, line);
 			}
 			break;
+		case "toolset": {
+			// 内部工具按需加载：不打断文本流，仅落一条轻提示
+			if (ev.active) {
+				const line = document.createElement("div");
+				line.className = "system-note";
+				line.textContent = `已加载工具组：${ev.toolset}`;
+				appendBlock(block, line);
+			}
+			break;
+		}
 		case "error": {
 			closeTextSegment(block);
 			const line = document.createElement("div");
@@ -563,7 +603,7 @@ async function send(text) {
 		handleEvent({ type: "error", message: `连接中断: ${err.message ?? err}` }, block);
 	} finally {
 		setBusy(false);
-		refreshFiles();
+		refreshPanel();
 		refreshSessionList(); // 首轮完成后标题/时间有变化
 	}
 }
@@ -661,21 +701,59 @@ function renderFileItem(f) {
 	return li;
 }
 
-async function refreshFiles() {
+/* 词汇本条目：单词 + 音标/词性，点击展开释义与例句 */
+function renderVocabItem(w) {
+	const li = document.createElement("li");
+	li.className = "vocab-item";
+	const head = document.createElement("button");
+	head.type = "button";
+	head.className = "vocab-item-head";
+	head.innerHTML =
+		'<span class="vocab-word"></span>' +
+		(w.phonetic ? '<span class="vocab-phonetic"></span>' : "") +
+		(w.pos ? '<span class="vocab-pos"></span>' : "");
+	head.querySelector(".vocab-word").textContent = w.word;
+	if (w.phonetic) head.querySelector(".vocab-phonetic").textContent = `/${w.phonetic}/`;
+	if (w.pos) head.querySelector(".vocab-pos").textContent = w.pos;
+	const body = document.createElement("div");
+	body.className = "vocab-item-body";
+	body.innerHTML = '<div class="vocab-meaning"></div>' + (w.example ? '<div class="vocab-example"></div>' : "");
+	body.querySelector(".vocab-meaning").textContent = w.meaning;
+	if (w.example) body.querySelector(".vocab-example").textContent = `例：${w.example}`;
+	li.append(head, body);
+	head.onclick = () => {
+		const opening = !li.classList.contains("expanded");
+		fileList.querySelectorAll(".vocab-item.expanded").forEach((el) => el.classList.remove("expanded"));
+		li.classList.toggle("expanded", opening);
+	};
+	return li;
+}
+
+/* 工作区侧栏按 pack 渲染：code → 代码文件；english → 词汇本 */
+async function refreshPanel() {
 	if (!sessionId) return;
 	try {
-		const resp = await fetch(`/api/files?id=${encodeURIComponent(sessionId)}`);
-		const { files } = await resp.json();
-		knownFiles = files;
-		if (!modal.classList.contains("hidden")) renderModalFile();
+		const resp = await fetch(`/api/panel?id=${encodeURIComponent(sessionId)}`);
+		const data = await resp.json();
 		fileList.innerHTML = "";
-		if (!files.length) {
-			fileList.innerHTML = '<li class="empty">暂无文件</li>';
-			currentFile = null;
-			return;
+		if (data.kind === "files") {
+			knownFiles = data.files ?? [];
+			if (!modal.classList.contains("hidden")) renderModalFile();
+			if (!knownFiles.length) {
+				fileList.innerHTML = '<li class="empty">暂无文件</li>';
+				currentFile = null;
+				return;
+			}
+			if (currentFile && !knownFiles.some((f) => f.path === currentFile.path)) currentFile = null;
+			for (const f of knownFiles) fileList.appendChild(renderFileItem(f));
+		} else if (data.kind === "vocabulary") {
+			const words = data.words ?? [];
+			if (!words.length) {
+				fileList.innerHTML = '<li class="empty">暂无生词，让老师教你几个吧</li>';
+				return;
+			}
+			for (const w of words) fileList.appendChild(renderVocabItem(w));
 		}
-		if (currentFile && !files.some((f) => f.path === currentFile.path)) currentFile = null;
-		for (const f of files) fileList.appendChild(renderFileItem(f));
 	} catch {
 		/* 侧栏刷新失败不影响对话 */
 	}
@@ -769,7 +847,15 @@ async function loadState() {
 		modelInfo.title = state.model ?? "";
 		modelNameEl.textContent = shortModel(state.model);
 		modelInfo.classList.remove("error");
-		applyPersona(state.persona?.name ?? null);
+		currentProfileKey = state.profile?.key ?? null;
+		applyPersona(state.profile?.name ?? null);
+		// 恢复的会话可能属于其它 pack（浏览器里切换过），同步包选择器
+		if (state.pack && state.pack !== currentPack) {
+			currentPack = state.pack;
+			localStorage.setItem("pilore-pack", currentPack);
+			packSelect.value = currentPack;
+			renderPackChrome();
+		}
 		if (state.demo) demoBadge.classList.remove("hidden");
 		const postgres = state.storage === "postgres";
 		storageBadgeEl.textContent = postgres ? "PostgreSQL 持久化" : "内存持久化";
@@ -777,7 +863,7 @@ async function loadState() {
 	} catch {
 		modelInfo.classList.add("error");
 	}
-	refreshFiles();
+	refreshPanel();
 }
 
 /* 按时段问候，降低机械感 */
@@ -882,13 +968,9 @@ inputEl.addEventListener("keydown", (e) => {
 	}
 });
 
-document.querySelectorAll(".suggestion").forEach((btn) => {
-	btn.onclick = () => send(btn.textContent);
-});
-
 /* 老师 chips：插入 @mention 前缀，再点同一 chip 取消 */
 const MENTION_RE = /^@[a-zA-Z][a-zA-Z0-9_-]*\s+/;
-const chips = [...document.querySelectorAll(".chip[data-mention]")];
+let chips = [];
 
 const mentionInInput = () => {
 	const m = inputEl.value.match(/^(@[a-zA-Z][a-zA-Z0-9_-]*)\s/);
@@ -904,26 +986,25 @@ function updateSend() {
 	sendBtn.disabled = !inputEl.value.trim();
 }
 
-chips.forEach((chip) => {
-	chip.onclick = () => {
-		const wasActive = chip.dataset.mention === mentionInInput();
-		inputEl.value = inputEl.value.replace(MENTION_RE, "");
-		if (!wasActive) inputEl.value = `${chip.dataset.mention} ${inputEl.value}`;
-		syncChips();
-		updateSend();
-		inputEl.focus();
-	};
-});
+function onChipClick(chip) {
+	const wasActive = chip.dataset.mention === mentionInInput();
+	inputEl.value = inputEl.value.replace(MENTION_RE, "");
+	if (!wasActive) inputEl.value = `${chip.dataset.mention} ${inputEl.value}`;
+	syncChips();
+	updateSend();
+	inputEl.focus();
+}
 
 resetChip.onclick = async () => {
 	try {
-		const resp = await fetch("/api/persona", {
+		const resp = await fetch("/api/profile", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
-			body: JSON.stringify({ sessionId, persona: null }),
+			body: JSON.stringify({ sessionId, profile: null }),
 		});
 		if (!resp.ok) return;
 		inputEl.value = inputEl.value.replace(MENTION_RE, "");
+		currentProfileKey = null;
 		applyPersona(null);
 		syncChips();
 		updateSend();
@@ -1128,7 +1209,7 @@ function renderSessionList() {
 
 async function refreshSessionList() {
 	try {
-		const resp = await fetch("/api/sessions");
+		const resp = await fetch(`/api/sessions?pack=${encodeURIComponent(currentPack)}`);
 		const data = await resp.json();
 		sessionsCache = data.sessions ?? [];
 	} catch {
@@ -1139,7 +1220,11 @@ async function refreshSessionList() {
 }
 
 async function createSessionOnServer() {
-	const resp = await fetch("/api/sessions", { method: "POST" });
+	const resp = await fetch("/api/sessions", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ pack: currentPack }),
+	});
 	const data = await resp.json();
 	return data.sessionId;
 }
@@ -1147,10 +1232,11 @@ async function createSessionOnServer() {
 /* 启动/删除后保证存在当前会话：优先上次打开的，其次最新的，否则新建 */
 async function ensureSession() {
 	const sessions = await refreshSessionList();
-	const saved = localStorage.getItem("pilore-session-id");
+	const key = `pilore-session-id:${currentPack}`;
+	const saved = localStorage.getItem(key);
 	if (saved && sessions.some((s) => s.id === saved)) sessionId = saved;
 	else if (!sessionId || !sessions.some((s) => s.id === sessionId)) sessionId = sessions[0]?.id ?? (await createSessionOnServer());
-	localStorage.setItem("pilore-session-id", sessionId);
+	localStorage.setItem(key, sessionId);
 	renderSessionList();
 }
 
@@ -1191,7 +1277,7 @@ async function renderHistory() {
 
 async function enterSession(id) {
 	sessionId = id;
-	localStorage.setItem("pilore-session-id", id);
+	localStorage.setItem(`pilore-session-id:${currentPack}`, id);
 	clearMessagesView();
 	const restored = await renderHistory();
 	if (!restored && welcomeEl) messagesEl.appendChild(welcomeEl);
@@ -1340,7 +1426,89 @@ if (savedSsW >= SS_MIN_W) {
 }
 ssResize.setAttribute("aria-valuemax", String(ssMaxW()));
 
+/* ---------- 学习包：目录加载 / 欢迎语与 chips 动态渲染 / 切换 ---------- */
+
+function packInfo() {
+	return packs.find((p) => p.id === currentPack);
+}
+
+/* 按当前 pack 重绘欢迎卡片、老师 chips 与工作区标题 */
+function renderPackChrome() {
+	const pack = packInfo();
+	if (!pack) return;
+	welcomeTitle.textContent = `${pack.name} · 开始学习`;
+	welcomeDesc.textContent = pack.tagline;
+	suggestionsEl.innerHTML = "";
+	for (const text of pack.suggestions) {
+		const btn = document.createElement("button");
+		btn.className = "suggestion";
+		btn.textContent = text;
+		btn.onclick = () => send(btn.textContent);
+		suggestionsEl.appendChild(btn);
+	}
+	chipsEl.innerHTML = "";
+	for (const profile of pack.profiles) {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = "chip";
+		btn.dataset.mention = `@${profile.key}`;
+		btn.innerHTML = '<span class="chip-dot"></span><span></span>';
+		btn.querySelector("span:last-child").textContent = profile.name;
+		btn.onclick = () => onChipClick(btn);
+		chipsEl.appendChild(btn);
+	}
+	chips = [...chipsEl.querySelectorAll(".chip[data-mention]")];
+	wsTitle.textContent = pack.id === "english" ? "词汇本" : "代码文件";
+}
+
+async function loadPacks() {
+	try {
+		const resp = await fetch("/api/packs");
+		const data = await resp.json();
+		packs = data.packs ?? [];
+	} catch {
+		packs = [];
+	}
+	packSelect.innerHTML = "";
+	for (const pack of packs) {
+		const opt = document.createElement("option");
+		opt.value = pack.id;
+		opt.textContent = pack.name;
+		packSelect.appendChild(opt);
+	}
+	const saved = localStorage.getItem("pilore-pack");
+	currentPack = saved && packs.some((p) => p.id === saved) ? saved : (packs[0]?.id ?? "code");
+	packSelect.value = currentPack;
+}
+
+async function switchPack(newPack) {
+	if (newPack === currentPack) return;
+	if (busy) {
+		packSelect.value = currentPack;
+		const note = document.createElement("div");
+		note.className = "system-note";
+		note.textContent = "正在生成回复，暂时无法切换学习包";
+		messagesEl.appendChild(note);
+		scrollToBottom();
+		return;
+	}
+	currentPack = newPack;
+	localStorage.setItem("pilore-pack", newPack);
+	packSelect.value = newPack;
+	applyPersona(null);
+	currentProfileKey = null;
+	currentFile = null;
+	renderPackChrome();
+	await ensureSession();
+	await enterSession(sessionId);
+	await refreshSessionList();
+}
+
+packSelect.onchange = () => switchPack(packSelect.value);
+
 (async function init() {
+	await loadPacks();
+	renderPackChrome();
 	await ensureSession();
 	await renderHistory();
 	await loadState();

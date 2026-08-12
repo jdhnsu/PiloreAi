@@ -1,4 +1,11 @@
+import type { SessionSnapshot } from "../../core/types.js";
 import type { EduSessionSnapshot } from "./snapshot.js";
+
+/**
+ * 存储层可持久化的快照：core 会话快照（版本 1，含 pack 扩展）或旧的 Web 兼容快照（V1/V2）。
+ * 存储按 opaque JSON 保存，不解析内容；恢复时由对应 pack 的 createXxxMentorSession 校验。
+ */
+export type StoredSnapshot = EduSessionSnapshot | SessionSnapshot;
 
 export interface SessionIdentity {
 	tenantId: string;
@@ -11,7 +18,7 @@ export interface StoredSession extends SessionIdentity {
 	revision: number;
 	/** 首条用户消息摘要；创建时通常为空，首轮完成后由存储派生。 */
 	title: string;
-	snapshot: EduSessionSnapshot;
+	snapshot: StoredSnapshot;
 	activeRunId?: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -57,7 +64,7 @@ export interface StoredRun {
 export interface CreateStoredSession {
 	id?: string;
 	identity: SessionIdentity;
-	snapshot: EduSessionSnapshot;
+	snapshot: StoredSnapshot;
 }
 
 export interface BeginRunInput {
@@ -74,7 +81,7 @@ export interface CompleteRunInput {
 	runId: string;
 	sessionId: string;
 	expectedRevision: number;
-	snapshot: EduSessionSnapshot;
+	snapshot: StoredSnapshot;
 	audit: RunAuditPayload;
 	metrics?: RunMetrics;
 }
@@ -99,8 +106,8 @@ export interface SessionStore {
 }
 
 /** 从快照的首条用户消息派生会话标题（空白折叠、截断到 maxLength）。 */
-export function deriveSessionTitle(snapshot: EduSessionSnapshot, maxLength = 40): string {
-	for (const message of snapshot.messages) {
+export function deriveSessionTitle(snapshot: StoredSnapshot, maxLength = 40): string {
+	for (const message of snapshot.messages as Array<{ role?: unknown; content?: unknown }>) {
 		if (message.role !== "user") continue;
 		const text =
 			typeof message.content === "string"

@@ -107,6 +107,24 @@ body {
 	gap: 12px;
 }
 
+/* 学习包切换：与 model-info 同族的轻量控件 */
+.pack-select {
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--text-secondary);
+	background: #f6f6f6;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 3px 6px;
+	cursor: pointer;
+	transition: background 0.15s;
+	max-width: 96px;
+}
+
+.pack-select:hover {
+	background: #efefef;
+}
+
 /* 徽标组与模型信息之间的竖向分隔线，无徽标时隐藏 */
 .topbar-sep {
 	display: none;
@@ -731,6 +749,13 @@ body {
 	color: var(--text-secondary);
 }
 
+.chips {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
 .chip {
 	display: inline-flex;
 	align-items: center;
@@ -1334,6 +1359,74 @@ body.ws-resizing {
 
 .file-view-body code {
 	font-family: inherit;
+}
+
+/* ===== 工作区词汇本（english pack） ===== */
+.vocab-item {
+	border: 1px solid transparent;
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.vocab-item-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	width: 100%;
+	padding: 7px 10px;
+	background: none;
+	border: none;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.vocab-item:hover {
+	background: var(--accent-light);
+}
+
+.vocab-item.expanded {
+	background: #fff;
+	border-color: var(--accent);
+}
+
+.vocab-word {
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--accent);
+}
+
+.vocab-phonetic {
+	font-family: "Cascadia Code", Consolas, monospace;
+	font-size: 12px;
+	color: var(--text-secondary);
+}
+
+.vocab-pos {
+	font-size: 11px;
+	color: var(--text-secondary);
+	background: #f0f0f0;
+	border-radius: 3px;
+	padding: 1px 5px;
+}
+
+.vocab-item-body {
+	display: none;
+	border-top: 1px solid var(--border);
+	padding: 8px 10px;
+	font-size: 12.5px;
+	color: var(--text-secondary);
+}
+
+.vocab-item.expanded .vocab-item-body {
+	display: block;
+}
+
+.vocab-meaning {
+	color: var(--text);
+	margin-bottom: 4px;
 }
 
 /* ===== 滚动条（Fluent 细滚动条） ===== */

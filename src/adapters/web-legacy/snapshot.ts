@@ -209,6 +209,6 @@ export function validateSessionSnapshot(snapshot: unknown, personas: Persona[]):
 	};
 }
 
-export function cloneSessionSnapshot<T extends EduSessionSnapshot>(snapshot: T): T {
+export function cloneSessionSnapshot<T>(snapshot: T): T {
 	return cloneJson(snapshot, "snapshot");
 }

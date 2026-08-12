@@ -18,6 +18,7 @@ import {
 	type StoredRun,
 	type StoredSession,
 } from "./persistence.js";
+import type { StoredSnapshot } from "./persistence.js";
 import { EDU_SESSION_SNAPSHOT_VERSION, type EduSessionSnapshot } from "./snapshot.js";
 
 const encoder = new TextEncoder();
@@ -197,9 +198,9 @@ export class PostgresSessionStore implements SessionStore {
 			},
 			context(row.tenant_id, row.id, revision, "snapshot", row.snapshot_version),
 		);
-		let snapshot: EduSessionSnapshot;
+		let snapshot: StoredSnapshot;
 		try {
-			snapshot = JSON.parse(decoder.decode(plaintext)) as EduSessionSnapshot;
+			snapshot = JSON.parse(decoder.decode(plaintext)) as StoredSnapshot;
 		} catch (cause) {
 			throw new SessionStoreError(`会话 ${row.id} 的快照 JSON 已损坏`, "INVALID_SNAPSHOT_JSON", { cause });
 		}
@@ -315,7 +316,7 @@ export class PostgresSessionStore implements SessionStore {
 
 			const nextRevision = input.expectedRevision + 1;
 			if (!Number.isSafeInteger(nextRevision)) throw new SessionStoreError("revision 超出安全整数范围", "INVALID_REVISION");
-			const snapshot: EduSessionSnapshot = { ...input.snapshot, revision: nextRevision };
+			const snapshot: StoredSnapshot = { ...input.snapshot, revision: nextRevision };
 			assertSupportedSnapshotVersion(snapshot);
 			const [snapshotPayload, auditPayload] = await Promise.all([
 				this.options.crypto.encrypt(encode(snapshot), context(session.tenant_id, input.sessionId, nextRevision, "snapshot", snapshot.version)),
