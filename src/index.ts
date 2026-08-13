@@ -42,6 +42,7 @@ export {
 	hashProfile,
 	isProfileContext,
 	type ProfileContextMessage,
+	type ProfileContextProvider,
 } from "./core/router/index.js";
 export {
 	INTERNAL_TOOL_NAMES,

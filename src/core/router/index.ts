@@ -30,8 +30,31 @@ export function appendProfileContext(messages: AgentMessage[], context: ProfileC
 	else next.push(context);
 	return next;
 }
-export function convertProfileMessages(messages: AgentMessage[], config?: RouterConfig): Message[] {
+export interface ProfileContextProvider {
+	/** 转换时的权威 Profile；未定义表示自动路由。 */
+	activeProfile: ProfileDefinition | undefined;
+	getProfileState?(key: string): JsonValue | undefined;
+}
+
+function mergeContextIntoUser(config: RouterConfig | undefined, context: ProfileContextMessage, user: UserMessage): UserMessage {
+	const rendered = config?.renderContext?.(context) ?? `<pilore_profile_context>\n${context.profileKey ? `Active profile: ${context.profileName}\n\n${context.methodology}` : "Automatic profile routing is active."}\n</pilore_profile_context>`;
+	return { role: "user", timestamp: user.timestamp, content: typeof user.content === "string" ? `${rendered}\n\n<user_message>\n${user.content}\n</user_message>` : [{ type: "text", text: rendered }, ...user.content] } as UserMessage;
+}
+
+export function convertProfileMessages(messages: AgentMessage[], config?: RouterConfig, provider?: ProfileContextProvider): Message[] {
 	const out: Message[] = [];
+	let pending: ProfileContextMessage | undefined;
+	// 预扫描：最后一个内部 context 的位置，以及历史中是否仍存在与当前权威 profile 匹配的 context。
+	let lastContextIndex = -1;
+	let hasMatchingContext = false;
+	if (provider) {
+		for (let index = 0; index < messages.length; index += 1) {
+			const message = messages[index];
+			if (!isProfileContext(message)) continue;
+			lastContextIndex = index;
+			if (message.profileKey === (provider.activeProfile?.key ?? null)) hasMatchingContext = true;
+		}
+	}
 	for (let index = 0; index < messages.length; index += 1) {
 		const message = messages[index];
 		if (isContextSummary(message)) {
@@ -39,25 +62,51 @@ export function convertProfileMessages(messages: AgentMessage[], config?: Router
 			continue;
 		}
 		if (isProfileContext(message)) {
-			const user = messages[index + 1];
-			if (user?.role === "user") {
-				const rendered = config?.renderContext?.(message) ?? `<pilore_profile_context>\n${message.profileKey ? `Active profile: ${message.profileName}\n\n${message.methodology}` : "Automatic profile routing is active."}\n</pilore_profile_context>`;
-				out.push({ role: "user", timestamp: user.timestamp, content: typeof user.content === "string" ? `${rendered}\n\n<user_message>\n${user.content}\n</user_message>` : [{ type: "text", text: rendered }, ...user.content] } as UserMessage);
-				index += 1;
+			if (!provider) {
+				// 无权威 provider 的旧行为：仅合并紧邻的下一条 user 消息。
+				const user = messages[index + 1];
+				if (user?.role === "user") {
+					out.push(mergeContextIntoUser(config, message, user as UserMessage));
+					index += 1;
+				}
+				continue;
 			}
+			if (message.profileKey === (provider.activeProfile?.key ?? null)) pending = message;
+			// 与当前权威 profile 不匹配的孤儿 context（模型已切走）直接丢弃。
 			continue;
 		}
-		if (message.role === "user" || message.role === "assistant" || message.role === "toolResult") out.push(message);
+		if (message.role === "user" || message.role === "assistant" || message.role === "toolResult") {
+			if (message.role === "user") {
+				let context = pending;
+				if (!context && provider?.activeProfile && !hasMatchingContext && index > lastContextIndex) {
+					// 权威保底：历史中的 context 已被压缩/修剪移除，按当前权威 profile 合成注入。
+					context = createProfileContext(provider.activeProfile, provider.getProfileState?.(provider.activeProfile.key));
+				}
+				if (context) {
+					// 合并时以权威 provider 的最新进度刷新 context 携带的状态。
+					const freshState = context.profileKey ? provider?.getProfileState?.(context.profileKey) : undefined;
+					out.push(mergeContextIntoUser(config, freshState === undefined ? context : { ...context, state: freshState }, message as UserMessage));
+					pending = undefined;
+					continue;
+				}
+			}
+			out.push(message);
+		}
 	}
 	return out;
 }
-export function createRouterTool(state: CoreState, config: RouterConfig): AgentTool<any> {
+export function createRouterTool(state: CoreState, config: RouterConfig, options?: { appendContext?(context: ProfileContextMessage): void }): AgentTool<any> {
 	const params = Type.Object({ profile: Type.Union([...config.profiles.map((p) => Type.Literal(p.key)), Type.Literal("auto")]) });
 	return {
 		name: "adopt_profile", label: "切换 Profile", description: "激活最适合当前问题的 profile；auto 表示交还自动路由。不要重复激活相同 profile。", parameters: params,
 		execute: async (_id, rawInput) => {
 			const input = rawInput as { profile: string };
-			if (input.profile === "auto") { state.setProfile(undefined, "model"); state.switchCount = 0; return { content: [{ type: "text", text: config.renderContext?.(createProfileContext(undefined, undefined)) ?? "已切回自动路由" }], details: { profile: "auto" } }; }
+			if (input.profile === "auto") {
+				state.setProfile(undefined, "model"); state.switchCount = 0;
+				const context = createProfileContext(undefined, undefined);
+				options?.appendContext?.(context);
+				return { content: [{ type: "text", text: config.renderContext?.(context) ?? "已切回自动路由" }], details: { profile: "auto" } };
+			}
 			const profile = config.profiles.find((p) => p.key === input.profile);
 			if (!profile) throw new Error(`未知 profile: ${input.profile}`);
 			if (state.activeProfile?.key === profile.key) throw new Error(`已经激活 profile: ${profile.key}`);
@@ -65,6 +114,7 @@ export function createRouterTool(state: CoreState, config: RouterConfig): AgentT
 			if (state.switchCount >= limit) throw new Error(`本轮 profile 切换已达上限 ${limit}`);
 			state.switchCount += 1; state.setProfile(profile, "model");
 			const context = createProfileContext(profile, config.getProfileState?.(profile.key));
+			options?.appendContext?.(context);
 			return { content: [{ type: "text", text: config.renderContext?.(context) ?? String(profile.methodology) }], details: { profile: profile.key, profileHash: context.profileHash } };
 		},
 	};

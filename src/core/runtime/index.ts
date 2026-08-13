@@ -1,6 +1,6 @@
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { createObservedStreamFn } from "../../infrastructure/telemetry/index.js";
-import { convertProfileMessages, createRouterTool, createUpdateProfileStateTool } from "../router/index.js";
+import { appendProfileContext, convertProfileMessages, createRouterTool, createUpdateProfileStateTool, type ProfileContextMessage } from "../router/index.js";
 import { CoreState } from "../state/index.js";
 import { estimateContextTokens, pruneContextForRequest, resolveContextPolicy, type ResolvedContextPolicy } from "../context-policy/index.js";
 import {
@@ -42,7 +42,10 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 	};
 
 	if (config.domain?.router) {
-		internalTools.push(createRouterTool(state, config.domain.router));
+		const appendContext = (context: ProfileContextMessage): void => {
+			if (agent) agent.state.messages = appendProfileContext(agent.state.messages, context);
+		};
+		internalTools.push(createRouterTool(state, config.domain.router, { appendContext }));
 		const updateState = createUpdateProfileStateTool(state, config.domain.router);
 		if (updateState) internalTools.push(updateState);
 	}
@@ -61,9 +64,9 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 			telemetry: config.llmTelemetry,
 			getProfileKey: () => state.activeProfile?.key ?? null,
 		}),
-		convertToLlm: (messages) => convertProfileMessages(messages, config.domain?.router),
+		convertToLlm: (messages) => convertProfileMessages(messages, config.domain?.router, { activeProfile: state.activeProfile, getProfileState: config.domain?.router?.getProfileState }),
 		transformContext: async (messages) => pruneContextForRequest(messages, (candidate) => {
-			const context = { systemPrompt: config.systemPrompt ?? config.domain?.basePrompt ?? "You are a helpful assistant.", messages: convertProfileMessages(candidate, config.domain?.router), tools: currentTools() };
+			const context = { systemPrompt: config.systemPrompt ?? config.domain?.basePrompt ?? "You are a helpful assistant.", messages: convertProfileMessages(candidate, config.domain?.router, { activeProfile: state.activeProfile, getProfileState: config.domain?.router?.getProfileState }), tools: currentTools() };
 			return estimateContextTokens(context) <= contextPolicy.contextWindow - contextPolicy.reserveTokens;
 		}),
 		prepareNextTurnWithContext: (context) => ({

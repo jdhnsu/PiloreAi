@@ -90,7 +90,7 @@ export function createSession(config: SessionConfig): Session {
 	};
 	const contextFor = (messages: AgentMessage[]) => ({
 		systemPrompt: agent.state.systemPrompt,
-		messages: convertProfileMessages(messages, router),
+		messages: convertProfileMessages(messages, router, { activeProfile: state.activeProfile, getProfileState: router?.getProfileState }),
 		tools: agent.state.tools,
 	});
 	const inspect = (text: string): ContextStatus => inspectContext(
@@ -111,7 +111,7 @@ export function createSession(config: SessionConfig): Session {
 			try {
 				const compacted = await compactContext({
 					messages: agent.state.messages,
-					convertToLlm: (messages) => convertProfileMessages(messages, router),
+					convertToLlm: (messages) => convertProfileMessages(messages, router, { activeProfile: state.activeProfile, getProfileState: router?.getProfileState }),
 					models: config.models,
 					model: config.model,
 					policy: runtime.contextPolicy,

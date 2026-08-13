@@ -101,8 +101,8 @@ Router 的关键安全与上下文行为：
 
 - 基座 Prompt 只保留 Profile 目录（名称和描述）；完整方法论不常驻 system prompt。
 - 用户通过 `setProfile()` 或 `@key` 选择 Profile 时，Session 在消息历史写入一个内部 `piloreProfileContext`。
-- 模型通过内部 `adopt_profile` 工具切换时，工具结果携带渲染后的可信上下文；下一条用户消息会与其合并后传给 LLM。
-- `convertProfileMessages()` 仅在紧邻用户消息时把内部上下文转换为 LLM 消息，不把内部消息原样暴露给模型。
+- 模型通过内部 `adopt_profile` 工具切换时，工具结果携带渲染后的可信上下文，成功切换（含切回 `auto`）还会把内部 context 写入历史，与用户侧选择走同一条路径，随快照与压缩保持一致。
+- `convertProfileMessages()` 不把内部消息原样暴露给模型：紧邻用户消息的 context 直接合并；非紧邻（模型切换后紧跟工具调用）的 context 合并到之后第一条用户消息；与当前权威 Profile 不匹配的过期 context 丢弃；历史中已无匹配 context 时（被压缩或修剪移除），按当前权威 Profile 合成注入方法论与最新进度。转换时以 `CoreState` 为权威，合并的 context 会刷新为 `getProfileState()` 的最新值。
 - 每轮 Profile 切换数默认至多 2 次；Pack 可通过 `maxSwitchesPerTurn` 调整。
 
 `update_profile_state` 只有当 Pack 提供 `RouterConfig.updateProfileState()` 时才注册。它只允许更新当前激活 Profile 的领域进度。
