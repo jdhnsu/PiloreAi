@@ -8,6 +8,9 @@
     "mock": "tsx mock/exec-server.ts",
     "chat": "tsx src/adapters/cli/index.ts",
     "chat:english": "tsx src/adapters/cli/index.ts --pack english",
+    "chat:math": "tsx src/adapters/cli/index.ts --pack math",
+    "chat:physics": "tsx src/adapters/cli/index.ts --pack physics",
+    "chat:history": "tsx src/adapters/cli/index.ts --pack history",
     "chat:list": "tsx src/adapters/cli/index.ts --list",
     "web": "tsx src/adapters/web/index.ts",
     "web:demo": "tsx scripts/web-demo.ts",
@@ -19,7 +22,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/unit/*.test.ts",
     "test:postgres": "node --import tsx --test tests/integration/postgres-store.test.ts",
-    "test:agent": "node --import tsx --test tests/unit/core.test.ts tests/unit/code-pack.test.ts tests/unit/code-mentor-session.test.ts tests/unit/english-pack.test.ts",
+    "test:agent": "node --import tsx --test tests/unit/core.test.ts tests/unit/code-pack.test.ts tests/unit/code-mentor-session.test.ts tests/unit/english-pack.test.ts tests/unit/academic-packs.test.ts",
     "test:agent:real": "tsx tests/run.ts --iterations 3",
     "test:agent:all": "npm test && npm run test:agent:real"
   },

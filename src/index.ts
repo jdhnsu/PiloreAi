@@ -36,6 +36,10 @@ export {
 
 export * from "./packs/code/index.js";
 export * from "./packs/english/index.js";
+export * from "./packs/shared/academic/index.js";
+export * from "./packs/math/index.js";
+export * from "./packs/physics/index.js";
+export * from "./packs/history/index.js";
 export * from "./infrastructure/models/index.js";
 export {
 	createObservedStreamFn,

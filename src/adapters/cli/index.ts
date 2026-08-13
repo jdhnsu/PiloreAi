@@ -5,8 +5,14 @@ import { fileURLToPath } from "node:url";
 import {
 	createCodeMentorSession,
 	createEnglishMentorSession,
+	createHistoryMentorSession,
+	createMathMentorSession,
+	createPhysicsMentorSession,
 	getDefaultCodeProfiles,
 	getDefaultEnglishProfiles,
+	getDefaultHistoryProfiles,
+	getDefaultMathProfiles,
+	getDefaultPhysicsProfiles,
 	type ProfileDefinition,
 	type Session,
 	type SessionEvent,
@@ -20,6 +26,9 @@ interface CliPack { id: string; name: string; help(): string; create(): CliSessi
 const PACKS: CliPack[] = [
 	{ id: "code", name: "PiLore 编程导师", help: () => mentorHelp(getDefaultCodeProfiles()), create: () => createCodeMentorSession() },
 	{ id: "english", name: "PiLore 英语导师", help: () => mentorHelp(getDefaultEnglishProfiles()), create: () => createEnglishMentorSession() },
+	{ id: "math", name: "PiLore 大学数学导师", help: () => mentorHelp(getDefaultMathProfiles()), create: () => createMathMentorSession() },
+	{ id: "physics", name: "PiLore 大学物理导师", help: () => mentorHelp(getDefaultPhysicsProfiles()), create: () => createPhysicsMentorSession() },
+	{ id: "history", name: "PiLore 大学历史导师", help: () => mentorHelp(getDefaultHistoryProfiles()), create: () => createHistoryMentorSession() },
 ];
 
 function mentorHelp(profiles: ProfileDefinition[]): string {

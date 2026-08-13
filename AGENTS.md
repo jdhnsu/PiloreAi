@@ -1,6 +1,6 @@
 # AGENTS.md — PiLore
 
-PiLore 是可嵌入的多领域教学 Agent。当前实现由领域无关 Core、Code Pack、English Pack，以及基础设施与适配器组成。
+PiLore 是可嵌入的多领域教学 Agent。当前实现由领域无关 Core、Code Pack、English Pack、Math Pack、Physics Pack、History Pack，以及基础设施与适配器组成。
 
 ## 依赖方向
 
@@ -9,6 +9,10 @@ PiLore 是可嵌入的多领域教学 Agent。当前实现由领域无关 Core�
 - `src/core/`：通用 Runtime、Session、State、Snapshot、Profile Router、动态 Tool Runtime 与事件协议。不得导入任何 Pack、VFS、ExecClient 或领域术语。
 - `src/packs/code/`：编程导师设定、Profiles、进度、VFS、执行器、评估器和代码工具。
 - `src/packs/english/`：英语导师设定、Profiles、词汇、练习、评估器和领域工具。
+- `src/packs/math/`：大学数学导师设定、Profiles、学科卡片、练习与评估器。
+- `src/packs/physics/`：大学物理导师设定、Profiles、学科卡片、练习与评估器。
+- `src/packs/history/`：大学历史导师设定、Profiles、学科卡片、练习与评估器。
+- `src/packs/shared/academic/`：三个大学学科 Pack 共用的本地状态、卡片、练习、快照与可选评估接口。
 - `src/infrastructure/`：模型注册、遥测和持久化。
 - `src/adapters/cli/`、`src/adapters/web/`：产品入口，只通过 `src/index.ts` 消费公开 API。
 - `src/index.ts`：唯一公开入口。仓库消费者不得新增深层导入。

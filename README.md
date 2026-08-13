@@ -6,13 +6,13 @@
 
 **可扩展的多领域教学 Agent**
 
-LLM → 工具调用（write_file / read_file / run_code）→ 远程沙箱执行 → 基于真实输出的讲解
+LLM → Profile 路由 → 动态学科工具 → 基于学习状态与真实工具结果的讲解
 
 <img src="assets/as1/robot_9.png" alt="PiLore 吉祥物" width="240">
 
 </div>
 
-PiLore 由领域无关的 Core、Code Pack 与 English Pack 组成。Core 独立提供 Agent Loop、Session、Profile Router、动态工具运行时和快照；领域设定与工具由 Pack 注入。
+PiLore 由领域无关的 Core，以及 Code、English、大学数学、大学物理和大学历史 Pack 组成。Core 独立提供 Agent Loop、Session、Profile Router、动态工具运行时和快照；领域设定与工具由 Pack 注入。
 
 **亮点**
 
@@ -20,7 +20,7 @@ PiLore 由领域无关的 Core、Code Pack 与 English Pack 组成。Core 独立
 - 多 Profile 教学团队：Feynman / Socrates / Oris，模型自动路由或 `@` 手动指定；方法论只在激活后追加到可信上下文
 - 能力契约：每位老师用 frontmatter 声明允许/禁止的能力（deny-list），运行时强制拦截，文档与运行时解耦
 - 传输无关的事件协议：`SessionEvent` 纯 JSON 流，Web / CLI / 其它项目共用同一会话层
-- **嵌入友好**：`createCodeMentorSession(config)` 或 `createEnglishMentorSession(config)` 一条接入；Core 也可不加载 Pack 独立运行
+- **嵌入友好**：每个 Pack 都提供 `create*MentorSession(config)` 工厂；Core 也可不加载 Pack 独立运行
 - Fluent（微软）风格 Web 界面：流式回答、工具调用卡片、实时工作区侧栏
 - 可替换执行后端：实现 `ExecClient` 接口，或用兼容 codapi 风格 `POST /v1/exec` 协议的服务，改一个环境变量即可切换
 
@@ -46,9 +46,12 @@ cp .env.example .env   # 填入 DEEPSEEK_API_KEY（首选）、MOONSHOT_API_KEY 
 npm run web            # 真实模型
 npm run web:demo       # 无需 API key（fauxProvider 脚本化 + 进程内 mock 执行服务）
 
-# CLI（支持 code / english pack）：
+# CLI（支持 code / english / math / physics / history pack）：
 npm run chat
 npm run chat:english
+npm run chat:math
+npm run chat:physics
+npm run chat:history
 #
 # EXEC_API_BASE 默认指向真实执行后端 http://192.168.172.134:1313。
 # 离线环境可改用本地 mock：npm run mock + EXEC_API_BASE=http://localhost:1313
@@ -94,7 +97,11 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 │  ├─ core/           # runtime / session / state / snapshot / router / tool-runtime / events
 │  ├─ packs/
 │  │  ├─ code/        # 编程导师设定、Profiles、VFS、ExecClient、代码工具与快照扩展
-│  │  └─ english/     # 英语导师设定、Profiles、词汇/练习工具与快照扩展
+│  │  ├─ english/     # 英语导师设定、Profiles、词汇/练习工具与快照扩展
+│  │  ├─ math/        # 大学数学 Profiles、学科工具与 math 快照扩展
+│  │  ├─ physics/     # 大学物理 Profiles、学科工具与 physics 快照扩展
+│  │  ├─ history/     # 大学历史 Profiles、学科工具与 history 快照扩展
+│  │  └─ shared/      # 学科 Pack 共用的卡片、练习、评估器与状态实现
 │  ├─ infrastructure/ # models / telemetry / persistence
 │  ├─ adapters/
 │  │  ├─ cli/         # CLI 入口
@@ -118,6 +125,8 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 3. LLM 先用 `activate_toolset` 动态加载工具组，再调用 Pack 工具
 4. `SessionEvent` 由 Adapter 实时渲染：流式文本、Profile、工具组与工具结果
 5. LLM 基于工具结果继续下一轮，直到产出讲解文本并结束
+
+大学数学、大学物理与大学历史 Pack 的 Profile、卡片/练习类型、评估器注入和 Snapshot 说明见 [`docs/academic-packs.md`](docs/academic-packs.md)。三个 Pack 默认不需要计算、仿真、史料检索或判题后端。
 
 ### 依赖说明
 
@@ -144,14 +153,14 @@ HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消�
 | `GET /` | 静态页面（web/） |
 | `GET /api/packs` | 可用 Pack 与 Profile 目录 |
 | `GET /api/state?id=...` | 当前会话的 Pack / Profile / busy / model |
-| `GET /api/panel?id=...` | Code 文件或 English 词汇侧栏 |
+| `GET /api/panel?id=...` | Code 文件、English 词汇或学科学习卡片侧栏 |
 | `POST /api/chat` | `{ sessionId, message }` → SSE `SessionEvent` |
 | `POST /api/profile` | `{ sessionId, profile }` 手动切换 Profile |
 | `POST /api/abort` | 中止指定会话的当前运行 |
 
 ## 老师设计文档与元数据（按需加载）
 
-每个 Pack 在自己的 `agent-design/profiles/*.md` 保存 Profile。首次创建该 Pack 时才懒加载；也可用 `parseCodeProfile` / `parseEnglishProfile` 从字符串构造 `ProfileDefinition` 后注入。
+每个 Pack 在自己的 `agent-design/profiles/*.md` 保存 Profile。首次创建该 Pack 时才懒加载；也可用对应的 `parseCodeProfile`、`parseEnglishProfile`、`parseMathProfile`、`parsePhysicsProfile` 或 `parseHistoryProfile` 从字符串构造 `ProfileDefinition` 后注入。
 
 ```yaml
 ---
@@ -179,7 +188,7 @@ capabilities:
 
 ## 组件接口（嵌入到其他项目）
 
-Core 提供 `createSession()`，领域产品提供 `createCodeMentorSession()` 与 `createEnglishMentorSession()`：
+Core 提供 `createSession()`；领域产品提供 `createCodeMentorSession()`、`createEnglishMentorSession()`、`createMathMentorSession()`、`createPhysicsMentorSession()` 与 `createHistoryMentorSession()`：
 
 | 配置项 | 缺省值 | 说明 |
 | --- | --- | --- |
@@ -190,6 +199,8 @@ Core 提供 `createSession()`，领域产品提供 `createCodeMentorSession()` �
 | `fetch` | `globalThis.fetch` | 自定义 provider HTTP transport，便于代理或测试 |
 | `llmTelemetry` | 关闭 | 脱敏的逻辑调用、HTTP attempt/retry、前缀哈希与 usage 事件 |
 | `vfs` | 新建空实例 | 自定义工作区（可预置学习者文件） |
+| `cards` | 新建空实例 | 数学/物理/历史 Pack 的学习卡片库 |
+| `evaluator` | 关闭 | English 或大学学科 Pack 的可选应用侧评估器 |
 | `profiles` | Pack 的 `agent-design/profiles/` 懒加载 | 自定义 Profile 集合 |
 | `exec` | `createHttpExecClient()` | 自定义执行后端（实现 `ExecClient` 接口） |
 | `maxTurns` | 不限 | 单次 prompt 的 LLM 回合护栏 |
@@ -225,7 +236,7 @@ CLI 与 Web 都只是 Adapter；嵌入方只需消费 `SessionEvent`，无需感
 
 ### PostgreSQL 会话持久化
 
-核心导出 `SessionSnapshotV1`。领域数据位于 `extensions.code` 或 `extensions.english`；`PostgresSessionStore` 可管理会话和运行记录，并通过可替换的 `CryptoProvider` 加密：
+核心导出 `SessionSnapshotV1`。领域数据分别位于 `extensions.code`、`extensions.english`、`extensions.math`、`extensions.physics` 或 `extensions.history`；`PostgresSessionStore` 可管理会话和运行记录，并通过可替换的 `CryptoProvider` 加密：
 
 ```ts
 import { Pool } from "pg";

@@ -7,9 +7,10 @@
 - Core：无 Domain Pack 的纯对话、Snapshot 校验、架构依赖边界。
 - Code Pack：默认 Profiles、动态工具组、VFS、Profile 状态、Snapshot 恢复。
 - English Pack：默认 Profiles、词汇/练习工具、评估记录、Snapshot 恢复。
+- Academic Packs：大学数学、大学物理、大学历史的默认 Profiles、动态卡片/练习工具、学科感知评估与独立 Snapshot namespace。
 - Infrastructure：AES-256-GCM、内存 SessionStore、Telemetry。
 
-`npm run test:agent` 只运行 Core 与两个 Pack 的离线 Agent 测试，使用 faux provider，不访问网络。
+`npm run test:agent` 运行 Core 与全部 Pack 的离线 Agent 测试，使用 faux provider，不访问网络。
 
 `npm run test:postgres` 使用 `PILORE_TEST_DATABASE_URL` 或 `DB_*`；未配置时跳过。测试在临时 schema 中执行并清理。
 

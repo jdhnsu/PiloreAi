@@ -731,7 +731,34 @@ function renderVocabItem(w) {
 	return li;
 }
 
-/* 工作区侧栏按 pack 渲染：code → 代码文件；english → 词汇本 */
+/* 学科卡片：类型 + 标题，点击展开摘要、详情与标签。 */
+function renderStudyCard(card) {
+	const li = document.createElement("li");
+	li.className = "vocab-item study-card-item";
+	const head = document.createElement("button");
+	head.type = "button";
+	head.className = "vocab-item-head";
+	head.innerHTML = '<span class="vocab-word"></span><span class="vocab-pos"></span>';
+	head.querySelector(".vocab-word").textContent = card.title;
+	head.querySelector(".vocab-pos").textContent = card.kind;
+	const body = document.createElement("div");
+	body.className = "vocab-item-body";
+	body.innerHTML = '<div class="vocab-meaning"></div>'
+		+ (card.details ? '<div class="vocab-example"></div>' : "")
+		+ (card.tags?.length ? '<div class="vocab-example study-card-tags"></div>' : "");
+	body.querySelector(".vocab-meaning").textContent = card.summary;
+	if (card.details) body.querySelector(".vocab-example").textContent = card.details;
+	if (card.tags?.length) body.querySelector(".study-card-tags").textContent = `标签：${card.tags.join("、")}`;
+	li.append(head, body);
+	head.onclick = () => {
+		const opening = !li.classList.contains("expanded");
+		fileList.querySelectorAll(".vocab-item.expanded").forEach((el) => el.classList.remove("expanded"));
+		li.classList.toggle("expanded", opening);
+	};
+	return li;
+}
+
+/* 工作区侧栏按 pack 渲染：代码文件、词汇本或学科学习卡片。 */
 async function refreshPanel() {
 	if (!sessionId) return;
 	try {
@@ -755,6 +782,13 @@ async function refreshPanel() {
 				return;
 			}
 			for (const w of words) fileList.appendChild(renderVocabItem(w));
+		} else if (data.kind === "study_cards") {
+			const cards = data.cards ?? [];
+			if (!cards.length) {
+				fileList.innerHTML = '<li class="empty">暂无学习卡片，和老师学习后会沉淀在这里</li>';
+				return;
+			}
+			for (const card of cards) fileList.appendChild(renderStudyCard(card));
 		}
 	} catch {
 		/* 侧栏刷新失败不影响对话 */
@@ -1460,7 +1494,7 @@ function renderPackChrome() {
 		chipsEl.appendChild(btn);
 	}
 	chips = [...chipsEl.querySelectorAll(".chip[data-mention]")];
-	wsTitle.textContent = pack.id === "english" ? "词汇本" : "代码文件";
+	wsTitle.textContent = pack.panelTitle ?? "学习资料";
 }
 
 async function loadPacks() {
@@ -1477,7 +1511,11 @@ async function loadPacks() {
 }
 
 function packIcon(pack) {
-	return pack.id === "english" ? "A" : "&lt;/&gt;";
+	if (pack.id === "english") return "A";
+	if (pack.id === "math") return "π";
+	if (pack.id === "physics") return "Φ";
+	if (pack.id === "history") return "史";
+	return "&lt;/&gt;";
 }
 
 function renderPackMenu() {

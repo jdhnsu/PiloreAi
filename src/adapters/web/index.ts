@@ -11,13 +11,20 @@ import {
 	createAes256GcmCryptoProvider,
 	createCodeMentorSession,
 	createEnglishMentorSession,
+	createHistoryMentorSession,
 	createInMemorySessionStore,
+	createMathMentorSession,
+	createPhysicsMentorSession,
 	createPostgresSessionStore,
 	getDefaultCodeProfiles,
 	getDefaultEnglishProfiles,
+	getDefaultHistoryProfiles,
+	getDefaultMathProfiles,
+	getDefaultPhysicsProfiles,
 	SessionBusyError,
 	SessionNotFoundError,
 	SessionRevisionConflictError,
+	type AcademicMentorSession,
 	type CodeMentorSession,
 	type EnglishMentorSession,
 	type ExecClient,
@@ -28,11 +35,12 @@ import {
 	type SessionSnapshotV1,
 	type SessionStore,
 	type StoredRun,
+	type StudyCard,
 	type WordEntry,
 } from "../../index.js";
 
 /**
- * Web 适配层：把 Domain Pack（code / english）暴露为 HTTP 接口（多会话，pack 可切换）。
+ * Web 适配层：把 Domain Pack 暴露为 HTTP 接口（多会话，pack 可切换）。
  *   GET    /                      静态页面（web/）
  *   GET    /api/packs             可用 pack 及其 profile 目录（chips / 欢迎语来源）
  *   GET    /api/sessions?pack=    某 pack 的会话历史列表（标题/时间）
@@ -40,7 +48,7 @@ import {
  *   DELETE /api/sessions?id=      删除会话
  *   GET    /api/sessions/history?id=  会话历史消息（渲染用）
  *   GET    /api/state?id=         { busy, pack, profile, model, demo, storage, profiles }
- *   GET    /api/panel?id=         { kind: files|vocabulary }（工作区侧栏）
+ *   GET    /api/panel?id=         { kind: files|vocabulary|study_cards }（工作区侧栏）
  *   POST   /api/chat              { sessionId, message } → SSE 流（data: SessionEvent JSON），整轮落库
  *   POST   /api/profile           { sessionId, profile: key | null } 设置老师（profile）
  *   POST   /api/abort             { sessionId } 中止当前运行
@@ -89,13 +97,17 @@ interface SessionCreateConfig {
 	exec?: ExecClient;
 }
 
-/** 工作区侧栏数据：code → 文件，english → 词汇本。 */
-type SidebarPanel = { kind: "files"; files: Array<{ path: string; content: string }> } | { kind: "vocabulary"; words: WordEntry[] };
+/** 工作区侧栏数据由 Pack 决定。 */
+type SidebarPanel =
+	| { kind: "files"; files: Array<{ path: string; content: string }> }
+	| { kind: "vocabulary"; words: WordEntry[] }
+	| { kind: "study_cards"; cards: StudyCard[] };
 
 interface WebPack {
 	id: string;
 	name: string;
 	tagline: string;
+	panelTitle: string;
 	suggestions: string[];
 	profiles: ProfileDefinition[];
 	create(config: SessionCreateConfig): PackSession;
@@ -181,11 +193,40 @@ const nextEnglishDemoStep = () => {
 	);
 };
 
+const ACADEMIC_DEMO: Record<string, { subject: string; kind: string; title: string; summary: string; practice: string }> = {
+	math: { subject: "大学数学", kind: "definition", title: "导数", summary: "函数在一点的瞬时变化率，也是切线斜率。", practice: "concept" },
+	physics: { subject: "大学物理", kind: "law", title: "动量守恒", summary: "孤立系统总动量保持不变；使用前先明确系统边界。", practice: "calculation" },
+	history: { subject: "大学历史", kind: "event", title: "工业革命", summary: "需要结合技术、能源、制度、市场与劳动关系分析的长期转型。", practice: "causation" },
+};
+
+function createAcademicDemoStep(packId: string): () => ReturnType<typeof fauxAssistantMessage> {
+	let step = 0;
+	const demo = ACADEMIC_DEMO[packId];
+	if (!demo) throw new Error(`缺少 ${packId} 演示配置`);
+	return () => {
+		const phase = (step++ % 5) + 1;
+		if (phase === 1) {
+			return fauxAssistantMessage([fauxText("先把核心概念整理成学习卡片：\n"), fauxToolCall("activate_toolset", { toolset: "study_cards" })], { stopReason: "toolUse" });
+		}
+		if (phase === 2) {
+			return fauxAssistantMessage([fauxToolCall("save_study_card", { kind: demo.kind, title: demo.title, summary: demo.summary, tags: ["演示"] })], { stopReason: "toolUse" });
+		}
+		if (phase === 3) {
+			return fauxAssistantMessage([fauxText("接着加载练习工具：\n"), fauxToolCall("activate_toolset", { toolset: "practice" })], { stopReason: "toolUse" });
+		}
+		if (phase === 4) {
+			return fauxAssistantMessage([fauxToolCall("start_academic_practice", { type: demo.practice, count: 1 })], { stopReason: "toolUse" });
+		}
+		return fauxAssistantMessage(`${demo.title} 的核心卡片已经保存。接下来我会先让你独立回答一道题，再根据你的思路反馈。\n\n（演示模式：回复由 fauxProvider 脚本化。配置真实 API key 后即为真实模型）`, { stopReason: "stop" });
+	};
+}
+
 const WEB_PACKS: WebPack[] = [
 	{
 		id: "code",
 		name: "编程",
 		tagline: "写代码、跑程序，在真实输出中学会编程。",
+		panelTitle: "代码文件",
 		suggestions: [
 			"写一个打印斐波那契数列前 10 项的 Python 程序并运行给我看",
 			"@feynman 什么是闭包？太抽象了，打个比方",
@@ -202,6 +243,7 @@ const WEB_PACKS: WebPack[] = [
 		id: "english",
 		name: "英语",
 		tagline: "积累词汇、讲解语法、做针对性练习。",
+		panelTitle: "词汇本",
 		suggestions: [
 			"教我记住 persistence 这个词，给个例句",
 			"@wren 我想系统学一下现在完成时",
@@ -213,6 +255,48 @@ const WEB_PACKS: WebPack[] = [
 			const s = session as EnglishMentorSession;
 			return { kind: "vocabulary", words: s.listWords() };
 		},
+	},
+	{
+		id: "math",
+		name: "大学数学",
+		tagline: "连接直觉、定义、证明与计算，建立可迁移的数学能力。",
+		panelTitle: "数学学习卡片",
+		suggestions: [
+			"@euler 用直观图景解释导数为什么是瞬时变化率",
+			"@gauss 带我分析一道含参数的极限题，但先别直接给答案",
+			"@noether 讲清楚线性无关的定义，并给一个反例",
+		],
+		profiles: getDefaultMathProfiles(),
+		create: (config) => createMathMentorSession(config),
+		panel: (session) => ({ kind: "study_cards", cards: (session as AcademicMentorSession).listCards() }),
+	},
+	{
+		id: "physics",
+		name: "大学物理",
+		tagline: "从物理图景到模型方程，用量纲、极限与实验检查结论。",
+		panelTitle: "物理学习卡片",
+		suggestions: [
+			"@feynman 为什么圆周运动中速度变了但速率可以不变？",
+			"@maxwell 带我建立斜面滑块模型，先分析系统和受力",
+			"@curie 如何设计实验测量重力加速度并分析不确定度？",
+		],
+		profiles: getDefaultPhysicsProfiles(),
+		create: (config) => createPhysicsMentorSession(config),
+		panel: (session) => ({ kind: "study_cards", cards: (session as AcademicMentorSession).listCards() }),
+	},
+	{
+		id: "history",
+		name: "大学历史",
+		tagline: "在时空语境中分析史料、行动者与多重因果。",
+		panelTitle: "历史学习卡片",
+		suggestions: [
+			"@sima 梳理辛亥革命的关键转折点和行动者选择",
+			"@bloch 教我如何判断一份回忆录能证明什么、不能证明什么",
+			"@braudel 比较中英工业化时应该统一哪些分析维度？",
+		],
+		profiles: getDefaultHistoryProfiles(),
+		create: (config) => createHistoryMentorSession(config),
+		panel: (session) => ({ kind: "study_cards", cards: (session as AcademicMentorSession).listCards() }),
 	},
 ];
 
@@ -343,10 +427,14 @@ async function main(): Promise<void> {
 		if (!FAUX_DEMO) return {};
 		const cached = demoOptionsCache.get(pack.id);
 		if (cached) return cached;
-		const options: SessionCreateConfig =
-			pack.id === "english"
-				? { models: createFauxModels(nextEnglishDemoStep), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false }
-				: { models: createFauxModels(nextCodeDemoStep), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false, exec: demoExec };
+		let options: SessionCreateConfig;
+		if (pack.id === "code") {
+			options = { models: createFauxModels(nextCodeDemoStep), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false, exec: demoExec };
+		} else if (pack.id === "english") {
+			options = { models: createFauxModels(nextEnglishDemoStep), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false };
+		} else {
+			options = { models: createFauxModels(createAcademicDemoStep(pack.id)), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false };
+		}
 		demoOptionsCache.set(pack.id, options);
 		return options;
 	};
@@ -382,6 +470,7 @@ async function main(): Promise<void> {
 						id: pack.id,
 						name: pack.name,
 						tagline: pack.tagline,
+						panelTitle: pack.panelTitle,
 						suggestions: pack.suggestions,
 						profiles: pack.profiles.map((p) => ({ key: p.key, name: p.name })),
 					})),
