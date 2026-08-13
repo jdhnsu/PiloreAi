@@ -61,18 +61,24 @@ test("ContextPolicy rejects oversized input before a provider request", async ()
 	assert.equal(session.exportSnapshot(0).messages.length, 0);
 });
 
-test("ContextPolicy reads PILORE_MAX_INPUT_TOKENS as the shared default", () => {
+test("ContextPolicy reads shared context limits from .env", () => {
 	const faux = fauxProvider();
 	const models = createModels(); models.setProvider(faux.provider);
 	const model = models.getModel("faux", "faux-1"); assert.ok(model);
-	const previous = process.env.PILORE_MAX_INPUT_TOKENS;
+	const previousInput = process.env.PILORE_MAX_INPUT_TOKENS;
+	const previousWindow = process.env.PILORE_CONTEXT_WINDOW;
 	process.env.PILORE_MAX_INPUT_TOKENS = "1234";
+	process.env.PILORE_CONTEXT_WINDOW = "8000";
 	try {
-		assert.equal(resolveContextPolicy(model, { contextWindow: 10_000 }).maxInputTokens, 1234);
+		assert.equal(resolveContextPolicy(model, {}).contextWindow, 8000);
+		assert.equal(resolveContextPolicy(model, {}).maxInputTokens, 1234);
+		assert.equal(resolveContextPolicy(model, { contextWindow: 10_000 }).contextWindow, 10_000);
 		assert.equal(resolveContextPolicy(model, { contextWindow: 10_000, maxInputTokens: 321 }).maxInputTokens, 321);
 	} finally {
-		if (previous === undefined) delete process.env.PILORE_MAX_INPUT_TOKENS;
-		else process.env.PILORE_MAX_INPUT_TOKENS = previous;
+		if (previousInput === undefined) delete process.env.PILORE_MAX_INPUT_TOKENS;
+		else process.env.PILORE_MAX_INPUT_TOKENS = previousInput;
+		if (previousWindow === undefined) delete process.env.PILORE_CONTEXT_WINDOW;
+		else process.env.PILORE_CONTEXT_WINDOW = previousWindow;
 	}
 });
 

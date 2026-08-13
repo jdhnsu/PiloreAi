@@ -83,7 +83,9 @@ function envPositiveInteger(name: string): number | undefined {
 }
 
 export function resolveContextPolicy(model: Model<string>, policy: ContextPolicy | undefined): ResolvedContextPolicy {
-	const contextWindow = positiveInteger(policy?.contextWindow, positiveInteger(model.contextWindow, DEFAULT_CONTEXT_WINDOW));
+	const envContextWindow = envPositiveInteger("PILORE_CONTEXT_WINDOW");
+	// Explicit runtime config wins; .env lets operators cap a provider/model deployment globally.
+	const contextWindow = positiveInteger(policy?.contextWindow, envContextWindow ?? positiveInteger(model.contextWindow, DEFAULT_CONTEXT_WINDOW));
 	const reserveTokens = Math.min(
 		Math.max(1_024, Math.floor(contextWindow * 0.08)),
 		positiveInteger(policy?.reserveTokens, Math.min(8_192, Math.max(4_096, Math.floor(contextWindow * 0.08)))),

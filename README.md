@@ -155,7 +155,7 @@ Fluent（微软）风格单页应用，零前端依赖，由 `src/adapters/web/i
 - 右侧「工作区」侧栏实时展示 VFS 文件并可查看内容
 - 长会话接近模型窗口时先征求确认：可压缩为结构化学习检查点后继续，或新建会话并保留当前草稿；单条过长输入会提示拆分，不会向模型发送必然失败的请求
 
-在 `.env` 中设置 `PILORE_MAX_INPUT_TOKENS` 可统一限制单条用户消息的最大 token 数，例如 `PILORE_MAX_INPUT_TOKENS=12000`。显式传入 `contextPolicy.maxInputTokens` 时以代码配置为准。
+在 `.env` 中可统一设置上下文护栏：`PILORE_CONTEXT_WINDOW=128000` 覆盖模型的总上下文窗口（含 system prompt、工具和历史），`PILORE_MAX_INPUT_TOKENS=12000` 限制单条用户消息。显式传入 `contextPolicy.contextWindow` 或 `contextPolicy.maxInputTokens` 时以代码配置为准。
 
 HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消费）：
 
