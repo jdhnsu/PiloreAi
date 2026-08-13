@@ -1,6 +1,6 @@
 # Adapters 与 HTTP API
 
-Adapter 是 PiLore 的产品边界。它负责把外部输入转为 Pack Session 调用、把 `SessionEvent` 转为终端或网络协议、选择存储实现并建立宿主身份；它不应包含 Pack 的教学逻辑或直接深层导入内部模块。
+Adapter 是 PiLore 的产品边界。它负责把外部输入转为 Pack Session 调用、把 `SessionEvent` 转为终端或网络协议、选择存储实现并建立宿主身份；它不应包含 Pack 的教学逻辑或直接深层导入内部模块（唯一例外：Web 的 faux demo 模式引用 `mock/exec-server.ts` 作为进程内模拟执行后端）。
 
 ## CLI Adapter
 

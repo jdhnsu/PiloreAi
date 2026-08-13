@@ -5,8 +5,6 @@ PiLore 以一个 Session 对应一个主 Domain Pack 为边界。Core 不理解�
 ## 分层与依赖方向
 
 ```text
-core/ → packs/ → infrastructure/ → adapters/
-
 src/core/                 通用 Runtime / Session / Router / Tool Runtime / Snapshot / Events
 src/packs/                教学领域 Pack；每个 Session 只装载一个
 src/infrastructure/       模型注册、请求遥测、内存与 PostgreSQL 持久化
@@ -15,12 +13,26 @@ src/adapters/web/         HTTP + SSE + 静态 Web 入口
 src/index.ts              唯一公共 API
 ```
 
-这是依赖约束，而不只是目录习惯：
+这是依赖约束，而不只是目录习惯。各层的 import 边界（"可以依赖谁"）如下：
 
-- `core` 不得导入任何 Pack、VFS、`ExecClient` 或领域术语。
-- Pack 可以依赖 Core 类型和运行时，但不依赖 Adapter。
-- Adapter 只能通过 `src/index.ts` 消费公共 API，不能绕过入口深层导入 Pack 或 Infrastructure。
+| 层 | 允许依赖 | 禁止依赖 |
+| --- | --- | --- |
+| `core/` | `@earendil-works/*`、Node 内置、`infrastructure/telemetry`（遥测 streamFn 包装属 Runtime 机制，受控例外，见下） | Pack、VFS、`ExecClient`、领域术语 |
+| `packs/` | `core/`、`infrastructure/models`、`infrastructure/telemetry`（仅类型）；大学学科 Pack 可共享 `packs/shared/academic/` | Adapter |
+| `infrastructure/` | `@earendil-works/*`、Node 内置、`pg`、`core/types` 与 `core/snapshot`（供持久化使用） | Pack |
+| `adapters/` | `src/index.ts`（唯一公开入口）；web 的 faux demo 另可引用 `mock/exec-server.ts` | 绕过入口的深层导入 |
+
+另有两条通用约束：
+
 - 默认 Profile 只在创建 Pack 时从磁盘懒加载；模块 import 不能读取环境变量、扫描磁盘或发网络请求。
+- 越层导入目前靠 code review 把关；`tests/unit/core.test.ts` 已自动覆盖 `core` 不导入 Pack / VFS / `ExecClient` 的核心约束。
+
+### core ↔ infrastructure 的受控交叉
+
+目录分四层，但模块层面存在两处跨层依赖，是当前实现的受控例外，不是分层错误：
+
+1. `core/runtime` 运行时导入 `infrastructure/telemetry` 的 `createObservedStreamFn`（`core/types.ts` 另有 `LlmTelemetrySink` 的类型导入）。理由：遥测包装是 Agent 运行的机制，而非产品设施。目标状态：把 streamFn 契约与包装下沉到 `core`，`infrastructure/telemetry` 只保留实现与 sink 类型；届时上表 `core/` 行可收紧为只允许 `@earendil-works/*` 与 Node 内置。
+2. `infrastructure/persistence` 使用 `core` 的快照设施——`persistence.ts` 类型导入 `core/types` 的 `SessionSnapshot`，`memory-store.ts` 运行时导入 `core/snapshot` 的 `cloneCoreSnapshot` 做深拷贝。该方向与"上层依赖下层"一致，无需消除；若未来希望 `infrastructure` 完全独立于 `core`，可把快照克隆工具下沉为共享模块。
 
 ## 一次对话的数据流
 
