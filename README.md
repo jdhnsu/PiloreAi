@@ -235,7 +235,7 @@ session.setProfile("guide");
 session.abort(); session.listFiles(); session.readFile("main.py");
 
 // 快照是纯 JSON，可交给独立持久化层；恢复时会校验版本、Profile、工具组和扩展
-const snapshot = session.exportSnapshot();
+const snapshot = session.exportSnapshot(currentRevision);
 const restored = createCodeMentorSession({ snapshot });
 ```
 
@@ -319,7 +319,7 @@ POST {EXEC_API_BASE}/v1/exec
 
 1. 每个会话持有一个 Pack Session
 2. 把 `SessionEvent` 通过 SSE/WebSocket 转发给前端
-3. 持久化 `session.exportSnapshot()`，恢复时通过 `snapshot` 配置注入
+3. 持久化 `session.exportSnapshot(currentRevision)`，恢复时通过 `snapshot` 配置注入
 
 ## 已核实的依赖 API 事实（v0.84.1）
 

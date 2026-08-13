@@ -13,7 +13,8 @@ export interface Session {
 	prompt(text: string, onEvent: (event: SessionEvent) => void): Promise<void>;
 	abort(): void;
 	setProfile(key: string | null): void;
-	exportSnapshot(): SessionSnapshotV1;
+	/** revision 由外部持久化层拥有；导出时必须提供其当前乐观锁版本。 */
+	exportSnapshot(revision: number): SessionSnapshotV1;
 	readonly busy: boolean;
 	readonly profile: string | null;
 	readonly runtime: Runtime;
@@ -96,14 +97,17 @@ export function createSession(config: SessionConfig): Session {
 			if (key && !profile) throw new Error(`未知 profile: ${key}`);
 			selectProfile(profile, "user");
 		},
-		exportSnapshot: () => cloneCoreSnapshot({
+		exportSnapshot: (revision) => {
+			if (!Number.isSafeInteger(revision) || revision < 0) throw new Error("snapshot revision 必须是非负安全整数");
+			return cloneCoreSnapshot({
 			version: 1,
-			revision: restored?.revision ?? 0,
+			revision,
 			activeProfileKey: state.activeProfile?.key ?? null,
 			activeToolsetKeys: [...state.activeToolsets],
 			messages: agent.state.messages,
 			extensions: extension ? { [extension.key]: extension.export() } : {},
-		}),
+			});
+		},
 		async prompt(text, onEvent) {
 			if (busy) throw new Error("上一轮对话还在进行");
 			busy = true;
@@ -125,6 +129,7 @@ export function createSession(config: SessionConfig): Session {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				onEvent({ type: "error", message: errorMessage });
 				onEvent({ type: "done", errorMessage });
+				throw error;
 			} finally {
 				busy = false;
 				emit = undefined;

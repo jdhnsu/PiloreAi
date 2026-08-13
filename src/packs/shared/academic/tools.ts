@@ -160,6 +160,13 @@ export function createAcademicToolManifest<TSubject extends string>(
 			{ key: "study_cards", description: `管理${spec.subjectName}学习卡片`, load: () => createStudyCardTools(bank, spec) },
 			{ key: "practice", description: `发起并记录${spec.subjectName}练习`, load: () => createAcademicPracticeTools(state, spec, evaluator) },
 		],
+		capabilities: {
+			save_study_card: ["study_cards.write"],
+			list_study_cards: ["study_cards.read"],
+			remove_study_card: ["study_cards.write"],
+			start_academic_practice: ["practice.run"],
+			submit_academic_answer: ["practice.run"],
+		},
 		resolveCapability(toolName) {
 			if (toolName === "save_study_card" || toolName === "remove_study_card") return "study_cards.write";
 			if (toolName === "list_study_cards") return "study_cards.read";

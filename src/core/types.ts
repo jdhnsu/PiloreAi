@@ -10,11 +10,19 @@ export interface RouterConfig {
 	maxSwitchesPerTurn?: number;
 	parseMention?(text: string): { profile: ProfileDefinition | null; rest: string } | undefined;
 	getProfileState?(key: string): JsonValue | undefined;
+	/** 将模型输入收窄为本 Pack 允许的状态字段；必须在写入前调用。 */
+	validateProfileStatePatch?(key: string, patch: unknown): Record<string, JsonValue>;
 	updateProfileState?(key: string, patch: Record<string, JsonValue>): JsonValue;
 	renderContext?(message: ProfileContextMessage): string;
 }
 export interface ToolGroup { key: string; description: string; eager?: boolean; load(): AgentTool<any>[] }
-export interface ToolManifest { groups: ToolGroup[]; resolveCapability(toolName: string, args: unknown): string | undefined }
+/** 每个具体工具的所有可能能力，用于启动时验证；动态能力也必须枚举全部分支。 */
+export type ToolCapabilities = Record<string, readonly string[]>;
+export interface ToolManifest {
+	groups: ToolGroup[];
+	capabilities: ToolCapabilities;
+	resolveCapability(toolName: string, args: unknown): string | undefined;
+}
 export interface SnapshotExtension<T extends JsonValue = JsonValue> { key: string; export(): T; validate(value: unknown): T; restore(value: T): void; migrate?(value: unknown, version: number): T }
 export interface DomainPack {
 	id: string; basePrompt?: string; router?: RouterConfig; toolManifest?: ToolManifest; snapshotExtension?: SnapshotExtension;

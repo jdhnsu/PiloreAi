@@ -40,7 +40,7 @@ test("English Mentor dynamically activates vocabulary tools", async () => {
 	assert.deepEqual(session.listWords().map((entry) => entry.word), ["persistent"]);
 	assert.ok(events.includes("toolset"));
 	assert.ok(events.includes("tool_start"));
-	assert.deepEqual(session.exportSnapshot().activeToolsetKeys, ["vocabulary"]);
+	assert.deepEqual(session.exportSnapshot(0).activeToolsetKeys, ["vocabulary"]);
 });
 
 test("English Mentor records evaluated answers through submit_answer", async () => {
@@ -66,7 +66,7 @@ test("English Mentor manual profile and snapshot restore carries vocabulary", ()
 	vocab.add({ word: "resilient", meaning: "有韧性的" });
 	const first = setup(); const session = createEnglishMentorSession({ models: first.models, providerId: "faux", modelId: "faux-1", vocab });
 	session.setProfile("wren");
-	const snapshot = session.exportSnapshot();
+	const snapshot = session.exportSnapshot(0);
 	const second = setup(); const restored = createEnglishMentorSession({ models: second.models, providerId: "faux", modelId: "faux-1", snapshot });
 	assert.equal(restored.profile, "wren");
 	assert.equal(restored.getWord("resilient")?.meaning, "有韧性的");

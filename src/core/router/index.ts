@@ -66,6 +66,7 @@ export function createRouterTool(state: CoreState, config: RouterConfig): AgentT
 }
 export function createUpdateProfileStateTool(state: CoreState, config: RouterConfig): AgentTool<any> | undefined {
 	if (!config.updateProfileState) return undefined;
+	if (!config.validateProfileStatePatch) throw new Error("配置 updateProfileState 时必须同时配置 validateProfileStatePatch");
 	const parameters = Type.Object({ patch: Type.Record(Type.String(), Type.Any()) });
-	return { name: "update_profile_state", label: "更新 Profile 状态", description: "记录当前 Profile 的领域进度；仅提交发生变化的字段。", parameters, execute: async (_id, raw) => { if (!state.activeProfile) throw new Error("当前未激活 profile"); const patch = (raw as { patch: Record<string, JsonValue> }).patch; const value = config.updateProfileState!(state.activeProfile.key, patch); return { content: [{ type: "text", text: `已更新 ${state.activeProfile.name} 的状态` }], details: { profile: state.activeProfile.key, state: value } }; } };
+	return { name: "update_profile_state", label: "更新 Profile 状态", description: "记录当前 Profile 的领域进度；仅提交发生变化的字段。", parameters, execute: async (_id, raw) => { if (!state.activeProfile) throw new Error("当前未激活 profile"); const patch = config.validateProfileStatePatch!(state.activeProfile.key, (raw as { patch: unknown }).patch); const value = config.updateProfileState!(state.activeProfile.key, patch); return { content: [{ type: "text", text: `已更新 ${state.activeProfile.name} 的状态` }], details: { profile: state.activeProfile.key, state: value } }; } };
 }

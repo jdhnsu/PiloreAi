@@ -62,7 +62,7 @@ test("Math Mentor saves a study card and restores its own snapshot extension", a
 	const session = createMathMentorSession({ models: first.models, providerId: "faux", modelId: "faux-1" });
 	await session.prompt("帮我整理导数定义", () => {});
 	assert.equal(session.getMathCard("derivative")?.kind, "definition");
-	const snapshot = session.exportSnapshot();
+	const snapshot = session.exportSnapshot(0);
 	assert.ok(snapshot.extensions.math);
 	assert.equal(snapshot.extensions.physics, undefined);
 	assert.equal(snapshot.extensions.history, undefined);
@@ -103,7 +103,7 @@ test("History Mentor exports history-only state", () => {
 	const { models } = setup();
 	const session = createHistoryMentorSession({ models, providerId: "faux", modelId: "faux-1" });
 	session.setProfile("bloch");
-	const snapshot = session.exportSnapshot();
+	const snapshot = session.exportSnapshot(0);
 	assert.equal(snapshot.activeProfileKey, "bloch");
 	assert.ok(snapshot.extensions.history);
 	assert.equal(snapshot.extensions.math, undefined);

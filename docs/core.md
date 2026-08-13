@@ -50,7 +50,7 @@ interface Session {
   prompt(text: string, onEvent: (event: SessionEvent) => void): Promise<void>;
   abort(): void;
   setProfile(key: string | null): void;
-  exportSnapshot(): SessionSnapshotV1;
+  exportSnapshot(revision: number): SessionSnapshotV1;
   readonly busy: boolean;
   readonly profile: string | null;
   readonly runtime: Runtime;
@@ -116,13 +116,14 @@ interface ToolGroup {
 
 interface ToolManifest {
   groups: ToolGroup[];
+  capabilities: Record<string, readonly string[]>;
   resolveCapability(toolName: string, args: unknown): string | undefined;
 }
 ```
 
-模型先调用内部 `activate_toolset({ toolset })`；Core 将该 Group 标记为激活并刷新 Agent 工具列表。`eager: true` 的组会从会话开始就加载。Manifest 在 Runtime 创建时验证：Tool Group key 与具体工具名都不能重复。
+模型先调用内部 `activate_toolset({ toolset })`；Core 将该 Group 标记为激活并刷新 Agent 工具列表。`eager: true` 的组会从会话开始就加载。Manifest 在 Runtime 创建时编译为不可变 Tool Registry，每个 Group 的 `load()` 只执行一次；验证会拒绝重复 Group/工具、漏填或多填的 capability 声明，以及 Profile 中未知的 capability。
 
-`resolveCapability()` 将具体工具调用映射为稳定 capability，例如 Code Pack 的 `run_code → exec.run`。当当前 Profile 对该 capability 声明 `deny` 时，Core 会在工具真正执行前阻止调用。
+`resolveCapability()` 将具体工具调用映射为稳定 capability，例如 Code Pack 的 `run_code → exec.run`；返回值必须属于该工具在 `capabilities` 中声明的集合。Profile 保持 deny-list 语义：未声明即允许，声明 `deny` 时 Core 会在工具真正执行前阻止调用。
 
 ## Snapshot V1
 
@@ -137,7 +138,9 @@ interface SessionSnapshotV1 {
 }
 ```
 
-`exportSnapshot()` 产生深拷贝 JSON。恢复时 `validateCoreSnapshot()` 会校验版本、revision、Profile key、Tool Group key、消息数组和 extension；随后 Session 恢复工具组、Profile、Agent 历史和领域 extension 状态。
+`exportSnapshot(revision)` 产生深拷贝 JSON；revision 始终由持久化层的乐观锁版本提供。恢复时 `validateCoreSnapshot()` 会校验版本、revision、Profile key、Tool Group key、消息结构和 extension；随后 Session 恢复工具组、Profile、Agent 历史和领域 extension 状态。
+
+错误语义：普通工具失败通过 `tool_end` 的 `isError: true` 反馈给模型并允许其恢复；模型结束时报告的错误通过 `error`、`done.errorMessage` 反馈；Session 自身不可恢复的运行错误则在发出这两个事件后拒绝 `prompt()` Promise。持久化层独占 revision：调用 `completeRun` 时传入 `session.exportSnapshot(expectedRevision)`，存储成功后使用返回的 revision 作为下一轮 `expectedRevision`。
 
 `SnapshotExtension` 由 Pack 实现：
 

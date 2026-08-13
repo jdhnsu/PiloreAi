@@ -1,7 +1,7 @@
 import type { ProfileContextMessage } from "../../../core/router/index.js";
 import type { ProfileDefinition, RouterConfig } from "../../../core/types.js";
 import type { AcademicMentorState } from "./state.js";
-import { updateAcademicProgress } from "./state.js";
+import { updateAcademicProgress, validateAcademicProgressPatch } from "./state.js";
 
 export function createAcademicRouterConfig(
 	profiles: ProfileDefinition[],
@@ -12,6 +12,7 @@ export function createAcademicRouterConfig(
 		profiles,
 		maxSwitchesPerTurn: 2,
 		getProfileState: (key) => state.progressByProfile[key],
+		validateProfileStatePatch: (_key, patch) => validateAcademicProgressPatch(patch) as Record<string, import("../../../core/types.js").JsonValue>,
 		updateProfileState: (key, patch) => updateAcademicProgress(state, key, patch),
 		parseMention(text) {
 			const match = text.match(/^@([a-zA-Z][a-zA-Z0-9_-]*)/);

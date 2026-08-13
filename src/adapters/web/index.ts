@@ -532,7 +532,7 @@ async function main(): Promise<void> {
 					storeErrorResponse(res, err);
 					return;
 				}
-				const snapshot = entry.session.exportSnapshot();
+				const snapshot = entry.session.exportSnapshot(entry.revision);
 				const messages = snapshot.messages.flatMap((raw): Array<{ role: "user" | "assistant"; text: string }> => {
 					const message = raw as { role?: unknown; content?: unknown };
 					if (message.role !== "user" && message.role !== "assistant") return [];
@@ -670,10 +670,11 @@ async function main(): Promise<void> {
 				let outputText = "";
 				const toolResults: Array<{ toolName: string; isError: boolean; text: string }> = [];
 				let runError: string | undefined;
+				let sessionFinished = false;
 				const send = (event: SessionEvent) => {
 					if (event.type === "text_delta") outputText += event.delta;
 					else if (event.type === "tool_end") toolResults.push({ toolName: event.toolName, isError: event.isError, text: event.text.slice(0, 2000) });
-					else if (event.type === "done") runError = event.errorMessage;
+					else if (event.type === "done") { runError = event.errorMessage; sessionFinished = true; }
 					try {
 						if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`);
 					} catch {
@@ -694,7 +695,7 @@ async function main(): Promise<void> {
 							runId: run.id,
 							sessionId,
 							expectedRevision: entry.revision,
-							snapshot: { ...entry.session.exportSnapshot(), revision: entry.revision },
+							snapshot: entry.session.exportSnapshot(entry.revision),
 							audit: audit(),
 						});
 						entry.revision = updated.revision;
@@ -705,11 +706,13 @@ async function main(): Promise<void> {
 					} catch {
 						/* 存储失败不掩盖主错误 */
 					}
-					const text = err instanceof Error ? err.message : String(err);
-					try {
-						if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type: "error", message: text })}\n\n`);
-					} catch {
-						/* 连接已断开 */
+					if (!sessionFinished) {
+						const text = err instanceof Error ? err.message : String(err);
+						try {
+							if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type: "error", message: text })}\n\n`);
+						} catch {
+							/* 连接已断开 */
+						}
 					}
 				} finally {
 					finished = true;

@@ -4,9 +4,10 @@ import { convertProfileMessages, createRouterTool, createUpdateProfileStateTool 
 import { CoreState } from "../state/index.js";
 import {
 	createActivateToolsetTool,
+	compileToolRegistry,
 	deniedCapability,
-	toolsForState,
-	validateToolManifest,
+	validateProfileCapabilities,
+	type ToolRegistry,
 } from "../tool-runtime/index.js";
 import type { RuntimeConfig } from "../types.js";
 
@@ -14,6 +15,7 @@ export interface Runtime {
 	agent: Agent;
 	state: CoreState;
 	runtimeConfig: RuntimeConfig;
+	toolRegistry?: ToolRegistry;
 	refreshTools(): void;
 }
 
@@ -25,11 +27,12 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 	let turns = 0;
 	let agent: Agent | undefined;
 
-	if (manifest) validateToolManifest(manifest);
+	const toolRegistry = manifest ? compileToolRegistry(manifest) : undefined;
+	validateProfileCapabilities(config.domain?.router?.profiles ?? [], toolRegistry);
 
 	const currentTools = (): AgentTool<any>[] => [
 		...injectedTools,
-		...toolsForState(manifest, state, internalTools),
+		...(toolRegistry?.toolsForState(state, internalTools) ?? internalTools),
 	];
 	const refreshTools = (): void => {
 		if (agent) agent.state.tools = currentTools();
@@ -40,7 +43,7 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 		const updateState = createUpdateProfileStateTool(state, config.domain.router);
 		if (updateState) internalTools.push(updateState);
 	}
-	if (manifest) internalTools.push(createActivateToolsetTool(state, manifest, refreshTools));
+	if (toolRegistry) internalTools.push(createActivateToolsetTool(state, toolRegistry, refreshTools));
 
 	agent = new Agent({
 		initialState: {
@@ -61,7 +64,7 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 		}),
 		shouldStopAfterTurn: async () => Boolean(config.maxTurns && ++turns >= config.maxTurns),
 		beforeToolCall: async (context) => {
-			const denied = deniedCapability(manifest, state.activeProfile, context.toolCall.name, context.args);
+			const denied = deniedCapability(toolRegistry, state.activeProfile, context.toolCall.name, context.args);
 			return denied ? { block: true, reason: `当前 profile 不允许能力 ${denied}` } : undefined;
 		},
 	});
@@ -70,5 +73,5 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 		if (event.type === "agent_start") turns = 0;
 	});
 
-	return { agent, state, runtimeConfig: config, refreshTools };
+	return { agent, state, runtimeConfig: config, toolRegistry, refreshTools };
 }

@@ -143,7 +143,7 @@ function lastAssistantUsage(session: Session): {
 	usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: number } | undefined;
 	messageCount: number;
 } {
-	const messages = session.exportSnapshot().messages;
+	const messages = session.exportSnapshot(0).messages;
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const m = messages[i] as { role?: string; usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } };
 		if (m.role === "assistant") {
@@ -207,14 +207,14 @@ async function main(): Promise<void> {
 	async function promptWithRetry(text: string): Promise<boolean> {
 		for (let attempt = 0; attempt < 2; attempt++) {
 			lastError = undefined;
-			const before = session.exportSnapshot().messages.length;
+			const before = session.exportSnapshot(0).messages.length;
 			try {
 				await session.prompt(text, onEvent);
 			} catch (err) {
 				lastError = err instanceof Error ? err.message : String(err);
 			}
 			if (!lastError) return true;
-			const after = session.exportSnapshot().messages.length;
+			const after = session.exportSnapshot(0).messages.length;
 			if (after !== before) {
 				// 失败时已写入部分 assistant 消息，重发会破坏消息序列与缓存前缀 → 中止
 				return false;

@@ -389,17 +389,17 @@ async function main(): Promise<void> {
 	async function promptWithRetry(text: string): Promise<"ok" | "skip" | "abort"> {
 		for (let attempt = 0; attempt < 2; attempt++) {
 			lastError = undefined;
-			const before = session.exportSnapshot().messages.length;
+			const before = session.exportSnapshot(0).messages.length;
 			try {
 				await session.prompt(text, onEvent);
 			} catch (err) {
 				lastError = err instanceof Error ? err.message : String(err);
 			}
 			if (!lastError) return "ok";
-			const after = session.exportSnapshot().messages.length;
+			const after = session.exportSnapshot(0).messages.length;
 			if (after !== before) {
 				// 失败时已写入部分 assistant 消息：回滚本轮新增（含注入文本），跳过本轮继续，不破坏前缀
-				session.runtime.agent.state.messages = (session.exportSnapshot().messages as AgentMessage[]).slice(0, before);
+			session.runtime.agent.state.messages = (session.exportSnapshot(0).messages as AgentMessage[]).slice(0, before);
 				console.log(`  ⚠ 第 ${rounds.length + 1} 轮失败(${lastError})且历史已污染，已回滚本轮消息，跳过本轮继续。`);
 				return "skip";
 			}
@@ -432,7 +432,7 @@ async function main(): Promise<void> {
 			}
 		}
 
-		const beforeCount = session.exportSnapshot().messages.length;
+		const beforeCount = session.exportSnapshot(0).messages.length;
 		const text = buildUserMessage(r, buildChunk(r + 1, effectiveChunkChars));
 
 		const result = await promptWithRetry(text);
@@ -444,7 +444,7 @@ async function main(): Promise<void> {
 		if (result === "skip") continue; // 失败轮已回滚，不统计，下一轮继续
 
 		// assistant 消息用于核对历史；usage 与请求计数以 telemetry 为事实源。
-		const msgs = session.exportSnapshot().messages as AgentMessage[];
+		const msgs = session.exportSnapshot(0).messages as AgentMessage[];
 		const newAssistants = msgs
 			.slice(beforeCount)
 			.filter((m) => m.role === "assistant" && m.usage) as Extract<(typeof msgs)[number], { role: "assistant" }>[];
@@ -636,7 +636,7 @@ async function main(): Promise<void> {
 		rounds,
 		requests: requestsAudit,
 		// 完整会话快照：供 --resume 续跑（含消息历史 / 激活 profile / 工具集 / 扩展状态）
-		snapshot: session.exportSnapshot(),
+		snapshot: session.exportSnapshot(0),
 	};
 	const file = join(reportDir, `cache-realistic-${stamp}.json`);
 	writeFileSync(file, JSON.stringify(report, null, 2));

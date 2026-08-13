@@ -62,7 +62,7 @@ const session = createPhysicsMentorSession({
 `SessionSnapshotV1` 是 JSON，可直接保存到你的存储层：
 
 ```ts
-const snapshot = session.exportSnapshot();
+const snapshot = session.exportSnapshot(currentRevision);
 await store.save(snapshot);
 
 const restored = createMathMentorSession({ snapshot: await store.load() });

@@ -2,7 +2,7 @@
 export { createRuntime, type Runtime } from "./core/runtime/index.js";
 export { createSession, type Session, type SessionConfig } from "./core/session/index.js";
 export { CoreState } from "./core/state/index.js";
-export { CORE_SESSION_SNAPSHOT_VERSION, validateCoreSnapshot, cloneCoreSnapshot } from "./core/snapshot/index.js";
+export { CORE_SESSION_SNAPSHOT_VERSION, validateCoreSnapshot, validateSnapshotMessages, cloneCoreSnapshot } from "./core/snapshot/index.js";
 export type {
 	JsonValue,
 	Profile,
@@ -29,8 +29,10 @@ export {
 } from "./core/router/index.js";
 export {
 	INTERNAL_TOOL_NAMES,
+	compileToolRegistry,
 	createActivateToolsetTool,
 	toolsForState,
+	validateProfileCapabilities,
 	validateToolManifest,
 } from "./core/tool-runtime/index.js";
 

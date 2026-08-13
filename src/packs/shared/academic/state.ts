@@ -30,6 +30,16 @@ export function createAcademicMentorState(): AcademicMentorState {
 	return { progressByProfile: {}, practiceLog: [] };
 }
 
+export function validateAcademicProgressPatch(value: unknown): Partial<AcademicProgress> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("profile state patch 必须是对象");
+	const patch = value as Record<string, unknown>;
+	const allowed = new Set(["stage", "topic", "covered", "pending"]);
+	for (const key of Object.keys(patch)) if (!allowed.has(key)) throw new Error(`不支持的 profile state 字段: ${key}`);
+	for (const key of ["stage", "topic"] as const) if (patch[key] !== undefined && typeof patch[key] !== "string") throw new Error(`profile state.${key} 必须是字符串`);
+	for (const key of ["covered", "pending"] as const) if (patch[key] !== undefined && (!Array.isArray(patch[key]) || !patch[key].every((item) => typeof item === "string"))) throw new Error(`profile state.${key} 必须是字符串数组`);
+	return patch as Partial<AcademicProgress>;
+}
+
 export function updateAcademicProgress(
 	state: AcademicMentorState,
 	key: string,

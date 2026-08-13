@@ -17,12 +17,12 @@ test("Code Mentor dynamically activates workspace tools", async () => {
 	assert.equal(session.readFile("main.py"), "print('ok')");
 	assert.ok(events.includes("toolset"));
 	assert.ok(events.includes("tool_start"));
-	assert.deepEqual(session.exportSnapshot().activeToolsetKeys, ["workspace"]);
+	assert.deepEqual(session.exportSnapshot(0).activeToolsetKeys, ["workspace"]);
 });
 
 test("Code Mentor manual profile and snapshot restore", () => {
 	const first = setup(); const session = createCodeMentorSession({ models: first.models, providerId: "faux", modelId: "faux-1" });
-	session.setProfile("socrates"); const snapshot = session.exportSnapshot(); assert.equal(snapshot.activeProfileKey, "socrates");
+	session.setProfile("socrates"); const snapshot = session.exportSnapshot(0); assert.equal(snapshot.activeProfileKey, "socrates");
 	const second = setup(); const restored = createCodeMentorSession({ models: second.models, providerId: "faux", modelId: "faux-1", snapshot }); assert.equal(restored.profile, "socrates");
 });
 
@@ -36,4 +36,16 @@ test("Code Mentor records profile-scoped progress through the generic router too
 	const session = createCodeMentorSession({ models, providerId: "faux", modelId: "faux-1" });
 	await session.prompt("讲讲闭包", () => {});
 	assert.equal(session.codeState.progressByProfile.socrates?.topic, "闭包");
+});
+
+test("Code Mentor rejects invalid Profile state patches", async () => {
+	const { faux, models } = setup();
+	faux.setResponses([
+		fauxAssistantMessage([fauxToolCall("adopt_profile", { profile: "socrates" })]),
+		fauxAssistantMessage([fauxToolCall("update_profile_state", { patch: { unexpected: true } })]),
+	]);
+	const session = createCodeMentorSession({ models, providerId: "faux", modelId: "faux-1" });
+	await session.prompt("讲闭包", () => {});
+	assert.ok(session.runtime.agent.state.messages.some((message) => message.role === "toolResult" && message.toolName === "update_profile_state" && message.isError));
+	assert.equal(session.codeState.progressByProfile.socrates, undefined);
 });
