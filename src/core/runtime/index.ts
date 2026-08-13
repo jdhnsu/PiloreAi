@@ -2,6 +2,7 @@ import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { createObservedStreamFn } from "../../infrastructure/telemetry/index.js";
 import { convertProfileMessages, createRouterTool, createUpdateProfileStateTool } from "../router/index.js";
 import { CoreState } from "../state/index.js";
+import { estimateContextTokens, pruneContextForRequest, resolveContextPolicy, type ResolvedContextPolicy } from "../context-policy/index.js";
 import {
 	createActivateToolsetTool,
 	compileToolRegistry,
@@ -15,6 +16,7 @@ export interface Runtime {
 	agent: Agent;
 	state: CoreState;
 	runtimeConfig: RuntimeConfig;
+	contextPolicy: ResolvedContextPolicy;
 	toolRegistry?: ToolRegistry;
 	refreshTools(): void;
 }
@@ -26,6 +28,7 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 	const internalTools: AgentTool<any>[] = [];
 	let turns = 0;
 	let agent: Agent | undefined;
+	const contextPolicy = resolveContextPolicy(config.model, config.contextPolicy);
 
 	const toolRegistry = manifest ? compileToolRegistry(manifest) : undefined;
 	validateProfileCapabilities(config.domain?.router?.profiles ?? [], toolRegistry);
@@ -59,6 +62,10 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 			getProfileKey: () => state.activeProfile?.key ?? null,
 		}),
 		convertToLlm: (messages) => convertProfileMessages(messages, config.domain?.router),
+		transformContext: async (messages) => pruneContextForRequest(messages, (candidate) => {
+			const context = { systemPrompt: config.systemPrompt ?? config.domain?.basePrompt ?? "You are a helpful assistant.", messages: convertProfileMessages(candidate, config.domain?.router), tools: currentTools() };
+			return estimateContextTokens(context) <= contextPolicy.contextWindow - contextPolicy.reserveTokens;
+		}),
 		prepareNextTurnWithContext: (context) => ({
 			context: { ...context.context, tools: currentTools() },
 		}),
@@ -73,5 +80,5 @@ export function createRuntime(config: RuntimeConfig): Runtime {
 		if (event.type === "agent_start") turns = 0;
 	});
 
-	return { agent, state, runtimeConfig: config, toolRegistry, refreshTools };
+	return { agent, state, runtimeConfig: config, contextPolicy, toolRegistry, refreshTools };
 }

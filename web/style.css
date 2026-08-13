@@ -846,6 +846,36 @@ body {
 	font-size: 13px;
 }
 
+.context-recovery {
+	align-self: center;
+	max-width: 560px;
+	padding: 16px 18px;
+	border-color: #e6c979;
+	background: #fffaf0;
+}
+
+.context-recovery strong {
+	display: block;
+	color: #6d4d05;
+}
+
+.context-recovery p {
+	margin: 7px 0 12px;
+	font-size: 13px;
+	color: var(--text-secondary);
+}
+
+.context-recovery-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.context-recovery-error {
+	margin-top: 10px;
+	font-size: 12px;
+	color: var(--danger);
+}
+
 /* ===== 输入区：整体式 Fluent 输入卡片 ===== */
 .composer {
 	padding: 0;

@@ -2,6 +2,22 @@
 export { createRuntime, type Runtime } from "./core/runtime/index.js";
 export { createSession, type Session, type SessionConfig } from "./core/session/index.js";
 export { CoreState } from "./core/state/index.js";
+export {
+	ContextPolicyError,
+	compactContext,
+	createContextSummary,
+	estimateContextTokens,
+	estimateTextTokens,
+	inspectContext,
+	isContextSummary,
+	pruneContextForRequest,
+	resolveContextPolicy,
+	type ContextCompactionResult,
+	type ContextPolicy,
+	type ContextStatus,
+	type ContextSummaryMessage,
+	type ResolvedContextPolicy,
+} from "./core/context-policy/index.js";
 export { CORE_SESSION_SNAPSHOT_VERSION, validateCoreSnapshot, validateSnapshotMessages, cloneCoreSnapshot } from "./core/snapshot/index.js";
 export type {
 	JsonValue,

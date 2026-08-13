@@ -553,6 +553,68 @@ function setBusy(value) {
 	inputEl.disabled = false;
 }
 
+/* 上下文接近模型上限时，用户明确选择压缩或改开新会话；不会静默丢弃历史。 */
+function showContextRecovery(message, info = {}) {
+	const card = document.createElement("div");
+	card.className = "context-recovery card";
+	const title = document.createElement("strong");
+	title.textContent = "这段对话需要先处理上下文";
+	const detail = document.createElement("p");
+	const estimated = info.context?.estimatedTokens;
+	detail.textContent = estimated
+		? `当前上下文约 ${estimated} tokens，接近模型安全上限。压缩会保留学习目标、进度和近期对话。`
+		: "当前上下文接近模型安全上限。压缩会保留学习目标、进度和近期对话。";
+	const actions = document.createElement("div");
+	actions.className = "context-recovery-actions";
+	const compact = document.createElement("button");
+	compact.type = "button";
+	compact.className = "btn-primary";
+	compact.textContent = "压缩并继续";
+	const fresh = document.createElement("button");
+	fresh.type = "button";
+	fresh.className = "copy-btn";
+	fresh.textContent = "新建会话";
+	const error = document.createElement("div");
+	error.className = "context-recovery-error hidden";
+	actions.append(compact, fresh);
+	card.append(title, detail, actions, error);
+	messagesEl.appendChild(card);
+	scrollToBottom();
+
+	compact.onclick = async () => {
+		compact.disabled = true;
+		fresh.disabled = true;
+		compact.textContent = "正在压缩…";
+		error.classList.add("hidden");
+		try {
+			const resp = await fetch("/api/context/compact", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ sessionId }),
+			});
+			if (!resp.ok) {
+				const body = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+				throw new Error(body.error ?? "压缩失败");
+			}
+			card.remove();
+			await send(message);
+		} catch (err) {
+			error.textContent = `压缩失败：${err.message ?? err}。历史没有被修改，可以重试或新建会话。`;
+			error.classList.remove("hidden");
+			compact.disabled = false;
+			fresh.disabled = false;
+			compact.textContent = "压缩并继续";
+		}
+	};
+	fresh.onclick = async () => {
+		card.remove();
+		inputEl.value = message;
+		autoGrow();
+		updateSend();
+		await newSession();
+	};
+}
+
 async function send(text) {
 	const message = (text ?? inputEl.value).trim();
 	if (!message || busy) return;
@@ -577,6 +639,12 @@ async function send(text) {
 		});
 		if (!resp.ok || !resp.body) {
 			const info = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+			if (info.code === "CONTEXT_COMPACTION_REQUIRED") {
+				userEl.remove();
+				block.card.remove();
+				showContextRecovery(message, info);
+				return;
+			}
 			handleEvent({ type: "error", message: info.error ?? "请求失败" }, block);
 			setBusy(false);
 			return;

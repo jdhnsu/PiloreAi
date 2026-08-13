@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
-import { createSession, createRuntime, validateCoreSnapshot, CORE_SESSION_SNAPSHOT_VERSION } from "../../src/index.js";
+import { ContextPolicyError, createSession, createRuntime, resolveContextPolicy, validateCoreSnapshot, CORE_SESSION_SNAPSHOT_VERSION } from "../../src/index.js";
 
 test("Core session works without a Domain Pack", async () => {
 	const faux = fauxProvider();
@@ -47,6 +47,57 @@ test("Core snapshot validates persisted agent and PiLore context messages", () =
 	assert.equal(snapshot.messages.length, 3);
 	assert.throws(() => validateCoreSnapshot({ ...snapshot, messages: [{ role: "assistant", content: [], timestamp: 1 }] }), /api 必须是字符串/);
 	assert.throws(() => validateCoreSnapshot({ ...snapshot, messages: [{ role: "unknown", timestamp: 1 }] }), /不受支持/);
+});
+
+test("ContextPolicy rejects oversized input before a provider request", async () => {
+	const faux = fauxProvider();
+	const models = createModels(); models.setProvider(faux.provider);
+	const model = models.getModel("faux", "faux-1"); assert.ok(model);
+	const session = createSession({ models, model, contextPolicy: { contextWindow: 10_000, maxInputTokens: 100 } });
+	await assert.rejects(
+		session.prompt("x".repeat(1_000), () => {}),
+		(error: unknown) => error instanceof ContextPolicyError && error.code === "INPUT_TOO_LARGE",
+	);
+	assert.equal(session.exportSnapshot(0).messages.length, 0);
+});
+
+test("ContextPolicy reads PILORE_MAX_INPUT_TOKENS as the shared default", () => {
+	const faux = fauxProvider();
+	const models = createModels(); models.setProvider(faux.provider);
+	const model = models.getModel("faux", "faux-1"); assert.ok(model);
+	const previous = process.env.PILORE_MAX_INPUT_TOKENS;
+	process.env.PILORE_MAX_INPUT_TOKENS = "1234";
+	try {
+		assert.equal(resolveContextPolicy(model, { contextWindow: 10_000 }).maxInputTokens, 1234);
+		assert.equal(resolveContextPolicy(model, { contextWindow: 10_000, maxInputTokens: 321 }).maxInputTokens, 321);
+	} finally {
+		if (previous === undefined) delete process.env.PILORE_MAX_INPUT_TOKENS;
+		else process.env.PILORE_MAX_INPUT_TOKENS = previous;
+	}
+});
+
+test("ContextPolicy compacts confirmed history into a durable checkpoint", async () => {
+	const faux = fauxProvider();
+	const models = createModels(); models.setProvider(faux.provider);
+	faux.setResponses(Array.from({ length: 20 }, () => fauxAssistantMessage("## 目标\n持续学习\n\n## 学习进度\n- 已完成：基础练习\n\n## 关键事实与状态\n- 保留近期内容\n\n## 待办\n- 继续")));
+	const model = models.getModel("faux", "faux-1"); assert.ok(model);
+	const messages = Array.from({ length: 7 }, (_, index) => [
+		{ role: "user", content: `问题 ${index}\n${"学习材料 ".repeat(500)}`, timestamp: index * 2 + 1 },
+		fauxAssistantMessage(`回答 ${index}\n${"讲解内容 ".repeat(500)}`, { timestamp: index * 2 + 2 }),
+	]).flat();
+	const session = createSession({
+		models,
+		model,
+		contextPolicy: { contextWindow: 10_000, keepRecentTokens: 1_000, maxInputTokens: 2_000, summaryMaxTokens: 200 },
+		snapshot: { version: 1, revision: 0, activeProfileKey: null, activeToolsetKeys: [], messages, extensions: {} },
+	});
+	assert.equal(session.inspectContext("继续").status, "requires_compaction");
+	const result = await session.compactContext();
+	assert.equal(result.compacted, true);
+	const snapshot = session.exportSnapshot(0);
+	assert.equal((snapshot.messages[0] as { role: string }).role, "piloreContextSummary");
+	assert.ok(snapshot.messages.length < messages.length);
+	assert.equal(session.inspectContext("继续").status, "ok");
 });
 
 test("Compiled tool registry loads each group once and validates capabilities", () => {

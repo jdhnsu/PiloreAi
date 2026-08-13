@@ -1,6 +1,7 @@
 import type { AgentTool, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model, MutableModels } from "@earendil-works/pi-ai";
 import type { ProfileContextMessage } from "./router/index.js";
+import type { ContextPolicy } from "./context-policy/index.js";
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export interface ProfileDefinition { key: string; name: string; description: string; methodology: string; capabilities?: Record<string, "allow" | "deny"> }
@@ -29,8 +30,11 @@ export interface DomainPack {
 }
 export interface RuntimeConfig {
 	model: Model<string>; models: MutableModels; thinkingLevel?: ThinkingLevel; systemPrompt?: string; tools?: AgentTool<any>[]; domain?: DomainPack; maxTurns?: number;
+	/** Optional model-aware input budget and user-confirmed history compaction policy. */
+	contextPolicy?: ContextPolicy;
 	fetch?: typeof globalThis.fetch; llmTelemetry?: import("../infrastructure/telemetry/index.js").LlmTelemetrySink;
 }
 export interface SessionSnapshotV1 { version: 1; revision: number; activeProfileKey: string | null; activeToolsetKeys: string[]; messages: unknown[]; extensions: Record<string, JsonValue> }
 export type SessionSnapshot = SessionSnapshotV1;
 export type { SessionEvent } from "./events/index.js";
+export type { ContextPolicy } from "./context-policy/index.js";

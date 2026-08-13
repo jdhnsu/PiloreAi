@@ -21,6 +21,7 @@ interface RuntimeConfig {
   tools?: AgentTool<any>[];
   domain?: DomainPack;
   maxTurns?: number;
+  contextPolicy?: ContextPolicy;
   fetch?: typeof globalThis.fetch;
   llmTelemetry?: LlmTelemetrySink;
 }
@@ -38,12 +39,16 @@ interface RuntimeConfig {
 - 每回合根据已激活的 Tool Group 刷新 `agent.state.tools`。
 - 在每次工具调用前根据当前 Profile 的 capability deny-list 拦截操作。
 - 以 `maxTurns` 限制单次 `prompt()` 最多可运行的 LLM 回合数；未设置则不限制。
+- 依据模型窗口和可选 `contextPolicy` 预估 system prompt、工具 schema 与消息的总预算；超出时仅发送受限的请求上下文，避免工具回合因上下文溢出崩溃。
 
 `Runtime.refreshTools()` 主要供 Session 恢复 Snapshot 后使用。通常 Pack 或 Adapter 不需要直接调用它。
 
 ## Session API
 
 `createSession(config)` 在 Runtime 之上提供适合产品接入的单会话接口：
+
+- `inspectContext(text)` 在写入消息前返回 `ok`、`requires_compaction` 或 `input_too_large`。
+- `compactContext()` 由产品层在用户确认后调用；它用模型生成结构化学习检查点，替换早期历史并进入可持久化 Snapshot。摘要失败不会改写既有历史。
 
 ```ts
 interface Session {

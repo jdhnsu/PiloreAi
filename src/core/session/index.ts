@@ -1,8 +1,9 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { appendProfileContext, createProfileContext } from "../router/index.js";
+import { appendProfileContext, convertProfileMessages, createProfileContext } from "../router/index.js";
 import { createRuntime, type Runtime } from "../runtime/index.js";
 import { cloneCoreSnapshot, validateCoreSnapshot } from "../snapshot/index.js";
 import { INTERNAL_TOOL_NAMES } from "../tool-runtime/index.js";
+import { compactContext, ContextPolicyError, inspectContext, type ContextCompactionResult, type ContextStatus } from "../context-policy/index.js";
 import type { ProfileDefinition, RuntimeConfig, SessionEvent, SessionSnapshotV1 } from "../types.js";
 
 export interface SessionConfig extends RuntimeConfig {
@@ -11,6 +12,8 @@ export interface SessionConfig extends RuntimeConfig {
 
 export interface Session {
 	prompt(text: string, onEvent: (event: SessionEvent) => void): Promise<void>;
+	inspectContext(text: string): ContextStatus;
+	compactContext(): Promise<ContextCompactionResult>;
 	abort(): void;
 	setProfile(key: string | null): void;
 	/** revision 由外部持久化层拥有；导出时必须提供其当前乐观锁版本。 */
@@ -85,11 +88,42 @@ export function createSession(config: SessionConfig): Session {
 			createProfileContext(profile, profile ? router?.getProfileState?.(profile.key) : undefined),
 		);
 	};
+	const contextFor = (messages: AgentMessage[]) => ({
+		systemPrompt: agent.state.systemPrompt,
+		messages: convertProfileMessages(messages, router),
+		tools: agent.state.tools,
+	});
+	const inspect = (text: string): ContextStatus => inspectContext(
+		contextFor([...agent.state.messages, { role: "user", content: text, timestamp: Date.now() }]),
+		runtime.contextPolicy,
+		text,
+	);
 
 	return {
 		get busy() { return busy; },
 		get profile() { return state.activeProfile?.key ?? null; },
 		runtime,
+		inspectContext: inspect,
+		async compactContext() {
+			if (busy) throw new Error("对话进行中不能压缩上下文");
+			if (!runtime.contextPolicy.enabled) throw new ContextPolicyError("COMPACTION_NOT_NEEDED", "当前会话未启用上下文压缩策略");
+			busy = true;
+			try {
+				const compacted = await compactContext({
+					messages: agent.state.messages,
+					convertToLlm: (messages) => convertProfileMessages(messages, router),
+					models: config.models,
+					model: config.model,
+					policy: runtime.contextPolicy,
+					thinkingLevel: config.thinkingLevel,
+					contextFor,
+				});
+				agent.state.messages = compacted.messages;
+				return compacted.result;
+			} finally {
+				busy = false;
+			}
+		},
 		abort: () => agent.abort(),
 		setProfile(key) {
 			if (busy) throw new Error("对话进行中不能切换 profile");
@@ -110,6 +144,9 @@ export function createSession(config: SessionConfig): Session {
 		},
 		async prompt(text, onEvent) {
 			if (busy) throw new Error("上一轮对话还在进行");
+			const contextStatus = inspect(text);
+			if (contextStatus.status === "input_too_large") throw new ContextPolicyError("INPUT_TOO_LARGE", `本条输入约 ${contextStatus.inputTokens} tokens，超过单条安全上限 ${contextStatus.maxInputTokens} tokens；请拆分后重试。`);
+			if (contextStatus.status === "requires_compaction") throw new ContextPolicyError("CONTEXT_COMPACTION_REQUIRED", "对话上下文接近模型上限。请先压缩早期记录，或新建会话后继续。");
 			busy = true;
 			emit = onEvent;
 			state.resetUserTurn();

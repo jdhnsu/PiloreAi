@@ -153,6 +153,9 @@ Fluent（微软）风格单页应用，零前端依赖，由 `src/adapters/web/i
 - Profile 是临时模式：模型可调用 `adopt_profile("auto")` 交还自动路由
 - 每条回复右下角显示本次回答的老师徽标（紫色 = 指定/自动路由到的老师，灰色 = PiLore 自动）
 - 右侧「工作区」侧栏实时展示 VFS 文件并可查看内容
+- 长会话接近模型窗口时先征求确认：可压缩为结构化学习检查点后继续，或新建会话并保留当前草稿；单条过长输入会提示拆分，不会向模型发送必然失败的请求
+
+在 `.env` 中设置 `PILORE_MAX_INPUT_TOKENS` 可统一限制单条用户消息的最大 token 数，例如 `PILORE_MAX_INPUT_TOKENS=12000`。显式传入 `contextPolicy.maxInputTokens` 时以代码配置为准。
 
 HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消费）：
 
@@ -163,6 +166,7 @@ HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消�
 | `GET /api/state?id=...` | 当前会话的 Pack / Profile / busy / model |
 | `GET /api/panel?id=...` | Code 文件、English 词汇或学科学习卡片侧栏 |
 | `POST /api/chat` | `{ sessionId, message }` → SSE `SessionEvent` |
+| `POST /api/context/compact` | `{ sessionId }` → 用户确认后压缩早期历史并持久化；`/api/chat` 超限时返回 `409 CONTEXT_COMPACTION_REQUIRED` |
 | `POST /api/profile` | `{ sessionId, profile }` 手动切换 Profile |
 | `POST /api/abort` | 中止指定会话的当前运行 |
 

@@ -10,6 +10,7 @@ import {
 	applyPostgresMigrations,
 	createAes256GcmCryptoProvider,
 	createCodeMentorSession,
+	ContextPolicyError,
 	createEnglishMentorSession,
 	createHistoryMentorSession,
 	createInMemorySessionStore,
@@ -52,6 +53,7 @@ import {
  *   POST   /api/chat              { sessionId, message } → SSE 流（data: SessionEvent JSON），整轮落库
  *   POST   /api/profile           { sessionId, profile: key | null } 设置老师（profile）
  *   POST   /api/abort             { sessionId } 中止当前运行
+ *   POST   /api/context/compact   { sessionId } 经用户确认后压缩早期上下文并持久化
  * 存储：配置 DB_* 且提供 SESSION_ENCRYPTION_KEY（64 位 hex）时走 PostgreSQL 加密持久化，
  * 否则回退进程内存储（重启丢失）。FAUX_DEMO=1 时无需 API key 且固定用内存存储。
  * 会话按 pack 分桶：identity.courseId = pack id，恢复时据此选择 pack 工厂。
@@ -366,6 +368,11 @@ function storeErrorResponse(res: http.ServerResponse, err: unknown): void {
 	else json(res, 500, { error: err instanceof Error ? err.message : String(err) });
 }
 
+function contextErrorResponse(res: http.ServerResponse, err: ContextPolicyError): void {
+	const status = err.code === "INPUT_TOO_LARGE" ? 413 : err.code === "CONTEXT_COMPACTION_REQUIRED" ? 409 : 422;
+	json(res, status, { error: err.message, code: err.code });
+}
+
 /** 历史渲染用：消息内容统一提取为纯文本（user 原文 / assistant 文本块拼接，跳过工具块）。 */
 function textOfContent(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -622,6 +629,57 @@ async function main(): Promise<void> {
 				});
 				return;
 			}
+			if (req.method === "POST" && url.pathname === "/api/context/compact") {
+				const body = await readJsonBody(req);
+				const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+				if (!sessionId) {
+					json(res, 400, { error: "missing sessionId" });
+					return;
+				}
+				let entry: SessionEntry;
+				try {
+					entry = await getEntry(sessionId);
+				} catch (err) {
+					storeErrorResponse(res, err);
+					return;
+				}
+				if (entry.session.busy) {
+					json(res, 409, { error: "会话正在运行，暂时不能压缩上下文" });
+					return;
+				}
+				const [providerId = "", modelId = ""] = entry.session.modelInfo.split("/");
+				let run: StoredRun;
+				try {
+					run = await store.beginRun({
+						sessionId,
+						expectedRevision: entry.revision,
+						providerId,
+						modelId,
+						profileKey: entry.session.profile ?? undefined,
+						audit: { input: "[context_compaction]" },
+					});
+				} catch (err) {
+					storeErrorResponse(res, err);
+					return;
+				}
+				try {
+					const result = await entry.session.compactContext();
+					const updated = await store.completeRun({
+						runId: run.id,
+						sessionId,
+						expectedRevision: entry.revision,
+						snapshot: entry.session.exportSnapshot(entry.revision),
+						audit: { input: "[context_compaction]", output: JSON.stringify(result) },
+					});
+					entry.revision = updated.revision;
+					json(res, 200, { ok: true, ...result, revision: updated.revision });
+				} catch (err) {
+					await store.failRun({ runId: run.id, sessionId, errorCode: err instanceof ContextPolicyError ? err.code : "CONTEXT_COMPACTION_ERROR", audit: { input: "[context_compaction]" } }).catch(() => {});
+					if (err instanceof ContextPolicyError) contextErrorResponse(res, err);
+					else storeErrorResponse(res, err);
+				}
+				return;
+			}
 			if (req.method === "POST" && url.pathname === "/api/chat") {
 				const body = await readJsonBody(req);
 				const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
@@ -643,6 +701,23 @@ async function main(): Promise<void> {
 				}
 				if (entry.session.busy) {
 					json(res, 409, { error: "上一轮对话还在进行，可调用 POST /api/abort" });
+					return;
+				}
+				const contextStatus = entry.session.inspectContext(message);
+				if (contextStatus.status === "input_too_large") {
+					json(res, 413, {
+						error: `本条输入约 ${contextStatus.inputTokens} tokens，超过单条安全上限 ${contextStatus.maxInputTokens} tokens；请拆分后重试。`,
+						code: "INPUT_TOO_LARGE",
+						context: contextStatus,
+					});
+					return;
+				}
+				if (contextStatus.status === "requires_compaction") {
+					json(res, 409, {
+						error: "对话上下文接近模型上限。请压缩早期记录，或新建会话后继续。",
+						code: "CONTEXT_COMPACTION_REQUIRED",
+						context: contextStatus,
+					});
 					return;
 				}
 				const [providerId = "", modelId = ""] = entry.session.modelInfo.split("/");

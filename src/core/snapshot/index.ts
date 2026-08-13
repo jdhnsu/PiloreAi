@@ -1,4 +1,5 @@
 import type { JsonValue, SessionSnapshot, SessionSnapshotV1, SnapshotExtension } from "../types.js";
+import { isContextSummary } from "../context-policy/index.js";
 
 export const CORE_SESSION_SNAPSHOT_VERSION = 1 as const;
 
@@ -54,12 +55,19 @@ function validateProfileContext(value: Record<string, unknown>, path: string): v
 	if (value.state !== undefined) cloneJson(value.state, `${path}.state`);
 }
 
+function validateContextSummary(value: Record<string, unknown>, path: string): void {
+	assertString(value.summary, `${path}.summary`);
+	if (!Number.isFinite(value.tokensBefore) || (value.tokensBefore as number) < 0) throw new Error(`${path}.tokensBefore 必须是非负有限数字`);
+	assertTimestamp(value.timestamp, `${path}.timestamp`);
+}
+
 /** Validate the durable subset of @earendil-works/pi-ai Message plus PiLore context messages. */
 export function validateSnapshotMessages(messages: unknown): unknown[] {
 	if (!Array.isArray(messages)) throw new Error("snapshot.messages 必须是数组");
 	for (const [index, raw] of messages.entries()) {
 		const path = `snapshot.messages[${index}]`;
 		if (!isRecord(raw) || typeof raw.role !== "string") throw new Error(`${path} 必须是带 role 的对象`);
+		if (isContextSummary(raw as { role: string })) { validateContextSummary(raw, path); continue; }
 		switch (raw.role) {
 			case "user":
 				assertTimestamp(raw.timestamp, `${path}.timestamp`);

@@ -2,7 +2,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model, MutableModels } from "@earendil-works/pi-ai";
 import { createRuntime, type Runtime } from "../../core/runtime/index.js";
 import { createSession, type Session } from "../../core/session/index.js";
-import type { DomainPack, ProfileDefinition, SessionSnapshot } from "../../core/types.js";
+import type { ContextPolicy, DomainPack, ProfileDefinition, SessionSnapshot } from "../../core/types.js";
 import {
 	createModelCollection,
 	DEFAULT_MODEL_IDS,
@@ -35,6 +35,7 @@ export interface EnglishMentorConfig {
 	evaluator?: EnglishEvaluator;
 	snapshot?: SessionSnapshot;
 	maxTurns?: number;
+	contextPolicy?: ContextPolicy;
 	fetch?: typeof globalThis.fetch;
 	llmTelemetry?: LlmTelemetrySink;
 }

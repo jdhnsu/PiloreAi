@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Type, type Message, type UserMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
 import type { CoreState } from "../state/index.js";
+import { isContextSummary } from "../context-policy/index.js";
 import type { JsonValue, ProfileDefinition, RouterConfig } from "../types.js";
 
 export interface ProfileContextMessage {
@@ -33,6 +34,10 @@ export function convertProfileMessages(messages: AgentMessage[], config?: Router
 	const out: Message[] = [];
 	for (let index = 0; index < messages.length; index += 1) {
 		const message = messages[index];
+		if (isContextSummary(message)) {
+			out.push({ role: "user", timestamp: message.timestamp, content: `<pilore_context_checkpoint>\n以下为较早会话的压缩检查点；以此保持教学连续性。\n\n${message.summary}\n</pilore_context_checkpoint>` });
+			continue;
+		}
 		if (isProfileContext(message)) {
 			const user = messages[index + 1];
 			if (user?.role === "user") {
