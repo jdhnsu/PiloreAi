@@ -14,6 +14,14 @@ LLM → Profile 路由 → 动态学科工具 → 基于学习状态与真实工
 
 PiLore 由领域无关的 Core，以及 Code、English、大学数学、大学物理和大学历史 Pack 组成。Core 独立提供 Agent Loop、Session、Profile Router、动态工具运行时和快照；领域设定与工具由 Pack 注入。
 
+## 文档
+
+完整文档从 [docs/README.md](docs/README.md) 开始。建议按角色阅读：
+
+- 使用或嵌入： [架构总览](docs/architecture.md)、[嵌入与 Session API](docs/embedding.md)、[Adapters 与 HTTP API](docs/adapters.md)
+- 理解通用运行机制： [Core](docs/core.md)、[持久化与 PostgreSQL](docs/persistence.md)、[模型与遥测](docs/models-and-telemetry.md)
+- 开发或扩展领域： [Packs](docs/packs.md)、[开发新的 Pack](docs/pack-development.md)、[大学学科 Packs](docs/academic-packs.md)
+
 **亮点**
 
 - 内存 VFS + 远程沙箱：学习者代码绝不落地、绝不在本地执行

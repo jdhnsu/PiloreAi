@@ -1,5 +1,7 @@
 # 大学学科 Packs
 
+> 文档入口见 [PiLore 文档](README.md)。本页是 [Packs](packs.md) 的大学数学、物理和历史专题补充。
+
 PiLore 现提供三个无需外部后端即可运行的大学学科 Pack：
 
 | Pack | 工厂 | 默认 Profiles | Snapshot namespace |
