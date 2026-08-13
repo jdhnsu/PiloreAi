@@ -395,8 +395,33 @@ function argsSummary(args) {
 	return text.length > 60 ? `${text.slice(0, 57)}...` : text;
 }
 
+/** 检查消息容器是否已滚动到底部 */
+function isAtBottom() {
+	return messagesEl.scrollHeight - messagesEl.clientHeight <= messagesEl.scrollTop + 10;
+}
+
+/** 标记：用户是否已手动上移阅读（防止自动滚回干扰） */
+let userScrolledAway = false;
+
+/** 监听用户手动滚动行为 */
+messagesEl.addEventListener("scroll", () => {
+	// 记录用户是否把滚动条拉上去阅读旧内容
+	// 只要距离底部超过 10px，就视为用户主动上移
+	const atBottom = isAtBottom();
+	userScrolledAway = !atBottom;
+}, { passive: true });
+
+/* requestAnimationFrame 节流：把多次事件触发的滚动合并到一帧，避免流式输出时反复强制滚动导致卡顿 */
+let scrollFrame = null;
 function scrollToBottom() {
-	messagesEl.scrollTop = messagesEl.scrollHeight;
+	if (scrollFrame !== null) return;
+	scrollFrame = requestAnimationFrame(() => {
+		scrollFrame = null;
+		// 用户主动上移阅读时，不强制滚回底部（保留其阅读位置）
+		if (!userScrolledAway) {
+			messagesEl.scrollTop = messagesEl.scrollHeight;
+		}
+	});
 }
 
 /* 一轮对话的 assistant 容器：文本段与工具卡片按到达顺序交错 */
