@@ -1712,6 +1712,64 @@ body.ws-resizing {
 	}
 }
 
+/* ===== 暗色主题 ===== */
+:root[data-theme="dark"] {
+	color-scheme: dark;
+	--accent: #62b0ff;
+	--accent-hover: #8bc7ff;
+	--accent-light: #173451;
+	--bg: #101318;
+	--card: #191d24;
+	--text: #e7ebf2;
+	--text-secondary: #9aa5b5;
+	--border: #303844;
+	--danger: #ff8178;
+	--persona: #c4a7ff;
+	--persona-bg: #2b2340;
+	--persona-border: #57497a;
+	--surface-muted: #202630;
+	--shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 24px rgba(0, 0, 0, .18);
+}
+
+:root[data-theme="dark"] .topbar { border-bottom-color: var(--border); }
+:root[data-theme="dark"] .logo { box-shadow: 0 0 0 1px var(--border), 0 2px 8px rgba(0,0,0,.35); }
+:root[data-theme="dark"] .subtitle { color: var(--text-secondary); }
+:root[data-theme="dark"] .pack-select,
+:root[data-theme="dark"] .pack-option.active,
+:root[data-theme="dark"] .icon-btn,
+:root[data-theme="dark"] .chip,
+:root[data-theme="dark"] .copy-btn,
+:root[data-theme="dark"] .ss-new { background: var(--surface-muted); color: var(--text); }
+:root[data-theme="dark"] .pack-options { box-shadow: 0 14px 32px rgba(0,0,0,.45); }
+:root[data-theme="dark"] .pack-option-icon { background: #203c59; }
+:root[data-theme="dark"] .suggestion:hover { background: #214568; }
+:root[data-theme="dark"] .msg-text code,
+:root[data-theme="dark"] .composer-hint kbd { background: #252b35; }
+:root[data-theme="dark"] .msg-text pre,
+:root[data-theme="dark"] .msg-text .code-block pre,
+:root[data-theme="dark"] .modal-body,
+:root[data-theme="dark"] .file-view-body { background: #11151b; }
+:root[data-theme="dark"] .msg-text .code-head,
+:root[data-theme="dark"] .modal-head { background: #242a34; }
+:root[data-theme="dark"] .msg-text blockquote { background: #1d2b3a; }
+:root[data-theme="dark"] .msg-text th { background: #252b35; }
+:root[data-theme="dark"] .tool { background: var(--surface-muted); }
+:root[data-theme="dark"] .tool-output { background: #151920; }
+:root[data-theme="dark"] .session-item:hover { background: #242b35; }
+:root[data-theme="dark"] .file-item.expanded,
+:root[data-theme="dark"] .vocab-item.expanded { background: #202630; }
+:root[data-theme="dark"] .vocab-pos,
+:root[data-theme="dark"] .storage-badge,
+:root[data-theme="dark"] .system-note { background: #282e38; }
+:root[data-theme="dark"] .btn-danger { background: transparent; }
+:root[data-theme="dark"] .btn-danger:hover { background: #42252a; }
+:root[data-theme="dark"] .model-info { background: #17251b; border-color: #315239; color: #a9d3ae; }
+:root[data-theme="dark"] .model-info.error { background: #3b2022; border-color: #6d3437; }
+:root[data-theme="dark"] .demo-badge { background: #3a2e18; border-color: #6b5122; color: #f0c86d; }
+:root[data-theme="dark"] .persona-badge { background: #2b2340; border-color: var(--persona-border); }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #4a5565; }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #647286; }
+
 /* ===== 视图切换与轨迹视图 ===== */
 .chat-viewbar {
 	flex-shrink: 0;

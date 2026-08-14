@@ -27,8 +27,24 @@ const wsTitle = $("#ws-title");
 const trajectoryEl = $("#trajectory");
 const chatTab = $("#tab-chat");
 const trajTab = $("#tab-trajectory");
+const themeToggle = $("#theme-toggle");
 
 let busy = false;
+
+function applyTheme(theme) {
+	document.documentElement.dataset.theme = theme;
+	const dark = theme === "dark";
+	themeToggle.textContent = dark ? "☀" : "☾";
+	themeToggle.title = dark ? "切换浅色主题" : "切换暗色主题";
+	themeToggle.setAttribute("aria-label", themeToggle.title);
+}
+
+applyTheme(localStorage.getItem("pilore-theme") || "light");
+themeToggle.onclick = () => {
+	const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+	localStorage.setItem("pilore-theme", next);
+	applyTheme(next);
+};
 let packs = []; // 可用学习包：{ id, name, tagline, suggestions, profiles }
 let currentPack = "code"; // 当前学习包 id
 let currentProfileKey = null; // 当前 profile key；null = 自动路由
