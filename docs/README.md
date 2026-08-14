@@ -14,6 +14,7 @@ PiLore 是可嵌入的多领域教学 Agent：领域无关的 Core 处理 Agent 
 - [开发新的 Pack](pack-development.md)：从设计 Profile 到公开导出、测试与 Adapter 接入的完整步骤。
 - [持久化与 PostgreSQL](persistence.md)：SessionStore 契约、并发语义、加密快照、表结构和迁移。
 - [模型与遥测](models-and-telemetry.md)：Provider 注册、自定义模型与脱敏观测事件。
+- [轨迹（Trajectory）](trajectory.md)：按轮次组织的运行轨迹——记录器、加密持久化、HTTP API 与 Web 轨迹视图。
 - [Adapters 与 HTTP API](adapters.md)：CLI、Web、SSE 和会话存储选择。
 - [大学学科 Packs](academic-packs.md)：数学、物理、历史 Pack 的教学设计、卡片、练习和可选评估器。
 - [测试说明](../tests/TEST-SPEC.md)：离线、PostgreSQL 与在线 Agent 测试。

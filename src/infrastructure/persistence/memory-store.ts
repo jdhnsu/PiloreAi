@@ -10,12 +10,14 @@ import {
 	type CreateStoredSession,
 	type FailRunInput,
 	type RunAuditPayload,
+	type SaveTrajectoryInput,
 	type SessionIdentity,
 	type SessionStore,
 	type SessionSummary,
 	type StoredRun,
 	type StoredSession,
 } from "./persistence.js";
+import type { TrajectoryRun } from "../../core/trajectory/types.js";
 import { cloneCoreSnapshot } from "../../core/snapshot/index.js";
 
 interface MemoryRun extends StoredRun {
@@ -36,6 +38,7 @@ function assertSupportedVersion(snapshot: { version: number }): void {
 export class InMemorySessionStore implements SessionStore {
 	private readonly sessions = new Map<string, StoredSession>();
 	private readonly runs = new Map<string, MemoryRun>();
+	private readonly trajectories = new Map<string, TrajectoryRun>();
 
 	async create(input: CreateStoredSession): Promise<StoredSession> {
 		const id = input.id ?? randomUUID();
@@ -137,10 +140,27 @@ export class InMemorySessionStore implements SessionStore {
 		stored.updatedAt = new Date();
 	}
 
+	async saveTrajectory(input: SaveTrajectoryInput): Promise<void> {
+		if (!this.sessions.has(input.sessionId)) throw new SessionNotFoundError(input.sessionId);
+		if (!this.runs.has(input.runId)) throw new SessionStoreError(`run ${input.runId} 不存在`, "RUN_NOT_FOUND");
+		this.trajectories.set(input.runId, structuredClone(input.run));
+	}
+
+	async loadTrajectory(sessionId: string): Promise<TrajectoryRun[]> {
+		if (!this.sessions.has(sessionId)) throw new SessionNotFoundError(sessionId);
+		return [...this.trajectories.values()]
+			.filter((run) => run.sessionId === sessionId)
+			.sort((left, right) => left.startedAt - right.startedAt)
+			.map((run) => structuredClone(run));
+	}
+
 	async delete(sessionId: string): Promise<void> {
 		this.sessions.delete(sessionId);
 		for (const [runId, run] of this.runs) {
-			if (run.sessionId === sessionId) this.runs.delete(runId);
+			if (run.sessionId === sessionId) {
+				this.runs.delete(runId);
+				this.trajectories.delete(runId);
+			}
 		}
 	}
 

@@ -1,6 +1,14 @@
 /** PiLore public API. All consumers import from this module. */
 export { createRuntime, type Runtime } from "./core/runtime/index.js";
 export { createSession, type Session, type SessionConfig } from "./core/session/index.js";
+export { createTrajectoryRecorder, type TrajectoryRecorder } from "./core/trajectory/recorder.js";
+export type {
+	TrajectoryRun,
+	TrajectoryRunDraft,
+	TrajectoryTurn,
+	TrajectoryStep,
+	TrajectoryToolStep,
+} from "./core/trajectory/types.js";
 export { CoreState } from "./core/state/index.js";
 export {
 	ContextPolicyError,
@@ -92,10 +100,12 @@ export {
 	type BeginRunInput,
 	type CompleteRunInput,
 	type FailRunInput,
+	type SaveTrajectoryInput,
 } from "./infrastructure/persistence/persistence.js";
 export { InMemorySessionStore, createInMemorySessionStore } from "./infrastructure/persistence/memory-store.js";
 export {
 	POSTGRES_MIGRATION_001,
+	POSTGRES_MIGRATION_002,
 	applyPostgresMigrations,
 	PostgresSessionStore,
 	createPostgresSessionStore,

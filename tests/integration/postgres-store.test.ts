@@ -6,12 +6,15 @@ import { Pool } from "pg";
 import {
 	CORE_SESSION_SNAPSHOT_VERSION,
 	SessionBusyError,
+	SessionNotFoundError,
 	SessionRevisionConflictError,
+	SessionStoreError,
 	applyPostgresMigrations,
 	createAes256GcmCryptoProvider,
 	createPostgresSessionStore,
 	type SessionSnapshotV1,
 	type SessionStore,
+	type TrajectoryRun,
 } from "../../src/index.js";
 
 const databaseConfig = process.env.PILORE_TEST_DATABASE_URL
@@ -145,4 +148,85 @@ test("PostgreSQL list：按身份过滤、updatedAt 降序、标题派生两条�
 	assert.equal(list[0].title, "PLAINTEXT_STUDENT_MESSAGE");
 	assert.equal(list[1].id, b.id);
 	assert.deepEqual(await store.list({ tenantId: "t1", userId: "nobody" }), []);
+});
+
+function trajectoryFixture(runId: string, sessionId: string, input: string, startedAt: number): TrajectoryRun {
+	return {
+		runId,
+		sessionId,
+		input,
+		outputText: "PLAINTEXT_TRAJECTORY_SENTINEL",
+		startedAt,
+		completedAt: startedAt + 100,
+		turns: [
+			{
+				turn: 1,
+				profileKey: null,
+				profileName: null,
+				provider: "faux",
+				model: "faux-1",
+				startedAt,
+				completedAt: startedAt + 100,
+				durationMs: 100,
+				usage: { input: 5, output: 6, cacheRead: 0, cacheWrite: 0, totalTokens: 11, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				steps: [{ kind: "text", text: "PLAINTEXT_TRAJECTORY_SENTINEL", time: startedAt + 50 }],
+			},
+		],
+	};
+}
+
+test("PostgreSQL trajectory 保存/加密回读/排序/级联删除", { skip: !databaseConfig }, async () => {
+	const created = await store.create({ identity: { tenantId: "t1", userId: "u4" }, snapshot: snapshot() });
+	const first = await store.beginRun({ sessionId: created.id, expectedRevision: 0, providerId: "faux", modelId: "faux-1", audit: { input: "第一次" } });
+	await store.completeRun({
+		runId: first.id,
+		sessionId: created.id,
+		expectedRevision: 0,
+		snapshot: snapshot(),
+		audit: { input: "第一次", output: "done" },
+		metrics: { durationMs: 1 },
+	});
+	const second = await store.beginRun({ sessionId: created.id, expectedRevision: 1, providerId: "faux", modelId: "faux-1", audit: { input: "第二次" } });
+	await store.completeRun({
+		runId: second.id,
+		sessionId: created.id,
+		expectedRevision: 1,
+		snapshot: snapshot(),
+		audit: { input: "第二次", output: "done" },
+		metrics: { durationMs: 1 },
+	});
+
+	await store.saveTrajectory({ runId: first.id, sessionId: created.id, run: trajectoryFixture(first.id, created.id, "第一次", 1000) });
+	await store.saveTrajectory({ runId: second.id, sessionId: created.id, run: trajectoryFixture(second.id, created.id, "第二次", 2000) });
+
+	const loaded = await store.loadTrajectory(created.id);
+	assert.equal(loaded.length, 2);
+	assert.equal(loaded[0]?.runId, first.id);
+	assert.equal(loaded[1]?.runId, second.id);
+	assert.equal(loaded[0]?.outputText, "PLAINTEXT_TRAJECTORY_SENTINEL");
+	assert.equal(loaded[0]?.turns[0]?.steps[0]?.kind, "text");
+
+	const raw = await pool.query<{ body: string }>(
+		`SELECT encode(payload_ciphertext, 'escape') AS body FROM "${schema}".trajectory_runs WHERE run_id = $1`,
+		[first.id],
+	);
+	assert.doesNotMatch(raw.rows[0].body, /PLAINTEXT_TRAJECTORY_SENTINEL/);
+
+	await store.delete(created.id);
+	await assert.rejects(store.loadTrajectory(created.id), SessionNotFoundError);
+});
+
+test("PostgreSQL trajectory 校验会话与 run 存在", { skip: !databaseConfig }, async () => {
+	const created = await store.create({ identity: { tenantId: "t1", userId: "u5" }, snapshot: snapshot() });
+	const run = await store.beginRun({ sessionId: created.id, expectedRevision: 0, providerId: "faux", modelId: "faux-1", audit: { input: "x" } });
+	const missingRun = "00000000-0000-0000-0000-000000000000";
+	await assert.rejects(
+		store.saveTrajectory({ runId: missingRun, sessionId: created.id, run: trajectoryFixture(missingRun, created.id, "x", 1) }),
+		SessionStoreError,
+	);
+	await assert.rejects(
+		store.saveTrajectory({ runId: run.id, sessionId: missingRun, run: trajectoryFixture(run.id, missingRun, "x", 1) }),
+		SessionNotFoundError,
+	);
+	await assert.rejects(store.loadTrajectory(missingRun), SessionNotFoundError);
 });

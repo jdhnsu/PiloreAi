@@ -12,12 +12,14 @@ import {
 	type CreateStoredSession,
 	type FailRunInput,
 	type RunAuditPayload,
+	type SaveTrajectoryInput,
 	type SessionIdentity,
 	type SessionStore,
 	type SessionSummary,
 	type StoredRun,
 	type StoredSession,
 } from "./persistence.js";
+import type { TrajectoryRun } from "../../core/trajectory/types.js";
 import type { StoredSnapshot } from "./persistence.js";
 
 const encoder = new TextEncoder();
@@ -72,6 +74,34 @@ CREATE INDEX IF NOT EXISTS runs_session_started_idx
   ON pilore.runs (session_id, started_at DESC);
 `;
 
+export const POSTGRES_MIGRATION_002 = `
+CREATE TABLE IF NOT EXISTS pilore.trajectory_runs (
+  run_id uuid PRIMARY KEY REFERENCES pilore.runs(id) ON DELETE CASCADE,
+  session_id uuid NOT NULL,
+  context_revision bigint NOT NULL,
+  payload_algorithm text NOT NULL,
+  payload_ciphertext bytea NOT NULL,
+  payload_nonce bytea NOT NULL,
+  payload_key_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS trajectory_runs_session_idx
+  ON pilore.trajectory_runs (session_id, created_at DESC);
+`;
+
+/** 迁移列表按版本升序追加；已应用的版本记录在 schema_migrations。 */
+const MIGRATIONS: Array<{ version: number; sql: string }> = [
+	{ version: 1, sql: POSTGRES_MIGRATION_001 },
+	{ version: 2, sql: POSTGRES_MIGRATION_002 },
+];
+
+function schemaSql(sql: string, schema: string): string {
+	return sql
+		.replace("CREATE SCHEMA IF NOT EXISTS pilore", `CREATE SCHEMA IF NOT EXISTS ${schema}`)
+		.replaceAll("pilore.", `${schema}.`);
+}
+
 function resolveSchema(schema = "pilore"): string {
 	if (!/^[a-z_][a-z0-9_]*$/i.test(schema)) throw new SessionStoreError(`非法 PostgreSQL schema: ${schema}`, "INVALID_SCHEMA");
 	return `"${schema}"`;
@@ -79,10 +109,6 @@ function resolveSchema(schema = "pilore"): string {
 
 export async function applyPostgresMigrations(pool: Pool, options: { schema?: string } = {}): Promise<void> {
 	const schema = resolveSchema(options.schema);
-	const migration = POSTGRES_MIGRATION_001.replace("CREATE SCHEMA IF NOT EXISTS pilore", `CREATE SCHEMA IF NOT EXISTS ${schema}`).replaceAll(
-		"pilore.",
-		`${schema}.`,
-	);
 	const client = await pool.connect();
 	try {
 		await client.query("BEGIN");
@@ -90,10 +116,15 @@ export async function applyPostgresMigrations(pool: Pool, options: { schema?: st
 		await client.query(
 			`CREATE TABLE IF NOT EXISTS ${schema}.schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`,
 		);
-		const applied = await client.query<{ version: number }>(`SELECT version FROM ${schema}.schema_migrations WHERE version = 1`);
-		if (applied.rowCount === 0) {
-			await client.query(migration);
-			await client.query(`INSERT INTO ${schema}.schema_migrations(version) VALUES (1)`);
+		for (const migration of MIGRATIONS) {
+			const applied = await client.query<{ version: number }>(
+				`SELECT version FROM ${schema}.schema_migrations WHERE version = $1`,
+				[migration.version],
+			);
+			if (applied.rowCount === 0) {
+				await client.query(schemaSql(migration.sql, schema));
+				await client.query(`INSERT INTO ${schema}.schema_migrations(version) VALUES ($1)`, [migration.version]);
+			}
 		}
 		await client.query("COMMIT");
 	} catch (error) {
@@ -130,6 +161,15 @@ interface RunRow {
 	persona_key: string | null;
 	started_at: Date;
 	completed_at: Date | null;
+}
+
+interface TrajectoryRow {
+	run_id: string;
+	context_revision: string;
+	payload_algorithm: string;
+	payload_ciphertext: Buffer;
+	payload_nonce: Buffer;
+	payload_key_id: string;
 }
 
 function context(
@@ -384,6 +424,66 @@ export class PostgresSessionStore implements SessionStore {
 				input.runId,
 			]);
 		});
+	}
+
+	async saveTrajectory(input: SaveTrajectoryInput): Promise<void> {
+		await transaction(this.options.pool, async (client) => {
+			const sessionResult = await client.query<Pick<SessionRow, "tenant_id" | "revision">>(
+				`SELECT tenant_id, revision FROM ${this.schema}.sessions WHERE id = $1`,
+				[input.sessionId],
+			);
+			const session = sessionResult.rows[0];
+			if (!session) throw new SessionNotFoundError(input.sessionId);
+			const runResult = await client.query(
+				`SELECT id FROM ${this.schema}.runs WHERE id = $1 AND session_id = $2`,
+				[input.runId, input.sessionId],
+			);
+			if (runResult.rowCount !== 1) throw new SessionStoreError(`run ${input.runId} 不存在`, "RUN_NOT_FOUND");
+			const revision = Number(session.revision);
+			const payload = await this.options.crypto.encrypt(
+				encode(input.run),
+				context(session.tenant_id, input.sessionId, revision, "run"),
+			);
+			const [algorithm, ciphertext, nonce, keyId] = encryptedColumns(payload);
+			await client.query(
+				`INSERT INTO ${this.schema}.trajectory_runs
+				 (run_id, session_id, context_revision, payload_algorithm, payload_ciphertext, payload_nonce, payload_key_id)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+				[input.runId, input.sessionId, String(revision), algorithm, ciphertext, nonce, keyId],
+			);
+		});
+	}
+
+	async loadTrajectory(sessionId: string): Promise<TrajectoryRun[]> {
+		const sessionResult = await this.options.pool.query<Pick<SessionRow, "tenant_id">>(
+			`SELECT tenant_id FROM ${this.schema}.sessions WHERE id = $1`,
+			[sessionId],
+		);
+		const session = sessionResult.rows[0];
+		if (!session) throw new SessionNotFoundError(sessionId);
+		const rows = await this.options.pool.query<TrajectoryRow>(
+			`SELECT run_id, context_revision, payload_algorithm, payload_ciphertext, payload_nonce, payload_key_id
+			 FROM ${this.schema}.trajectory_runs WHERE session_id = $1`,
+			[sessionId],
+		);
+		const runs: TrajectoryRun[] = [];
+		for (const row of rows.rows) {
+			const plaintext = await this.options.crypto.decrypt(
+				{
+					algorithm: row.payload_algorithm as EncryptedPayload["algorithm"],
+					keyId: row.payload_key_id,
+					nonce: row.payload_nonce,
+					ciphertext: row.payload_ciphertext,
+				},
+				context(session.tenant_id, sessionId, Number(row.context_revision), "run"),
+			);
+			try {
+				runs.push(JSON.parse(decoder.decode(plaintext)) as TrajectoryRun);
+			} catch (cause) {
+				throw new SessionStoreError(`轨迹记录 ${row.run_id} 的 JSON 已损坏`, "INVALID_TRAJECTORY_JSON", { cause });
+			}
+		}
+		return runs.sort((left, right) => left.startedAt - right.startedAt);
 	}
 
 	async delete(sessionId: string): Promise<void> {

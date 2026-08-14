@@ -59,6 +59,7 @@ npm run web:demo   # fauxProvider + 进程内 mock；无需 API key
 | `GET /api/sessions/history?id=<id>` | — | 用于 UI 的 user / assistant 纯文本历史 |
 | `GET /api/state?id=<id>` | — | busy、Pack、Profile、模型、demo、存储与 Profile 列表 |
 | `GET /api/panel?id=<id>` | — | Pack 侧栏投影 |
+| `GET /api/trajectory?id=<id>` | — | 按轮次组织的运行轨迹（`{ sessionId, pack, runs }`，详见 [轨迹](trajectory.md)）；会话不存在 404 |
 
 侧栏投影：Code 返回 `{ kind: "files", files }`；English 返回 `{ kind: "vocabulary", words }`；大学学科 Pack 返回 `{ kind: "study_cards", cards }`。
 

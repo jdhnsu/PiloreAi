@@ -4,6 +4,8 @@ import { createRuntime, type Runtime } from "../runtime/index.js";
 import { cloneCoreSnapshot, validateCoreSnapshot } from "../snapshot/index.js";
 import { INTERNAL_TOOL_NAMES } from "../tool-runtime/index.js";
 import { compactContext, ContextPolicyError, inspectContext, type ContextCompactionResult, type ContextStatus } from "../context-policy/index.js";
+import { createTrajectoryRecorder, type TrajectoryRecorder } from "../trajectory/recorder.js";
+import type { TrajectoryRunDraft } from "../trajectory/types.js";
 import type { ProfileDefinition, RuntimeConfig, SessionEvent, SessionSnapshotV1 } from "../types.js";
 
 export interface SessionConfig extends RuntimeConfig {
@@ -21,6 +23,8 @@ export interface Session {
 	readonly busy: boolean;
 	readonly profile: string | null;
 	readonly runtime: Runtime;
+	/** 最近一次 `prompt()` 的轨迹记录；尚未运行过时为 null。 */
+	readonly lastRun: TrajectoryRunDraft | null;
 }
 
 function toolResultText(result: { content?: Array<{ type: string; text?: string }> } | undefined): string {
@@ -34,6 +38,7 @@ function toolResultText(result: { content?: Array<{ type: string; text?: string 
 export function createSession(config: SessionConfig): Session {
 	const runtime = createRuntime(config);
 	const { agent, state } = runtime;
+	const recorder: TrajectoryRecorder = createTrajectoryRecorder({ agent, state });
 	const router = config.domain?.router;
 	const profiles = router?.profiles ?? [];
 	const manifest = config.domain?.toolManifest;
@@ -63,6 +68,7 @@ export function createSession(config: SessionConfig): Session {
 
 	let busy = false;
 	let emit: ((event: SessionEvent) => void) | undefined;
+	let lastRunDraft: TrajectoryRunDraft | null = null;
 
 	state.onProfileChange((profile, source) => {
 		emit?.({ type: "profile", profile: profile?.key ?? null, name: profile?.name ?? null, source });
@@ -102,6 +108,7 @@ export function createSession(config: SessionConfig): Session {
 	return {
 		get busy() { return busy; },
 		get profile() { return state.activeProfile?.key ?? null; },
+		get lastRun() { return lastRunDraft; },
 		runtime,
 		inspectContext: inspect,
 		async compactContext() {
@@ -150,7 +157,9 @@ export function createSession(config: SessionConfig): Session {
 			busy = true;
 			emit = onEvent;
 			state.resetUserTurn();
+			recorder.begin(text);
 			let message = text;
+			let runError: string | undefined;
 			try {
 				const mention = router?.parseMention?.(text);
 				if (mention) {
@@ -159,17 +168,18 @@ export function createSession(config: SessionConfig): Session {
 				}
 				onEvent({ type: "start" });
 				await agent.prompt(message);
-				const errorMessage = agent.state.errorMessage;
-				if (errorMessage) onEvent({ type: "error", message: errorMessage });
-				onEvent({ type: "done", ...(errorMessage ? { errorMessage } : {}) });
+				runError = agent.state.errorMessage;
+				if (runError) onEvent({ type: "error", message: runError });
+				onEvent({ type: "done", ...(runError ? { errorMessage: runError } : {}) });
 			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
-				onEvent({ type: "error", message: errorMessage });
-				onEvent({ type: "done", errorMessage });
+				runError = error instanceof Error ? error.message : String(error);
+				onEvent({ type: "error", message: runError });
+				onEvent({ type: "done", errorMessage: runError });
 				throw error;
 			} finally {
 				busy = false;
 				emit = undefined;
+				lastRunDraft = recorder.finish(runError);
 			}
 		},
 	};

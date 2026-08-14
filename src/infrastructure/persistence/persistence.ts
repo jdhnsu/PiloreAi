@@ -1,4 +1,5 @@
 import type { SessionSnapshot } from "../../core/types.js";
+import type { TrajectoryRun } from "../../core/trajectory/types.js";
 export type StoredSnapshot = SessionSnapshot;
 
 export interface SessionIdentity {
@@ -88,6 +89,13 @@ export interface FailRunInput {
 	metrics?: RunMetrics;
 }
 
+/** One trajectory record persisted beside its owning run. */
+export interface SaveTrajectoryInput {
+	runId: string;
+	sessionId: string;
+	run: TrajectoryRun;
+}
+
 export interface SessionStore {
 	create(input: CreateStoredSession): Promise<StoredSession>;
 	load(sessionId: string): Promise<StoredSession | undefined>;
@@ -96,6 +104,10 @@ export interface SessionStore {
 	beginRun(input: BeginRunInput): Promise<StoredRun>;
 	completeRun(input: CompleteRunInput): Promise<StoredSession>;
 	failRun(input: FailRunInput): Promise<void>;
+	/** 保存一次运行的结构化轨迹；对应 run 必须已存在。 */
+	saveTrajectory(input: SaveTrajectoryInput): Promise<void>;
+	/** 读取某会话的轨迹记录，按运行开始时间升序。 */
+	loadTrajectory(sessionId: string): Promise<TrajectoryRun[]>;
 	delete(sessionId: string): Promise<void>;
 }
 

@@ -30,6 +30,7 @@ import {
 	type EnglishMentorSession,
 	type ExecClient,
 	type ProfileDefinition,
+	type RunMetrics,
 	type Session,
 	type SessionEvent,
 	type SessionIdentity,
@@ -37,6 +38,7 @@ import {
 	type SessionStore,
 	type StoredRun,
 	type StudyCard,
+	type TrajectoryRunDraft,
 	type WordEntry,
 } from "../../index.js";
 
@@ -50,6 +52,7 @@ import {
  *   GET    /api/sessions/history?id=  会话历史消息（渲染用）
  *   GET    /api/state?id=         { busy, pack, profile, model, demo, storage, profiles }
  *   GET    /api/panel?id=         { kind: files|vocabulary|study_cards }（工作区侧栏）
+ *   GET    /api/trajectory?id=    { sessionId, pack, runs }（按轮次组织的运行轨迹，只读）
  *   POST   /api/chat              { sessionId, message } → SSE 流（data: SessionEvent JSON），整轮落库
  *   POST   /api/profile           { sessionId, profile: key | null } 设置老师（profile）
  *   POST   /api/abort             { sessionId } 中止当前运行
@@ -81,6 +84,32 @@ async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, u
 		if (body.length > 1_000_000) throw new Error("请求体过大");
 	}
 	return JSON.parse(body || "{}") as Record<string, unknown>;
+}
+
+/** 从轨迹最后一轮的 usage 折算 run 指标；无轨迹时只有耗时。 */
+function runMetrics(trajectory: TrajectoryRunDraft | null, startedAt: Date): RunMetrics {
+	const usage = trajectory?.turns.at(-1)?.usage;
+	if (usage === undefined) return { durationMs: Date.now() - startedAt.getTime() };
+	return {
+		durationMs: Date.now() - startedAt.getTime(),
+		inputTokens: usage.input,
+		outputTokens: usage.output,
+	};
+}
+
+/** 轨迹落库失败只告警，不影响对话响应。 */
+async function persistTrajectory(
+	store: SessionStore,
+	runId: string,
+	sessionId: string,
+	draft: TrajectoryRunDraft | null,
+): Promise<void> {
+	if (draft === null) return;
+	try {
+		await store.saveTrajectory({ runId, sessionId, run: { ...draft, runId, sessionId } });
+	} catch (err) {
+		console.warn("[web] 轨迹保存失败:", err instanceof Error ? err.message : err);
+	}
 }
 
 /* ---------- Pack 注册表：每包自带 profiles / 会话工厂 / 工作区侧栏 ---------- */
@@ -591,6 +620,22 @@ async function main(): Promise<void> {
 				json(res, 200, { pack: entry.pack.id, ...entry.pack.panel(entry.session) });
 				return;
 			}
+			if (req.method === "GET" && url.pathname === "/api/trajectory") {
+				if (!sessionIdParam) {
+					json(res, 400, { error: "missing sessionId" });
+					return;
+				}
+				let entry: SessionEntry;
+				try {
+					entry = await getEntry(sessionIdParam);
+				} catch (err) {
+					storeErrorResponse(res, err);
+					return;
+				}
+				const runs = await store.loadTrajectory(sessionIdParam);
+				json(res, 200, { sessionId: sessionIdParam, pack: entry.pack.id, runs });
+				return;
+			}
 			if (req.method === "POST" && url.pathname === "/api/abort") {
 				const body = await readJsonBody(req);
 				const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
@@ -664,14 +709,23 @@ async function main(): Promise<void> {
 				}
 				try {
 					const result = await entry.session.compactContext();
+					const metrics = runMetrics(null, run.startedAt);
 					const updated = await store.completeRun({
 						runId: run.id,
 						sessionId,
 						expectedRevision: entry.revision,
 						snapshot: entry.session.exportSnapshot(entry.revision),
 						audit: { input: "[context_compaction]", output: JSON.stringify(result) },
+						metrics,
 					});
 					entry.revision = updated.revision;
+					await persistTrajectory(store, run.id, sessionId, {
+						input: "[context_compaction]",
+						outputText: JSON.stringify(result),
+						startedAt: run.startedAt.getTime(),
+						completedAt: Date.now(),
+						turns: [],
+					});
 					json(res, 200, { ok: true, ...result, revision: updated.revision });
 				} catch (err) {
 					await store.failRun({ runId: run.id, sessionId, errorCode: err instanceof ContextPolicyError ? err.code : "CONTEXT_COMPACTION_ERROR", audit: { input: "[context_compaction]" } }).catch(() => {});
@@ -763,8 +817,11 @@ async function main(): Promise<void> {
 				const audit = () => ({ input: message, output: outputText.slice(0, 8000), toolResults });
 				try {
 					await entry.session.prompt(message, send);
+					const trajectory = entry.session.lastRun;
+					const metrics = runMetrics(trajectory, run.startedAt);
 					if (runError) {
-						await store.failRun({ runId: run.id, sessionId, errorCode: "RUN_FAILED", audit: audit() });
+						await store.failRun({ runId: run.id, sessionId, errorCode: "RUN_FAILED", audit: audit(), metrics });
+						await persistTrajectory(store, run.id, sessionId, trajectory);
 					} else {
 						const updated = await store.completeRun({
 							runId: run.id,
@@ -772,8 +829,10 @@ async function main(): Promise<void> {
 							expectedRevision: entry.revision,
 							snapshot: entry.session.exportSnapshot(entry.revision),
 							audit: audit(),
+							metrics,
 						});
 						entry.revision = updated.revision;
+						await persistTrajectory(store, run.id, sessionId, trajectory);
 					}
 				} catch (err) {
 					try {

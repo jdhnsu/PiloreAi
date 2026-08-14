@@ -54,6 +54,12 @@
 			</nav>
 
 			<section class="chat">
+				<div class="chat-viewbar">
+					<div class="view-tabs" role="tablist" aria-label="视图切换">
+						<button id="tab-chat" class="view-tab active" type="button" role="tab" aria-selected="true">对话</button>
+						<button id="tab-trajectory" class="view-tab" type="button" role="tab" aria-selected="false">轨迹</button>
+					</div>
+				</div>
 				<div id="messages" class="messages">
 					<div class="welcome card">
 						<h2 id="welcome-title">开始学习</h2>
@@ -61,6 +67,8 @@
 						<div id="suggestions" class="suggestions"></div>
 					</div>
 				</div>
+
+				<div id="trajectory" class="trajectory hidden"></div>
 
 				<div class="composer card" id="composer">
 					<div class="composer-toolbar">

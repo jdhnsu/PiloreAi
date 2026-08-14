@@ -24,6 +24,9 @@ const welcomeDesc = $("#welcome-desc");
 const suggestionsEl = $("#suggestions");
 const chipsEl = $("#chips");
 const wsTitle = $("#ws-title");
+const trajectoryEl = $("#trajectory");
+const chatTab = $("#tab-chat");
+const trajTab = $("#tab-trajectory");
 
 let busy = false;
 let packs = []; // 可用学习包：{ id, name, tagline, suggestions, profiles }
@@ -700,8 +703,180 @@ async function send(text) {
 		setBusy(false);
 		refreshPanel();
 		refreshSessionList(); // 首轮完成后标题/时间有变化
+		if (viewMode === "trajectory") void loadTrajectory();
 	}
 }
+
+/* ---------- 轨迹视图：对话 / 轨迹 切换与渲染 ---------- */
+
+let viewMode = "chat";
+
+function formatMs(ms) {
+	if (!Number.isFinite(ms)) return "—";
+	if (ms < 1000) return `${Math.round(ms)} ms`;
+	return `${(ms / 1000).toFixed(ms < 10000 ? 2 : 1)} s`;
+}
+
+function formatTime(ts) {
+	return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function usageSummary(turn) {
+	const u = turn.usage;
+	if (!u) return "";
+	const parts = [];
+	const input = (u.input ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+	if (input > 0) parts.push(`输入 ${input} tok`);
+	if (u.output > 0) parts.push(`输出 ${u.output} tok`);
+	if (u.cacheRead > 0) parts.push(`缓存命中 ${u.cacheRead}`);
+	if (u.cacheWrite > 0) parts.push(`缓存写入 ${u.cacheWrite}`);
+	if (typeof u.cost?.total === "number" && u.cost.total > 0) parts.push(`费用 ${u.cost.total.toFixed(4)}`);
+	return parts.join(" · ");
+}
+
+function renderTrajectoryStep(step) {
+	if (step.kind === "text") {
+		const el = document.createElement("div");
+		el.className = "trajectory-text msg-text";
+		el.innerHTML = renderMarkdown(step.text);
+		return el;
+	}
+	if (step.kind === "profile") {
+		const el = document.createElement("div");
+		el.className = step.name ? "persona-line" : "persona-line reset";
+		el.textContent = step.name
+			? `[老师] ${step.name}${step.source === "user" ? "（你指定）" : ""}`
+			: "[系统] 已切回 PiLore 自动路由";
+		return el;
+	}
+	if (step.kind === "toolset") {
+		const el = document.createElement("div");
+		el.className = "system-note";
+		el.textContent = step.active ? `已加载工具组：${step.toolset}` : `已卸载工具组：${step.toolset}`;
+		return el;
+	}
+	const tool = document.createElement("div");
+	tool.className = "tool";
+	const head = document.createElement("div");
+	head.className = "tool-head";
+	head.innerHTML = `
+		<span class="tool-glyph">${TOOL_GLYPHS[step.toolName] ?? "•"}</span>
+		<span class="tool-name">${esc(step.toolName)}</span>
+		<span class="tool-args">${esc(argsSummary(step.args))}</span>
+		<span class="tool-status ${step.isError ? "err" : "ok"}">${step.isError ? "失败" : TOOL_LABELS[step.toolName] ?? "完成"}</span>`;
+	const duration = document.createElement("span");
+	duration.className = "tool-duration";
+	duration.textContent = formatMs(step.durationMs);
+	head.appendChild(duration);
+	tool.appendChild(head);
+	if (step.resultText) {
+		const pre = document.createElement("pre");
+		pre.className = "tool-output";
+		pre.textContent = step.resultText;
+		tool.appendChild(pre);
+	}
+	return tool;
+}
+
+function renderTrajectoryTurn(turn) {
+	const wrap = document.createElement("div");
+	wrap.className = "trajectory-turn";
+	const head = document.createElement("div");
+	head.className = "trajectory-turn-head";
+	const label = document.createElement("span");
+	label.className = "trajectory-turn-label";
+	label.textContent = turn.turn === 0 ? "前导" : `第 ${turn.turn} 轮`;
+	head.appendChild(label);
+	if (turn.profileName) {
+		const persona = document.createElement("span");
+		persona.className = "persona-tag";
+		persona.textContent = turn.profileName;
+		head.appendChild(persona);
+	}
+	if (turn.provider && turn.model) {
+		const model = document.createElement("span");
+		model.className = "trajectory-model";
+		model.textContent = `${turn.provider}/${turn.model}`;
+		head.appendChild(model);
+	}
+	const meta = document.createElement("span");
+	meta.className = "trajectory-turn-meta";
+	meta.textContent = formatMs(turn.durationMs);
+	head.appendChild(meta);
+	wrap.appendChild(head);
+	for (const step of turn.steps) wrap.appendChild(renderTrajectoryStep(step));
+	const usage = usageSummary(turn);
+	if (usage) {
+		const foot = document.createElement("div");
+		foot.className = "trajectory-turn-foot";
+		foot.textContent = usage;
+		wrap.appendChild(foot);
+	}
+	return wrap;
+}
+
+function renderTrajectoryRun(run) {
+	const section = document.createElement("section");
+	section.className = "trajectory-run card";
+	const head = document.createElement("div");
+	head.className = "trajectory-run-head";
+	const question = document.createElement("div");
+	question.className = "trajectory-question";
+	question.textContent = run.input || "（无输入）";
+	const meta = document.createElement("div");
+	meta.className = "trajectory-run-meta";
+	meta.textContent = `${formatTime(run.startedAt)} · 耗时 ${formatMs(run.completedAt - run.startedAt)}`;
+	head.append(question, meta);
+	section.appendChild(head);
+	if (run.errorMessage) {
+		const error = document.createElement("div");
+		error.className = "error-line";
+		error.textContent = run.errorMessage;
+		section.appendChild(error);
+	}
+	for (const turn of run.turns) section.appendChild(renderTrajectoryTurn(turn));
+	return section;
+}
+
+function renderTrajectory(runs) {
+	trajectoryEl.innerHTML = "";
+	if (!runs.length) {
+		const empty = document.createElement("div");
+		empty.className = "trajectory-empty";
+		empty.textContent = "暂无运行记录：发起一次提问后，这里会展示每一轮老师的决策、工具调用与耗时。";
+		trajectoryEl.appendChild(empty);
+		return;
+	}
+	for (const run of runs) trajectoryEl.appendChild(renderTrajectoryRun(run));
+}
+
+async function loadTrajectory() {
+	if (!sessionId) return;
+	trajectoryEl.innerHTML = '<div class="trajectory-empty">加载轨迹…</div>';
+	try {
+		const resp = await fetch(`/api/trajectory?id=${encodeURIComponent(sessionId)}`);
+		if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+		const data = await resp.json();
+		renderTrajectory(data.runs ?? []);
+	} catch {
+		trajectoryEl.innerHTML = '<div class="trajectory-empty">轨迹加载失败</div>';
+	}
+}
+
+function setView(mode) {
+	viewMode = mode;
+	chatTab.classList.toggle("active", mode === "chat");
+	chatTab.setAttribute("aria-selected", String(mode === "chat"));
+	trajTab.classList.toggle("active", mode === "trajectory");
+	trajTab.setAttribute("aria-selected", String(mode === "trajectory"));
+	messagesEl.classList.toggle("hidden", mode !== "chat");
+	trajectoryEl.classList.toggle("hidden", mode !== "trajectory");
+	composerEl.classList.toggle("hidden", mode !== "chat");
+	if (mode === "trajectory") void loadTrajectory();
+}
+
+chatTab.onclick = () => setView("chat");
+trajTab.onclick = () => setView("trajectory");
 
 /* 扩展名 → 高亮语言（复用聊天气泡里的 highlightCode） */
 const EXT_LANG = {
@@ -1411,6 +1586,7 @@ async function enterSession(id) {
 	const restored = await renderHistory();
 	if (!restored && welcomeEl) messagesEl.appendChild(welcomeEl);
 	await loadState();
+	if (viewMode === "trajectory") void loadTrajectory();
 	renderSessionList();
 }
 
