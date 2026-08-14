@@ -46,6 +46,14 @@ test("Session records one trajectory run with turns, tools, text, and usage", as
 	assert.ok(first.usage);
 	assert.ok(first.startedAt <= first.completedAt);
 	assert.ok(first.durationMs >= 0);
+	assert.equal(typeof first.systemPrompt, "string");
+	assert.ok(first.systemPrompt !== "");
+	const catalog = first.tools;
+	assert.ok(catalog);
+	assert.ok(catalog.length > 0);
+	assert.equal(catalog[0]?.name, "echo");
+	assert.equal(catalog[0]?.description, "echo the text");
+	assert.ok(catalog[0]?.parameters !== null);
 
 	const toolStep = first.steps.find((step) => step.kind === "tool");
 	if (toolStep === undefined || toolStep.kind !== "tool") throw new Error("expected a tool step");
@@ -54,8 +62,12 @@ test("Session records one trajectory run with turns, tools, text, and usage", as
 	assert.ok(toolStep.callId !== "");
 	assert.deepEqual(toolStep.args, { text: "hi" });
 	assert.equal(toolStep.resultText, "echo:hi");
+	assert.equal(toolStep.resultTruncated, false);
 	assert.equal(toolStep.isError, false);
 	assert.ok(toolStep.durationMs >= 0);
+	assert.equal(toolStep.schema?.name, "echo");
+	assert.equal(toolStep.schema?.description, "echo the text");
+	assert.ok(toolStep.schema?.parameters !== null);
 
 	const textStep = second.steps.find((step) => step.kind === "text");
 	if (textStep === undefined || textStep.kind !== "text") throw new Error("expected a text step");
@@ -88,6 +100,34 @@ test("Failing tool execution records an errored tool step", async () => {
 	const toolStep = run.turns[0]?.steps.find((step) => step.kind === "tool");
 	if (toolStep === undefined || toolStep.kind !== "tool") throw new Error("expected a tool step");
 	assert.equal(toolStep.isError, true);
+	assert.equal(toolStep.resultTruncated, false);
+});
+
+test("Oversized tool results are truncated at the transport cap", async () => {
+	const faux = fauxProvider();
+	const models = createModels();
+	models.setProvider(faux.provider);
+	faux.setResponses([
+		fauxAssistantMessage([fauxToolCall("dump", {})], { stopReason: "toolUse" }),
+		fauxAssistantMessage([fauxText("完。")], { stopReason: "stop" }),
+	]);
+	const model = models.getModel("faux", "faux-1");
+	assert.ok(model);
+	const dumpTool = {
+		name: "dump",
+		label: "倾倒",
+		description: "returns a very long text",
+		parameters: Type.Object({}),
+		execute: async () => ({ content: [{ type: "text" as const, text: "x".repeat(9000) }], details: {} }),
+	};
+	const session = createSession({ models, model, tools: [dumpTool] });
+	await session.prompt("倒出来", () => {});
+	const run = session.lastRun;
+	if (run === null) throw new Error("expected a recorded run");
+	const toolStep = run.turns[0]?.steps.find((step) => step.kind === "tool");
+	if (toolStep === undefined || toolStep.kind !== "tool") throw new Error("expected a tool step");
+	assert.equal(toolStep.resultText.length, 8000);
+	assert.equal(toolStep.resultTruncated, true);
 });
 
 test("Recorder folds profile and toolset events into a turn-0 prelude", () => {

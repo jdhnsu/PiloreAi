@@ -734,6 +734,48 @@ function usageSummary(turn) {
 	return parts.join(" · ");
 }
 
+/* 会话累计用量：从第一轮开始逐轮累加，供每轮展示"到目前为止"的总数据 */
+
+function addUsageInto(target, usage) {
+	if (!usage) return target;
+	target.input += usage.input ?? 0;
+	target.cacheRead += usage.cacheRead ?? 0;
+	target.cacheWrite += usage.cacheWrite ?? 0;
+	target.output += usage.output ?? 0;
+	target.cost += typeof usage.cost?.total === "number" ? usage.cost.total : 0;
+	return target;
+}
+
+function formatPercent(rate) {
+	if (!Number.isFinite(rate) || rate < 0) return "—";
+	return `${Math.round(rate * 1000) / 10}%`;
+}
+
+function cumulativeSummary(total) {
+	const input = total.input + total.cacheRead + total.cacheWrite;
+	if (input === 0 && total.output === 0 && total.cost === 0) return "";
+	const parts = [];
+	if (input > 0) parts.push(`输入 ${input} tok`);
+	if (total.output > 0) parts.push(`输出 ${total.output} tok`);
+	if (total.cacheRead > 0) parts.push(`缓存命中 ${total.cacheRead}`);
+	if (input > 0) parts.push(`命中率 ${formatPercent(total.cacheRead / input)}`);
+	if (total.cost > 0) parts.push(`费用 ${total.cost.toFixed(4)}`);
+	return parts.join(" · ");
+}
+
+function detailSection(title, text) {
+	const el = document.createElement("div");
+	el.className = "trajectory-detail-section";
+	const h = document.createElement("div");
+	h.className = "trajectory-detail-title";
+	h.textContent = title;
+	const pre = document.createElement("pre");
+	pre.className = "trajectory-detail-pre";
+	pre.textContent = text ?? "—";
+	el.append(h, pre);
+	return el;
+}
+
 function renderTrajectoryStep(step) {
 	if (step.kind === "text") {
 		const el = document.createElement("div");
@@ -774,11 +816,35 @@ function renderTrajectoryStep(step) {
 		pre.className = "tool-output";
 		pre.textContent = step.resultText;
 		tool.appendChild(pre);
+		if (step.resultTruncated) {
+			const note = document.createElement("div");
+			note.className = "trajectory-truncated-note";
+			note.textContent = "（结果过长，已截断）";
+			tool.appendChild(note);
+		}
 	}
+	const extra = document.createElement("details");
+	extra.className = "trajectory-tool-extra";
+	const summary = document.createElement("summary");
+	summary.textContent = step.schema
+		? `调用详情：参数 / Schema · ${step.schema.label ?? step.schema.name}`
+		: "调用详情：参数";
+	extra.appendChild(summary);
+	const body = document.createElement("div");
+	body.className = "trajectory-detail-body";
+	body.appendChild(detailSection("参数", JSON.stringify(step.args ?? null, null, 2)));
+	if (step.schema) {
+		const schemaText = [step.schema.description || "", JSON.stringify(step.schema.parameters, null, 2)]
+			.filter((part) => part !== "")
+			.join("\n\n");
+		body.appendChild(detailSection(`Schema · ${step.schema.name}`, schemaText || "—"));
+	}
+	extra.appendChild(body);
+	tool.appendChild(extra);
 	return tool;
 }
 
-function renderTrajectoryTurn(turn) {
+function renderTrajectoryTurn(turn, cumulative) {
 	const wrap = document.createElement("div");
 	wrap.className = "trajectory-turn";
 	const head = document.createElement("div");
@@ -804,18 +870,51 @@ function renderTrajectoryTurn(turn) {
 	meta.textContent = formatMs(turn.durationMs);
 	head.appendChild(meta);
 	wrap.appendChild(head);
+	if (turn.systemPrompt !== undefined || (turn.tools?.length ?? 0) > 0) {
+		const request = document.createElement("details");
+		request.className = "trajectory-request";
+		const summary = document.createElement("summary");
+		summary.textContent = `系统提示词与工具目录（${turn.tools?.length ?? 0} 个工具）`;
+		request.appendChild(summary);
+		const body = document.createElement("div");
+		body.className = "trajectory-detail-body";
+		if (turn.systemPrompt !== undefined) {
+			body.appendChild(detailSection("System Prompt", turn.systemPrompt));
+		}
+		for (const tool of turn.tools ?? []) {
+			const text = [tool.description || "", JSON.stringify(tool.parameters, null, 2)]
+				.filter((part) => part !== "")
+				.join("\n\n");
+			body.appendChild(detailSection(`工具 · ${tool.name}${tool.label ? `（${tool.label}）` : ""}`, text || "—"));
+		}
+		request.appendChild(body);
+		wrap.appendChild(request);
+	}
 	for (const step of turn.steps) wrap.appendChild(renderTrajectoryStep(step));
+	addUsageInto(cumulative, turn.usage);
 	const usage = usageSummary(turn);
-	if (usage) {
+	const cumulativeText = cumulativeSummary(cumulative);
+	if (usage || cumulativeText) {
 		const foot = document.createElement("div");
 		foot.className = "trajectory-turn-foot";
-		foot.textContent = usage;
+		if (usage) {
+			const line = document.createElement("span");
+			line.className = "trajectory-turn-usage";
+			line.textContent = `本次 · ${usage}`;
+			foot.appendChild(line);
+		}
+		if (cumulativeText) {
+			const line = document.createElement("span");
+			line.className = "trajectory-turn-cumulative";
+			line.textContent = `累计 · ${cumulativeText}`;
+			foot.appendChild(line);
+		}
 		wrap.appendChild(foot);
 	}
 	return wrap;
 }
 
-function renderTrajectoryRun(run) {
+function renderTrajectoryRun(run, cumulative) {
 	const section = document.createElement("section");
 	section.className = "trajectory-run card";
 	const head = document.createElement("div");
@@ -834,7 +933,7 @@ function renderTrajectoryRun(run) {
 		error.textContent = run.errorMessage;
 		section.appendChild(error);
 	}
-	for (const turn of run.turns) section.appendChild(renderTrajectoryTurn(turn));
+	for (const turn of run.turns) section.appendChild(renderTrajectoryTurn(turn, cumulative));
 	return section;
 }
 
@@ -847,7 +946,8 @@ function renderTrajectory(runs) {
 		trajectoryEl.appendChild(empty);
 		return;
 	}
-	for (const run of runs) trajectoryEl.appendChild(renderTrajectoryRun(run));
+	const cumulative = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, cost: 0 };
+	for (const run of runs) trajectoryEl.appendChild(renderTrajectoryRun(run, cumulative));
 }
 
 async function loadTrajectory() {

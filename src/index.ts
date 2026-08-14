@@ -8,6 +8,7 @@ export type {
 	TrajectoryTurn,
 	TrajectoryStep,
 	TrajectoryToolStep,
+	TrajectoryToolSchema,
 } from "./core/trajectory/types.js";
 export { CoreState } from "./core/state/index.js";
 export {

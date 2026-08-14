@@ -1,19 +1,21 @@
-import type { Agent, AgentEvent } from "@earendil-works/pi-agent-core";
+import type { Agent, AgentEvent, AgentTool } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent, Usage } from "@earendil-works/pi-ai";
 import { INTERNAL_TOOL_NAMES } from "../tool-runtime/index.js";
 import type { CoreState } from "../state/index.js";
 import type { ProfileChangeSource } from "../events/index.js";
-import type { TrajectoryRunDraft, TrajectoryStep, TrajectoryToolStep, TrajectoryTurn } from "./types.js";
+import type { TrajectoryRunDraft, TrajectoryStep, TrajectoryToolSchema, TrajectoryToolStep, TrajectoryTurn } from "./types.js";
 
-/** Plain-text tool result cap, aligned with the run audit's truncation budget. */
-const TOOL_RESULT_TEXT_LIMIT = 2000;
+/** Plain-text tool result cap, aligned with the SessionEvent transport limit. */
+const TOOL_RESULT_TEXT_LIMIT = 8000;
 
-function toolResultText(result: { content?: Array<{ type: string; text?: string }> } | undefined): string {
-	return (result?.content ?? [])
+function toolResultText(result: { content?: Array<{ type: string; text?: string }> } | undefined): { text: string; truncated: boolean } {
+	const text = (result?.content ?? [])
 		.filter((block) => block.type === "text")
 		.map((block) => block.text ?? "")
-		.join("\n")
-		.slice(0, TOOL_RESULT_TEXT_LIMIT);
+		.join("\n");
+	return text.length > TOOL_RESULT_TEXT_LIMIT
+		? { text: text.slice(0, TOOL_RESULT_TEXT_LIMIT), truncated: true }
+		: { text, truncated: false };
 }
 
 function assistantText(message: AssistantMessage): string {
@@ -23,11 +25,32 @@ function assistantText(message: AssistantMessage): string {
 		.join("");
 }
 
+/** JSON-safe projection of a TypeBox schema; null when serialization fails. */
+function serializeParameters(parameters: unknown): unknown {
+	try {
+		const json = JSON.stringify(parameters);
+		return json === undefined ? null : JSON.parse(json);
+	} catch {
+		return null;
+	}
+}
+
+/** Call-time model-visible schema of one tool. */
+function toolSchema(tool: AgentTool<any>): TrajectoryToolSchema {
+	return {
+		name: tool.name,
+		label: tool.label,
+		description: tool.description,
+		parameters: serializeParameters(tool.parameters),
+	};
+}
+
 interface ToolDraft {
 	callId: string;
 	toolName: string;
 	args: unknown;
 	startedAt: number;
+	schema?: TrajectoryToolSchema;
 }
 
 interface TurnDraft {
@@ -36,6 +59,8 @@ interface TurnDraft {
 	steps: TrajectoryStep[];
 	provider: string | null;
 	model: string | null;
+	systemPrompt?: string;
+	tools?: TrajectoryToolSchema[];
 	usage?: Usage;
 }
 
@@ -71,11 +96,17 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 
 	const now = (): number => Date.now();
 
+	const schemaByName = (name: string): TrajectoryToolSchema | undefined => {
+		const candidate = options.agent.state.tools.find((item) => item.name === name);
+		return candidate === undefined ? undefined : toolSchema(candidate);
+	};
+
 	const closeTool = (
 		steps: TrajectoryStep[],
 		draft: ToolDraft,
 		completedAt: number,
 		resultText: string,
+		resultTruncated: boolean,
 		isError: boolean,
 	): void => {
 		const step: TrajectoryToolStep = {
@@ -84,7 +115,9 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 			toolName: draft.toolName,
 			args: draft.args,
 			resultText,
+			resultTruncated,
 			isError,
+			...(draft.schema === undefined ? {} : { schema: draft.schema }),
 			startedAt: draft.startedAt,
 			completedAt,
 			durationMs: Math.max(0, completedAt - draft.startedAt),
@@ -97,7 +130,7 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 		current = null;
 		if (target === null) return;
 		if (tool !== null) {
-			closeTool(target.steps, tool, completedAt, "", true);
+			closeTool(target.steps, tool, completedAt, "", false, true);
 			tool = null;
 		}
 		const profile = options.state.activeProfile;
@@ -107,6 +140,8 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 			profileName: profile?.name ?? null,
 			provider: target.provider,
 			model: target.model,
+			...(target.systemPrompt === undefined ? {} : { systemPrompt: target.systemPrompt }),
+			...(target.tools === undefined ? {} : { tools: target.tools }),
 			startedAt: target.startedAt,
 			completedAt,
 			durationMs: Math.max(0, completedAt - target.startedAt),
@@ -146,6 +181,8 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 				steps: [],
 				provider: null,
 				model: null,
+				systemPrompt: options.agent.state.systemPrompt,
+				tools: options.agent.state.tools.map(toolSchema),
 			};
 			return;
 		}
@@ -169,7 +206,14 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 		}
 		if (event.type === "tool_execution_start") {
 			if (INTERNAL_TOOL_NAMES.has(event.toolName)) return;
-			tool = { callId: event.toolCallId, toolName: event.toolName, args: event.args, startedAt: now() };
+			const schema = schemaByName(event.toolName);
+			tool = {
+				callId: event.toolCallId,
+				toolName: event.toolName,
+				args: event.args,
+				startedAt: now(),
+				...(schema === undefined ? {} : { schema }),
+			};
 			return;
 		}
 		if (event.type === "tool_execution_end") {
@@ -177,11 +221,13 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 			const draft = tool;
 			tool = null;
 			if (draft === null) return;
+			const result = toolResultText(event.result);
 			closeTool(
 				current === null ? prelude : current.steps,
 				draft,
 				now(),
-				toolResultText(event.result),
+				result.text,
+				result.truncated,
 				event.isError,
 			);
 		}
@@ -205,7 +251,7 @@ export function createTrajectoryRecorder(options: { agent: Agent; state: CoreSta
 			active = false;
 			const completedAt = now();
 			if (tool !== null) {
-				closeTool(prelude, tool, completedAt, "", true);
+				closeTool(prelude, tool, completedAt, "", false, true);
 				tool = null;
 			}
 			if (current !== null) finalizeCurrent(completedAt);

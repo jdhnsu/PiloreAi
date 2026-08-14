@@ -165,6 +165,8 @@ function trajectoryFixture(runId: string, sessionId: string, input: string, star
 				profileName: null,
 				provider: "faux",
 				model: "faux-1",
+				systemPrompt: "PLAINTEXT_TRAJECTORY_SENTINEL",
+				tools: [{ name: "echo", label: "回声", description: "echo the text", parameters: { type: "object", properties: {} } }],
 				startedAt,
 				completedAt: startedAt + 100,
 				durationMs: 100,
