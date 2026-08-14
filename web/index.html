@@ -5,6 +5,18 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>PiLore · AI 学习助手</title>
 	<link rel="stylesheet" href="/style.css">
+	<script>
+		window.MathJax = {
+			tex: {
+				inlineMath: [["$", "$"], ["\\(", "\\)"]],
+				displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+				processEscapes: true,
+			},
+			options: { skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"] },
+			startup: { typeset: false },
+		};
+	</script>
+	<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 	<div class="app">
@@ -132,6 +144,6 @@
 		</div>
 	</div>
 
-	<script src="/app.js"></script>
+	<script defer src="/app.js"></script>
 </body>
 </html>

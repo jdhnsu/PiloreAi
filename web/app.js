@@ -77,6 +77,37 @@ function esc(text) {
 	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+const mathTypesetStates = new WeakMap();
+
+function queueMathTypeset(el) {
+	const mathJax = window.MathJax;
+	if (!mathJax?.startup?.promise || !mathJax.typesetPromise) return;
+	let state = mathTypesetStates.get(el);
+	if (!state) {
+		state = { queued: false, running: null };
+		mathTypesetStates.set(el, state);
+	}
+	state.queued = true;
+	if (state.running) return;
+	state.running = (async () => {
+		await mathJax.startup.promise;
+		while (state.queued) {
+			state.queued = false;
+			mathJax.typesetClear?.([el]);
+			await mathJax.typesetPromise([el]);
+		}
+	})()
+		.catch(() => {})
+		.finally(() => {
+			state.running = null;
+		});
+}
+
+function renderMathMarkdown(el, source) {
+	el.innerHTML = renderMarkdown(source);
+	queueMathTypeset(el);
+}
+
 /* ---------- Markdown 渲染：代码块(带高亮)/表格/引用/标题/列表，先转义再套标签 ---------- */
 
 const CJK_RE = /[\u2e80-\u9fff\uf900-\ufaff\uff01-\uffee]/;
@@ -511,7 +542,7 @@ function handleEvent(ev, block) {
 		case "text_delta": {
 			const el = ensureTextEl(block);
 			block.textBuf += ev.delta;
-			el.innerHTML = renderMarkdown(block.textBuf);
+			renderMathMarkdown(el, block.textBuf);
 			break;
 		}
 		case "tool_start": {
@@ -796,7 +827,7 @@ function renderTrajectoryStep(step) {
 	if (step.kind === "text") {
 		const el = document.createElement("div");
 		el.className = "trajectory-text msg-text";
-		el.innerHTML = renderMarkdown(step.text);
+		renderMathMarkdown(el, step.text);
 		return el;
 	}
 	if (step.kind === "profile") {
@@ -1683,7 +1714,7 @@ async function renderHistory() {
 				card.className = "msg-assistant card";
 				const text = document.createElement("div");
 				text.className = "msg-text";
-				text.innerHTML = renderMarkdown(m.text);
+				renderMathMarkdown(text, m.text);
 				card.appendChild(text);
 				messagesEl.appendChild(card);
 			}

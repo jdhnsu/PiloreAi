@@ -460,6 +460,19 @@ body {
 	margin: 4px 0;
 }
 
+.msg-text mjx-container {
+	color: inherit;
+}
+
+.msg-text mjx-container[display="true"] {
+	display: block;
+	max-width: 100%;
+	margin: 0.7em 0 !important;
+	padding: 2px 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
 .msg-text ul,
 .msg-text ol {
 	padding-left: 22px;
