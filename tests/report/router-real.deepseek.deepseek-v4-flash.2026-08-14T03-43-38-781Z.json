@@ -1,0 +1,1119 @@
+{
+  "kind": "router-real",
+  "date": "2026-08-14T03:43:38.781Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "thinking": "off",
+  "iterations": 3,
+  "thresholds": {
+    "perCase": 0.6666666666666666,
+    "perMetric": 0.8,
+    "maxThrashTurns": 0,
+    "maxErrorTurns": 0
+  },
+  "passed": false,
+  "metrics": {
+    "activation": {
+      "rate": 1,
+      "passed": true,
+      "samples": 9
+    },
+    "nonActivation": {
+      "rate": 1,
+      "passed": true,
+      "samples": 6
+    },
+    "stability": {
+      "rate": 1,
+      "passed": true,
+      "samples": 9
+    },
+    "switching": {
+      "rate": 0.5555555555555556,
+      "passed": false,
+      "samples": 9
+    }
+  },
+  "thrashCount": 1,
+  "errorCount": 0,
+  "failedCases": [
+    "CRR-11"
+  ],
+  "cases": [
+    {
+      "id": "CRR-01",
+      "name": "抽象概念需要生活类比",
+      "metric": "activation",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，我完全听不懂。能不能不要堆术语，用生活里的比方和大白话讲给零基础的人？",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，我完全听不懂。能不能不要堆术语，用生活里的比方和大白话讲给零基础的人？",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，我完全听不懂。能不能不要堆术语，用生活里的比方和大白话讲给零基础的人？",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-02",
+      "name": "原理与易混概念辨析",
+      "metric": "activation",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请把 Python 里 == 和 is 的底层原理讲透，并系统辨析它们最容易混淆的地方。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请把 Python 里 == 和 is 的底层原理讲透，并系统辨析它们最容易混淆的地方。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请把 Python 里 == 和 is 的底层原理讲透，并系统辨析它们最容易混淆的地方。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-03",
+      "name": "缺少前置基础需要脚手架",
+      "metric": "activation",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学 Django，但连 HTTP 都没学过，也不知道还缺哪些基础。请先帮我拆开前置知识，告诉我从哪里开始。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学 Django，但连 HTTP 都没学过，也不知道还缺哪些基础。请先帮我拆开前置知识，告诉我从哪里开始。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学 Django，但连 HTTP 都没学过，也不知道还缺哪些基础。请先帮我拆开前置知识，告诉我从哪里开始。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "metric": "activation",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-04",
+      "name": "简单语法问题不激活",
+      "metric": "nonActivation",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "Python 里创建一个空列表用什么语法？只给最简示例。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": null,
+              "metric": "nonActivation",
+              "actualStartProfile": null,
+              "actualEndProfile": null,
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "Python 里创建一个空列表用什么语法？只给最简示例。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": null,
+              "metric": "nonActivation",
+              "actualStartProfile": null,
+              "actualEndProfile": null,
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "Python 里创建一个空列表用什么语法？只给最简示例。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": null,
+              "metric": "nonActivation",
+              "actualStartProfile": null,
+              "actualEndProfile": null,
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-05",
+      "name": "简单 API 事实不激活",
+      "metric": "nonActivation",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "pathlib.Path.exists() 返回什么类型？请直接回答。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": null,
+              "metric": "nonActivation",
+              "actualStartProfile": null,
+              "actualEndProfile": null,
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "pathlib.Path.exists() 返回什么类型？请直接回答。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": null,
+              "metric": "nonActivation",
+              "actualStartProfile": null,
+              "actualEndProfile": null,
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "pathlib.Path.exists() 返回什么类型？请直接回答。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": null,
+              "metric": "nonActivation",
+              "actualStartProfile": null,
+              "actualEndProfile": null,
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-06",
+      "name": "类比方式跨主题保持",
+      "metric": "stability",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，请用生活里的比方和大白话讲，让零基础的人也能听懂。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "沿用刚才这种生活化的讲法，再解释一下 Python 的生成器。",
+              "expectedStartProfile": "feynman",
+              "expectedEndProfile": "feynman",
+              "metric": "stability",
+              "actualStartProfile": "feynman",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，请用生活里的比方和大白话讲，让零基础的人也能听懂。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "沿用刚才这种生活化的讲法，再解释一下 Python 的生成器。",
+              "expectedStartProfile": "feynman",
+              "expectedEndProfile": "feynman",
+              "metric": "stability",
+              "actualStartProfile": "feynman",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，请用生活里的比方和大白话讲，让零基础的人也能听懂。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "沿用刚才这种生活化的讲法，再解释一下 Python 的生成器。",
+              "expectedStartProfile": "feynman",
+              "expectedEndProfile": "feynman",
+              "metric": "stability",
+              "actualStartProfile": "feynman",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-07",
+      "name": "原理方式跨主题保持",
+      "metric": "stability",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请讲透 Python 引用计数的工作原理，并说明循环引用为什么特殊。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "继续沿着这种原理分析方式，讲讲浅拷贝和深拷贝为什么会有不同表现。",
+              "expectedStartProfile": "socrates",
+              "expectedEndProfile": "socrates",
+              "metric": "stability",
+              "actualStartProfile": "socrates",
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请讲透 Python 引用计数的工作原理，并说明循环引用为什么特殊。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "继续沿着这种原理分析方式，讲讲浅拷贝和深拷贝为什么会有不同表现。",
+              "expectedStartProfile": "socrates",
+              "expectedEndProfile": "socrates",
+              "metric": "stability",
+              "actualStartProfile": "socrates",
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请讲透 Python 引用计数的工作原理，并说明循环引用为什么特殊。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "继续沿着这种原理分析方式，讲讲浅拷贝和深拷贝为什么会有不同表现。",
+              "expectedStartProfile": "socrates",
+              "expectedEndProfile": "socrates",
+              "metric": "stability",
+              "actualStartProfile": "socrates",
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-08",
+      "name": "补基础路径保持",
+      "metric": "stability",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学异步 Web 开发，但连事件循环和协程都没学过。请先梳理必须补的基础和顺序。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "先别跳到框架代码，继续按这个顺序把下一项必需的基础补上。",
+              "expectedStartProfile": "oris",
+              "expectedEndProfile": "oris",
+              "metric": "stability",
+              "actualStartProfile": "oris",
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学异步 Web 开发，但连事件循环和协程都没学过。请先梳理必须补的基础和顺序。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "先别跳到框架代码，继续按这个顺序把下一项必需的基础补上。",
+              "expectedStartProfile": "oris",
+              "expectedEndProfile": "oris",
+              "metric": "stability",
+              "actualStartProfile": "oris",
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学异步 Web 开发，但连事件循环和协程都没学过。请先梳理必须补的基础和顺序。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "先别跳到框架代码，继续按这个顺序把下一项必需的基础补上。",
+              "expectedStartProfile": "oris",
+              "expectedEndProfile": "oris",
+              "metric": "stability",
+              "actualStartProfile": "oris",
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-09",
+      "name": "基础补齐后切到原理辨析",
+      "metric": "switching",
+      "successRate": 0.6666666666666666,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学 Django，但 HTTP 基础还没学过。先帮我拆开前置知识并安排学习顺序。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "这些前置我已经明白了。现在请把 HTTP 无状态的原理讲透，并辨析 Cookie 和 Session 容易混淆的地方。",
+              "expectedStartProfile": "oris",
+              "expectedEndProfile": "socrates",
+              "metric": "switching",
+              "actualStartProfile": "oris",
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": false,
+          "measuredPassed": false,
+          "thrashCount": 1,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学 Django，但 HTTP 基础还没学过。先帮我拆开前置知识并安排学习顺序。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "这些前置我已经明白了。现在请把 HTTP 无状态的原理讲透，并辨析 Cookie 和 Session 容易混淆的地方。",
+              "expectedStartProfile": "oris",
+              "expectedEndProfile": "socrates",
+              "metric": "switching",
+              "actualStartProfile": "oris",
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": null,
+                  "name": null
+                },
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 2,
+              "passed": false
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "我想学 Django，但 HTTP 基础还没学过。先帮我拆开前置知识并安排学习顺序。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "oris",
+              "actualStartProfile": null,
+              "actualEndProfile": "oris",
+              "modelProfileEvents": [
+                {
+                  "profile": "oris",
+                  "name": "Oris"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "这些前置我已经明白了。现在请把 HTTP 无状态的原理讲透，并辨析 Cookie 和 Session 容易混淆的地方。",
+              "expectedStartProfile": "oris",
+              "expectedEndProfile": "socrates",
+              "metric": "switching",
+              "actualStartProfile": "oris",
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-10",
+      "name": "原理太抽象后切到类比",
+      "metric": "switching",
+      "successRate": 1,
+      "passed": true,
+      "rounds": [
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请系统讲透 Python 闭包的词法作用域原理，以及自由变量是怎样被保存的。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "还是太抽象了。不要再讲术语，换成生活里的比方，用大白话重新解释。",
+              "expectedStartProfile": "socrates",
+              "expectedEndProfile": "feynman",
+              "metric": "switching",
+              "actualStartProfile": "socrates",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请系统讲透 Python 闭包的词法作用域原理，以及自由变量是怎样被保存的。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "还是太抽象了。不要再讲术语，换成生活里的比方，用大白话重新解释。",
+              "expectedStartProfile": "socrates",
+              "expectedEndProfile": "feynman",
+              "metric": "switching",
+              "actualStartProfile": "socrates",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        },
+        {
+          "passed": true,
+          "measuredPassed": true,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "请系统讲透 Python 闭包的词法作用域原理，以及自由变量是怎样被保存的。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "socrates",
+              "actualStartProfile": null,
+              "actualEndProfile": "socrates",
+              "modelProfileEvents": [
+                {
+                  "profile": "socrates",
+                  "name": "Socrates"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "还是太抽象了。不要再讲术语，换成生活里的比方，用大白话重新解释。",
+              "expectedStartProfile": "socrates",
+              "expectedEndProfile": "feynman",
+              "metric": "switching",
+              "actualStartProfile": "socrates",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CRR-11",
+      "name": "专门讲解后交还简单问答",
+      "metric": "switching",
+      "successRate": 0,
+      "passed": false,
+      "rounds": [
+        {
+          "passed": false,
+          "measuredPassed": false,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，请用生活里的比方和大白话解释给零基础的人。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "明白了。顺便告诉我 Python 空字典怎么写，只给一行答案。",
+              "expectedStartProfile": "feynman",
+              "expectedEndProfile": null,
+              "metric": "switching",
+              "actualStartProfile": "feynman",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": false
+            }
+          ]
+        },
+        {
+          "passed": false,
+          "measuredPassed": false,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，请用生活里的比方和大白话解释给零基础的人。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "明白了。顺便告诉我 Python 空字典怎么写，只给一行答案。",
+              "expectedStartProfile": "feynman",
+              "expectedEndProfile": null,
+              "metric": "switching",
+              "actualStartProfile": "feynman",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": false
+            }
+          ]
+        },
+        {
+          "passed": false,
+          "measuredPassed": false,
+          "thrashCount": 0,
+          "errorCount": 0,
+          "turns": [
+            {
+              "prompt": "闭包太抽象了，请用生活里的比方和大白话解释给零基础的人。",
+              "expectedStartProfile": null,
+              "expectedEndProfile": "feynman",
+              "actualStartProfile": null,
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [
+                {
+                  "profile": "feynman",
+                  "name": "Feynman"
+                }
+              ],
+              "switchCount": 1,
+              "passed": true
+            },
+            {
+              "prompt": "明白了。顺便告诉我 Python 空字典怎么写，只给一行答案。",
+              "expectedStartProfile": "feynman",
+              "expectedEndProfile": null,
+              "metric": "switching",
+              "actualStartProfile": "feynman",
+              "actualEndProfile": "feynman",
+              "modelProfileEvents": [],
+              "switchCount": 0,
+              "passed": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

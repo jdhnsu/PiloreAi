@@ -26,6 +26,7 @@
     "test:postgres": "node --import tsx --test tests/integration/postgres-store.test.ts",
     "test:agent": "node --import tsx --test tests/unit/core.test.ts tests/unit/code-pack.test.ts tests/unit/code-mentor-session.test.ts tests/unit/english-pack.test.ts tests/unit/academic-packs.test.ts",
     "test:agent:real": "tsx tests/run.ts --iterations 3",
+    "test:router:real": "tsx tests/run-router-real.ts",
     "test:agent:all": "npm test && npm run test:agent:real"
   },
   "dependencies": {
