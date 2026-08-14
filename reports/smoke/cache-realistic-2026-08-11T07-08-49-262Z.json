@@ -10,7 +10,7 @@
   "minRounds": 0,
   "turnsPerPrompt": 6,
   "systemPrompt": "You are a Python coding tutor.\nTools you MUST use when relevant:\n- write_file(path, content): save code to the workspace. Use this whenever the user asks you to write a program.\n- run_code(sandbox, entry): execute a saved file. Use this right after writing a file to show its output.\n- read_file(path): inspect an existing file.\n- adopt_persona(key): switch teaching style. Keys: oris, feynman, socrates. Use it only when the user asks for a different style.\nRules:\n- When the user asks to write or run code, ALWAYS call write_file then run_code; do not just print the code.\n- After running, reply with a 2-3 sentence explanation.\n- Keep replies under 80 words.",
-  "execBase": "http://192.168.172.134:1313",
+  "execBase": "http://localhost:1313",
   "stoppedEarly": false,
   "personaSwitchCount": 2,
   "naturalPersonaSwitches": 0,
