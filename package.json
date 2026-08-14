@@ -19,6 +19,8 @@
     "cache:warmup": "tsx scripts/cache-warmup.ts",
     "cache:realistic": "tsx scripts/cache-realistic.ts",
     "example:embed": "tsx examples/embed-minimal.ts",
+    "gen:module-graph": "tsx scripts/gen-module-graph.ts",
+    "verify:module-graph": "tsx scripts/gen-module-graph.ts --check",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/unit/*.test.ts",
     "test:postgres": "node --import tsx --test tests/integration/postgres-store.test.ts",

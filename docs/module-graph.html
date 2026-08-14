@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>PiLore · module dependency graph</title>
+<style>
+:root { --bg:#0b0e14; --bar:#10141d; --panel:#12161f; --border:#232a36; --text:#e6e9ef; --muted:#8a93a5; --accent:#ffd166; }
+* { box-sizing: border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--text); overflow:hidden; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; }
+#stage { position:fixed; inset:0; z-index:0; }
+a { color:#7fb4ff; text-decoration:none; }
+a:hover { text-decoration:underline; }
+.hidden { display:none !important; }
+
+#bar { position:fixed; top:0; left:0; right:0; height:56px; z-index:5; display:flex; align-items:center; gap:14px; padding:0 16px; background:var(--bar); border-bottom:1px solid var(--border); }
+#bar h1 { font-size:15px; font-weight:650; margin:0; letter-spacing:.2px; }
+#bar .sub { font-size:12px; color:var(--muted); margin:0; }
+#bar .grow { flex:1; }
+#search { width:230px; height:32px; padding:0 10px; border:1px solid var(--border); border-radius:6px; background:#0d1119; color:var(--text); font-size:13px; }
+#search::placeholder { color:#5c6675; }
+button.ctl { height:32px; padding:0 12px; border:1px solid var(--border); border-radius:6px; background:#0d1119; color:var(--text); font-size:13px; cursor:pointer; }
+button.ctl:hover { border-color:#39424f; }
+#bar .hint { font-size:11px; color:var(--muted); }
+
+#legend { position:fixed; top:70px; left:12px; bottom:12px; width:210px; z-index:4; overflow-y:auto; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:10px; }
+#legend h2 { font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:0 0 8px; }
+button.lg { display:flex; align-items:center; gap:8px; width:100%; padding:5px 6px; border:0; border-radius:6px; background:transparent; color:var(--text); font-size:12px; cursor:pointer; text-align:left; }
+button.lg:hover { background:#1a2030; }
+button.lg.active { background:#23304a; }
+.swatch { display:inline-block; width:10px; height:10px; border-radius:3px; flex:0 0 auto; }
+.lg-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lg-count { color:var(--muted); font-size:11px; }
+
+#panel { position:fixed; top:70px; right:12px; bottom:12px; width:330px; z-index:4; overflow-y:auto; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+#panel h2 { font-size:18px; margin:0 0 2px; color:var(--accent); }
+#panel .p-name { font-size:12px; color:var(--muted); margin-bottom:10px; word-break:break-all; }
+#panel .p-row { font-size:12px; margin-bottom:10px; display:flex; align-items:center; gap:7px; }
+#panel .p-links { font-size:12px; margin-bottom:4px; }
+#panel h3 { font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:14px 0 7px; }
+.p-chips { display:flex; flex-wrap:wrap; gap:6px; }
+button.chip { padding:4px 8px; border:1px solid var(--border); border-radius:6px; background:#0d1119; color:var(--text); font-size:11px; cursor:pointer; }
+button.chip:hover { border-color:var(--accent); color:var(--accent); }
+.muted { color:var(--muted); font-size:12px; }
+.p-close { position:absolute; top:8px; right:12px; font-size:20px; line-height:1; color:var(--muted); cursor:pointer; padding:2px 6px; }
+.p-close:hover { color:var(--text); }
+
+#tooltip { position:fixed; z-index:6; max-width:280px; padding:9px 11px; background:#1a2130; border:1px solid var(--border); border-radius:8px; pointer-events:none; font-size:12px; box-shadow:0 6px 20px rgba(0,0,0,.4); }
+.tt-name { font-weight:650; color:var(--accent); font-size:13px; }
+.tt-group { display:flex; align-items:center; gap:6px; color:var(--muted); margin:3px 0; }
+.tt-stats { color:var(--muted); }
+
+#error { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; background:var(--bg); color:var(--text); font-size:14px; text-align:center; padding:30px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<header id="bar">
+  <h1>PiLore — module dependency graph</h1>
+  <p class="sub">edge a&nbsp;→&nbsp;b means file <em>a</em> imports file <em>b</em> (src/**/*.ts, ESM relative imports)</p>
+  <span class="grow"></span>
+  <input id="search" type="search" placeholder="Search module… (Enter to focus, Esc to clear)" autocomplete="off">
+  <button class="ctl" id="reset">Reset view</button>
+  <span class="hint">drag to pan · scroll to zoom · drag a node to pin · click a node for details</span>
+</header>
+
+<div id="legend"><h2>Layers</h2><div id="legend-list"></div></div>
+<div id="panel" class="hidden"></div>
+<div id="tooltip" class="hidden"></div>
+<div id="error" class="hidden"></div>
+
+<script>
+var GRAPH_DATA = {"groups":["adapters","core","infrastructure","packs","src"],"nodes":[{"id":"adapters/cli/index","name":"adapters/cli/index","group":"adapters","rel":"adapters/cli/index.ts"},{"id":"adapters/web/index","name":"adapters/web/index","group":"adapters","rel":"adapters/web/index.ts"},{"id":"core/context-policy/index","name":"core/context-policy/index","group":"core","rel":"core/context-policy/index.ts"},{"id":"core/events/index","name":"core/events/index","group":"core","rel":"core/events/index.ts"},{"id":"core/router/index","name":"core/router/index","group":"core","rel":"core/router/index.ts"},{"id":"core/runtime/index","name":"core/runtime/index","group":"core","rel":"core/runtime/index.ts"},{"id":"core/session/index","name":"core/session/index","group":"core","rel":"core/session/index.ts"},{"id":"core/snapshot/index","name":"core/snapshot/index","group":"core","rel":"core/snapshot/index.ts"},{"id":"core/state/index","name":"core/state/index","group":"core","rel":"core/state/index.ts"},{"id":"core/tool-runtime/index","name":"core/tool-runtime/index","group":"core","rel":"core/tool-runtime/index.ts"},{"id":"core/trajectory/recorder","name":"core/trajectory/recorder","group":"core","rel":"core/trajectory/recorder.ts"},{"id":"core/trajectory/types","name":"core/trajectory/types","group":"core","rel":"core/trajectory/types.ts"},{"id":"core/types","name":"core/types","group":"core","rel":"core/types.ts"},{"id":"index","name":"index","group":"src","rel":"index.ts"},{"id":"infrastructure/models/custom","name":"infrastructure/models/custom","group":"infrastructure","rel":"infrastructure/models/custom.ts"},{"id":"infrastructure/models/index","name":"infrastructure/models/index","group":"infrastructure","rel":"infrastructure/models/index.ts"},{"id":"infrastructure/models/providers/deepseek","name":"infrastructure/models/providers/deepseek","group":"infrastructure","rel":"infrastructure/models/providers/deepseek.ts"},{"id":"infrastructure/models/providers/longcat","name":"infrastructure/models/providers/longcat","group":"infrastructure","rel":"infrastructure/models/providers/longcat.ts"},{"id":"infrastructure/models/providers/moonshot-cn","name":"infrastructure/models/providers/moonshot-cn","group":"infrastructure","rel":"infrastructure/models/providers/moonshot-cn.ts"},{"id":"infrastructure/models/providers/ollama","name":"infrastructure/models/providers/ollama","group":"infrastructure","rel":"infrastructure/models/providers/ollama.ts"},{"id":"infrastructure/models/registry","name":"infrastructure/models/registry","group":"infrastructure","rel":"infrastructure/models/registry.ts"},{"id":"infrastructure/models/types","name":"infrastructure/models/types","group":"infrastructure","rel":"infrastructure/models/types.ts"},{"id":"infrastructure/persistence/crypto","name":"infrastructure/persistence/crypto","group":"infrastructure","rel":"infrastructure/persistence/crypto.ts"},{"id":"infrastructure/persistence/memory-store","name":"infrastructure/persistence/memory-store","group":"infrastructure","rel":"infrastructure/persistence/memory-store.ts"},{"id":"infrastructure/persistence/persistence","name":"infrastructure/persistence/persistence","group":"infrastructure","rel":"infrastructure/persistence/persistence.ts"},{"id":"infrastructure/persistence/postgres-store","name":"infrastructure/persistence/postgres-store","group":"infrastructure","rel":"infrastructure/persistence/postgres-store.ts"},{"id":"infrastructure/telemetry/index","name":"infrastructure/telemetry/index","group":"infrastructure","rel":"infrastructure/telemetry/index.ts"},{"id":"packs/code/agent-design/base-prompt","name":"packs/code/agent-design/base-prompt","group":"packs","rel":"packs/code/agent-design/base-prompt.ts"},{"id":"packs/code/agent-design/profiles","name":"packs/code/agent-design/profiles","group":"packs","rel":"packs/code/agent-design/profiles.ts"},{"id":"packs/code/create-code-mentor","name":"packs/code/create-code-mentor","group":"packs","rel":"packs/code/create-code-mentor.ts"},{"id":"packs/code/evaluator","name":"packs/code/evaluator","group":"packs","rel":"packs/code/evaluator.ts"},{"id":"packs/code/exec-client","name":"packs/code/exec-client","group":"packs","rel":"packs/code/exec-client.ts"},{"id":"packs/code/index","name":"packs/code/index","group":"packs","rel":"packs/code/index.ts"},{"id":"packs/code/router-config","name":"packs/code/router-config","group":"packs","rel":"packs/code/router-config.ts"},{"id":"packs/code/snapshot-extension","name":"packs/code/snapshot-extension","group":"packs","rel":"packs/code/snapshot-extension.ts"},{"id":"packs/code/state","name":"packs/code/state","group":"packs","rel":"packs/code/state.ts"},{"id":"packs/code/tools/evaluation","name":"packs/code/tools/evaluation","group":"packs","rel":"packs/code/tools/evaluation.ts"},{"id":"packs/code/tools/execution","name":"packs/code/tools/execution","group":"packs","rel":"packs/code/tools/execution.ts"},{"id":"packs/code/tools/manifest","name":"packs/code/tools/manifest","group":"packs","rel":"packs/code/tools/manifest.ts"},{"id":"packs/code/tools/workspace","name":"packs/code/tools/workspace","group":"packs","rel":"packs/code/tools/workspace.ts"},{"id":"packs/code/vfs","name":"packs/code/vfs","group":"packs","rel":"packs/code/vfs.ts"},{"id":"packs/english/agent-design/base-prompt","name":"packs/english/agent-design/base-prompt","group":"packs","rel":"packs/english/agent-design/base-prompt.ts"},{"id":"packs/english/agent-design/profiles","name":"packs/english/agent-design/profiles","group":"packs","rel":"packs/english/agent-design/profiles.ts"},{"id":"packs/english/create-english-mentor","name":"packs/english/create-english-mentor","group":"packs","rel":"packs/english/create-english-mentor.ts"},{"id":"packs/english/evaluator","name":"packs/english/evaluator","group":"packs","rel":"packs/english/evaluator.ts"},{"id":"packs/english/index","name":"packs/english/index","group":"packs","rel":"packs/english/index.ts"},{"id":"packs/english/router-config","name":"packs/english/router-config","group":"packs","rel":"packs/english/router-config.ts"},{"id":"packs/english/snapshot-extension","name":"packs/english/snapshot-extension","group":"packs","rel":"packs/english/snapshot-extension.ts"},{"id":"packs/english/state","name":"packs/english/state","group":"packs","rel":"packs/english/state.ts"},{"id":"packs/english/tools/manifest","name":"packs/english/tools/manifest","group":"packs","rel":"packs/english/tools/manifest.ts"},{"id":"packs/english/tools/practice","name":"packs/english/tools/practice","group":"packs","rel":"packs/english/tools/practice.ts"},{"id":"packs/english/tools/vocabulary","name":"packs/english/tools/vocabulary","group":"packs","rel":"packs/english/tools/vocabulary.ts"},{"id":"packs/english/vocab","name":"packs/english/vocab","group":"packs","rel":"packs/english/vocab.ts"},{"id":"packs/history/agent-design/base-prompt","name":"packs/history/agent-design/base-prompt","group":"packs","rel":"packs/history/agent-design/base-prompt.ts"},{"id":"packs/history/agent-design/profiles","name":"packs/history/agent-design/profiles","group":"packs","rel":"packs/history/agent-design/profiles.ts"},{"id":"packs/history/create-history-mentor","name":"packs/history/create-history-mentor","group":"packs","rel":"packs/history/create-history-mentor.ts"},{"id":"packs/history/evaluator","name":"packs/history/evaluator","group":"packs","rel":"packs/history/evaluator.ts"},{"id":"packs/history/index","name":"packs/history/index","group":"packs","rel":"packs/history/index.ts"},{"id":"packs/history/tools/manifest","name":"packs/history/tools/manifest","group":"packs","rel":"packs/history/tools/manifest.ts"},{"id":"packs/math/agent-design/base-prompt","name":"packs/math/agent-design/base-prompt","group":"packs","rel":"packs/math/agent-design/base-prompt.ts"},{"id":"packs/math/agent-design/profiles","name":"packs/math/agent-design/profiles","group":"packs","rel":"packs/math/agent-design/profiles.ts"},{"id":"packs/math/create-math-mentor","name":"packs/math/create-math-mentor","group":"packs","rel":"packs/math/create-math-mentor.ts"},{"id":"packs/math/evaluator","name":"packs/math/evaluator","group":"packs","rel":"packs/math/evaluator.ts"},{"id":"packs/math/index","name":"packs/math/index","group":"packs","rel":"packs/math/index.ts"},{"id":"packs/math/tools/manifest","name":"packs/math/tools/manifest","group":"packs","rel":"packs/math/tools/manifest.ts"},{"id":"packs/physics/agent-design/base-prompt","name":"packs/physics/agent-design/base-prompt","group":"packs","rel":"packs/physics/agent-design/base-prompt.ts"},{"id":"packs/physics/agent-design/profiles","name":"packs/physics/agent-design/profiles","group":"packs","rel":"packs/physics/agent-design/profiles.ts"},{"id":"packs/physics/create-physics-mentor","name":"packs/physics/create-physics-mentor","group":"packs","rel":"packs/physics/create-physics-mentor.ts"},{"id":"packs/physics/evaluator","name":"packs/physics/evaluator","group":"packs","rel":"packs/physics/evaluator.ts"},{"id":"packs/physics/index","name":"packs/physics/index","group":"packs","rel":"packs/physics/index.ts"},{"id":"packs/physics/tools/manifest","name":"packs/physics/tools/manifest","group":"packs","rel":"packs/physics/tools/manifest.ts"},{"id":"packs/shared/academic/create-academic-mentor","name":"packs/shared/academic/create-academic-mentor","group":"packs","rel":"packs/shared/academic/create-academic-mentor.ts"},{"id":"packs/shared/academic/evaluator","name":"packs/shared/academic/evaluator","group":"packs","rel":"packs/shared/academic/evaluator.ts"},{"id":"packs/shared/academic/index","name":"packs/shared/academic/index","group":"packs","rel":"packs/shared/academic/index.ts"},{"id":"packs/shared/academic/profile-loader","name":"packs/shared/academic/profile-loader","group":"packs","rel":"packs/shared/academic/profile-loader.ts"},{"id":"packs/shared/academic/router-config","name":"packs/shared/academic/router-config","group":"packs","rel":"packs/shared/academic/router-config.ts"},{"id":"packs/shared/academic/snapshot-extension","name":"packs/shared/academic/snapshot-extension","group":"packs","rel":"packs/shared/academic/snapshot-extension.ts"},{"id":"packs/shared/academic/state","name":"packs/shared/academic/state","group":"packs","rel":"packs/shared/academic/state.ts"},{"id":"packs/shared/academic/study-card-bank","name":"packs/shared/academic/study-card-bank","group":"packs","rel":"packs/shared/academic/study-card-bank.ts"},{"id":"packs/shared/academic/tools","name":"packs/shared/academic/tools","group":"packs","rel":"packs/shared/academic/tools.ts"}],"links":[{"source":"adapters/cli/index","target":"index"},{"source":"adapters/web/index","target":"index"},{"source":"core/router/index","target":"core/state/index"},{"source":"core/router/index","target":"core/context-policy/index"},{"source":"core/router/index","target":"core/types"},{"source":"core/runtime/index","target":"infrastructure/telemetry/index"},{"source":"core/runtime/index","target":"core/router/index"},{"source":"core/runtime/index","target":"core/state/index"},{"source":"core/runtime/index","target":"core/context-policy/index"},{"source":"core/runtime/index","target":"core/tool-runtime/index"},{"source":"core/runtime/index","target":"core/types"},{"source":"core/session/index","target":"core/router/index"},{"source":"core/session/index","target":"core/runtime/index"},{"source":"core/session/index","target":"core/snapshot/index"},{"source":"core/session/index","target":"core/tool-runtime/index"},{"source":"core/session/index","target":"core/context-policy/index"},{"source":"core/session/index","target":"core/trajectory/recorder"},{"source":"core/session/index","target":"core/trajectory/types"},{"source":"core/session/index","target":"core/types"},{"source":"core/snapshot/index","target":"core/types"},{"source":"core/snapshot/index","target":"core/context-policy/index"},{"source":"core/state/index","target":"core/types"},{"source":"core/state/index","target":"core/events/index"},{"source":"core/tool-runtime/index","target":"core/state/index"},{"source":"core/tool-runtime/index","target":"core/types"},{"source":"core/trajectory/recorder","target":"core/tool-runtime/index"},{"source":"core/trajectory/recorder","target":"core/state/index"},{"source":"core/trajectory/recorder","target":"core/events/index"},{"source":"core/trajectory/recorder","target":"core/trajectory/types"},{"source":"core/trajectory/types","target":"core/events/index"},{"source":"core/types","target":"core/router/index"},{"source":"core/types","target":"core/context-policy/index"},{"source":"core/types","target":"core/events/index"},{"source":"core/types","target":"infrastructure/telemetry/index"},{"source":"index","target":"core/runtime/index"},{"source":"index","target":"core/session/index"},{"source":"index","target":"core/trajectory/recorder"},{"source":"index","target":"core/trajectory/types"},{"source":"index","target":"core/state/index"},{"source":"index","target":"core/context-policy/index"},{"source":"index","target":"core/snapshot/index"},{"source":"index","target":"core/types"},{"source":"index","target":"core/router/index"},{"source":"index","target":"core/tool-runtime/index"},{"source":"index","target":"packs/code/index"},{"source":"index","target":"packs/english/index"},{"source":"index","target":"packs/shared/academic/index"},{"source":"index","target":"packs/math/index"},{"source":"index","target":"packs/physics/index"},{"source":"index","target":"packs/history/index"},{"source":"index","target":"infrastructure/models/index"},{"source":"index","target":"infrastructure/telemetry/index"},{"source":"index","target":"infrastructure/persistence/crypto"},{"source":"index","target":"infrastructure/persistence/persistence"},{"source":"index","target":"infrastructure/persistence/memory-store"},{"source":"index","target":"infrastructure/persistence/postgres-store"},{"source":"infrastructure/models/index","target":"infrastructure/models/registry"},{"source":"infrastructure/models/index","target":"infrastructure/models/types"},{"source":"infrastructure/models/index","target":"infrastructure/models/custom"},{"source":"infrastructure/models/index","target":"infrastructure/models/providers/longcat"},{"source":"infrastructure/models/index","target":"infrastructure/models/providers/deepseek"},{"source":"infrastructure/models/index","target":"infrastructure/models/providers/moonshot-cn"},{"source":"infrastructure/models/index","target":"infrastructure/models/providers/ollama"},{"source":"infrastructure/models/providers/deepseek","target":"infrastructure/models/types"},{"source":"infrastructure/models/providers/longcat","target":"infrastructure/models/types"},{"source":"infrastructure/models/providers/moonshot-cn","target":"infrastructure/models/types"},{"source":"infrastructure/models/providers/ollama","target":"infrastructure/models/types"},{"source":"infrastructure/models/registry","target":"infrastructure/models/types"},{"source":"infrastructure/models/registry","target":"infrastructure/models/providers/deepseek"},{"source":"infrastructure/models/registry","target":"infrastructure/models/providers/moonshot-cn"},{"source":"infrastructure/models/registry","target":"infrastructure/models/providers/longcat"},{"source":"infrastructure/models/registry","target":"infrastructure/models/providers/ollama"},{"source":"infrastructure/persistence/memory-store","target":"infrastructure/persistence/persistence"},{"source":"infrastructure/persistence/memory-store","target":"core/snapshot/index"},{"source":"infrastructure/persistence/persistence","target":"core/types"},{"source":"infrastructure/persistence/postgres-store","target":"infrastructure/persistence/crypto"},{"source":"infrastructure/persistence/postgres-store","target":"infrastructure/persistence/persistence"},{"source":"packs/code/agent-design/base-prompt","target":"core/types"},{"source":"packs/code/agent-design/profiles","target":"core/types"},{"source":"packs/code/create-code-mentor","target":"core/runtime/index"},{"source":"packs/code/create-code-mentor","target":"core/session/index"},{"source":"packs/code/create-code-mentor","target":"core/types"},{"source":"packs/code/create-code-mentor","target":"infrastructure/models/index"},{"source":"packs/code/create-code-mentor","target":"infrastructure/telemetry/index"},{"source":"packs/code/create-code-mentor","target":"packs/code/agent-design/base-prompt"},{"source":"packs/code/create-code-mentor","target":"packs/code/agent-design/profiles"},{"source":"packs/code/create-code-mentor","target":"packs/code/evaluator"},{"source":"packs/code/create-code-mentor","target":"packs/code/exec-client"},{"source":"packs/code/create-code-mentor","target":"packs/code/router-config"},{"source":"packs/code/create-code-mentor","target":"packs/code/snapshot-extension"},{"source":"packs/code/create-code-mentor","target":"packs/code/state"},{"source":"packs/code/create-code-mentor","target":"packs/code/tools/manifest"},{"source":"packs/code/create-code-mentor","target":"packs/code/vfs"},{"source":"packs/code/index","target":"packs/code/create-code-mentor"},{"source":"packs/code/index","target":"packs/code/vfs"},{"source":"packs/code/index","target":"packs/code/exec-client"},{"source":"packs/code/index","target":"packs/code/agent-design/profiles"},{"source":"packs/code/index","target":"packs/code/tools/manifest"},{"source":"packs/code/index","target":"packs/code/evaluator"},{"source":"packs/code/index","target":"packs/code/state"},{"source":"packs/code/router-config","target":"core/router/index"},{"source":"packs/code/router-config","target":"core/types"},{"source":"packs/code/router-config","target":"packs/code/state"},{"source":"packs/code/snapshot-extension","target":"core/types"},{"source":"packs/code/snapshot-extension","target":"packs/code/state"},{"source":"packs/code/snapshot-extension","target":"packs/code/vfs"},{"source":"packs/code/state","target":"core/types"},{"source":"packs/code/tools/evaluation","target":"packs/code/vfs"},{"source":"packs/code/tools/evaluation","target":"packs/code/evaluator"},{"source":"packs/code/tools/execution","target":"packs/code/vfs"},{"source":"packs/code/tools/execution","target":"packs/code/exec-client"},{"source":"packs/code/tools/manifest","target":"core/types"},{"source":"packs/code/tools/manifest","target":"packs/code/vfs"},{"source":"packs/code/tools/manifest","target":"packs/code/exec-client"},{"source":"packs/code/tools/manifest","target":"packs/code/evaluator"},{"source":"packs/code/tools/manifest","target":"packs/code/tools/workspace"},{"source":"packs/code/tools/manifest","target":"packs/code/tools/execution"},{"source":"packs/code/tools/manifest","target":"packs/code/tools/evaluation"},{"source":"packs/code/tools/workspace","target":"packs/code/vfs"},{"source":"packs/english/agent-design/base-prompt","target":"core/types"},{"source":"packs/english/agent-design/profiles","target":"core/types"},{"source":"packs/english/create-english-mentor","target":"core/runtime/index"},{"source":"packs/english/create-english-mentor","target":"core/session/index"},{"source":"packs/english/create-english-mentor","target":"core/types"},{"source":"packs/english/create-english-mentor","target":"infrastructure/models/index"},{"source":"packs/english/create-english-mentor","target":"infrastructure/telemetry/index"},{"source":"packs/english/create-english-mentor","target":"packs/english/agent-design/base-prompt"},{"source":"packs/english/create-english-mentor","target":"packs/english/agent-design/profiles"},{"source":"packs/english/create-english-mentor","target":"packs/english/evaluator"},{"source":"packs/english/create-english-mentor","target":"packs/english/router-config"},{"source":"packs/english/create-english-mentor","target":"packs/english/snapshot-extension"},{"source":"packs/english/create-english-mentor","target":"packs/english/state"},{"source":"packs/english/create-english-mentor","target":"packs/english/tools/manifest"},{"source":"packs/english/create-english-mentor","target":"packs/english/vocab"},{"source":"packs/english/index","target":"packs/english/create-english-mentor"},{"source":"packs/english/index","target":"packs/english/vocab"},{"source":"packs/english/index","target":"packs/english/tools/manifest"},{"source":"packs/english/index","target":"packs/english/agent-design/profiles"},{"source":"packs/english/index","target":"packs/english/evaluator"},{"source":"packs/english/index","target":"packs/english/state"},{"source":"packs/english/router-config","target":"core/router/index"},{"source":"packs/english/router-config","target":"core/types"},{"source":"packs/english/router-config","target":"packs/english/state"},{"source":"packs/english/snapshot-extension","target":"core/types"},{"source":"packs/english/snapshot-extension","target":"packs/english/state"},{"source":"packs/english/snapshot-extension","target":"packs/english/vocab"},{"source":"packs/english/state","target":"core/types"},{"source":"packs/english/tools/manifest","target":"core/types"},{"source":"packs/english/tools/manifest","target":"packs/english/vocab"},{"source":"packs/english/tools/manifest","target":"packs/english/state"},{"source":"packs/english/tools/manifest","target":"packs/english/evaluator"},{"source":"packs/english/tools/manifest","target":"packs/english/tools/vocabulary"},{"source":"packs/english/tools/manifest","target":"packs/english/tools/practice"},{"source":"packs/english/tools/practice","target":"packs/english/state"},{"source":"packs/english/tools/practice","target":"packs/english/evaluator"},{"source":"packs/english/tools/vocabulary","target":"packs/english/vocab"},{"source":"packs/english/vocab","target":"core/types"},{"source":"packs/history/agent-design/base-prompt","target":"core/types"},{"source":"packs/history/agent-design/profiles","target":"core/types"},{"source":"packs/history/agent-design/profiles","target":"packs/shared/academic/profile-loader"},{"source":"packs/history/create-history-mentor","target":"packs/shared/academic/evaluator"},{"source":"packs/history/create-history-mentor","target":"packs/shared/academic/create-academic-mentor"},{"source":"packs/history/create-history-mentor","target":"packs/shared/academic/state"},{"source":"packs/history/create-history-mentor","target":"packs/shared/academic/study-card-bank"},{"source":"packs/history/create-history-mentor","target":"packs/history/agent-design/base-prompt"},{"source":"packs/history/create-history-mentor","target":"packs/history/agent-design/profiles"},{"source":"packs/history/create-history-mentor","target":"packs/history/tools/manifest"},{"source":"packs/history/evaluator","target":"packs/shared/academic/evaluator"},{"source":"packs/history/index","target":"packs/history/create-history-mentor"},{"source":"packs/history/index","target":"packs/history/agent-design/profiles"},{"source":"packs/history/index","target":"packs/history/tools/manifest"},{"source":"packs/history/index","target":"packs/history/evaluator"},{"source":"packs/history/tools/manifest","target":"core/types"},{"source":"packs/history/tools/manifest","target":"packs/shared/academic/evaluator"},{"source":"packs/history/tools/manifest","target":"packs/shared/academic/state"},{"source":"packs/history/tools/manifest","target":"packs/shared/academic/study-card-bank"},{"source":"packs/history/tools/manifest","target":"packs/shared/academic/tools"},{"source":"packs/math/agent-design/base-prompt","target":"core/types"},{"source":"packs/math/agent-design/profiles","target":"core/types"},{"source":"packs/math/agent-design/profiles","target":"packs/shared/academic/profile-loader"},{"source":"packs/math/create-math-mentor","target":"packs/shared/academic/evaluator"},{"source":"packs/math/create-math-mentor","target":"packs/shared/academic/create-academic-mentor"},{"source":"packs/math/create-math-mentor","target":"packs/shared/academic/state"},{"source":"packs/math/create-math-mentor","target":"packs/shared/academic/study-card-bank"},{"source":"packs/math/create-math-mentor","target":"packs/math/agent-design/base-prompt"},{"source":"packs/math/create-math-mentor","target":"packs/math/agent-design/profiles"},{"source":"packs/math/create-math-mentor","target":"packs/math/tools/manifest"},{"source":"packs/math/evaluator","target":"packs/shared/academic/evaluator"},{"source":"packs/math/index","target":"packs/math/create-math-mentor"},{"source":"packs/math/index","target":"packs/math/agent-design/profiles"},{"source":"packs/math/index","target":"packs/math/tools/manifest"},{"source":"packs/math/index","target":"packs/math/evaluator"},{"source":"packs/math/tools/manifest","target":"core/types"},{"source":"packs/math/tools/manifest","target":"packs/shared/academic/evaluator"},{"source":"packs/math/tools/manifest","target":"packs/shared/academic/state"},{"source":"packs/math/tools/manifest","target":"packs/shared/academic/study-card-bank"},{"source":"packs/math/tools/manifest","target":"packs/shared/academic/tools"},{"source":"packs/physics/agent-design/base-prompt","target":"core/types"},{"source":"packs/physics/agent-design/profiles","target":"core/types"},{"source":"packs/physics/agent-design/profiles","target":"packs/shared/academic/profile-loader"},{"source":"packs/physics/create-physics-mentor","target":"packs/shared/academic/evaluator"},{"source":"packs/physics/create-physics-mentor","target":"packs/shared/academic/create-academic-mentor"},{"source":"packs/physics/create-physics-mentor","target":"packs/shared/academic/state"},{"source":"packs/physics/create-physics-mentor","target":"packs/shared/academic/study-card-bank"},{"source":"packs/physics/create-physics-mentor","target":"packs/physics/agent-design/base-prompt"},{"source":"packs/physics/create-physics-mentor","target":"packs/physics/agent-design/profiles"},{"source":"packs/physics/create-physics-mentor","target":"packs/physics/tools/manifest"},{"source":"packs/physics/evaluator","target":"packs/shared/academic/evaluator"},{"source":"packs/physics/index","target":"packs/physics/create-physics-mentor"},{"source":"packs/physics/index","target":"packs/physics/agent-design/profiles"},{"source":"packs/physics/index","target":"packs/physics/tools/manifest"},{"source":"packs/physics/index","target":"packs/physics/evaluator"},{"source":"packs/physics/tools/manifest","target":"core/types"},{"source":"packs/physics/tools/manifest","target":"packs/shared/academic/evaluator"},{"source":"packs/physics/tools/manifest","target":"packs/shared/academic/state"},{"source":"packs/physics/tools/manifest","target":"packs/shared/academic/study-card-bank"},{"source":"packs/physics/tools/manifest","target":"packs/shared/academic/tools"},{"source":"packs/shared/academic/create-academic-mentor","target":"core/runtime/index"},{"source":"packs/shared/academic/create-academic-mentor","target":"core/session/index"},{"source":"packs/shared/academic/create-academic-mentor","target":"core/types"},{"source":"packs/shared/academic/create-academic-mentor","target":"infrastructure/models/index"},{"source":"packs/shared/academic/create-academic-mentor","target":"infrastructure/telemetry/index"},{"source":"packs/shared/academic/create-academic-mentor","target":"packs/shared/academic/evaluator"},{"source":"packs/shared/academic/create-academic-mentor","target":"packs/shared/academic/router-config"},{"source":"packs/shared/academic/create-academic-mentor","target":"packs/shared/academic/snapshot-extension"},{"source":"packs/shared/academic/create-academic-mentor","target":"packs/shared/academic/state"},{"source":"packs/shared/academic/create-academic-mentor","target":"packs/shared/academic/study-card-bank"},{"source":"packs/shared/academic/create-academic-mentor","target":"packs/shared/academic/tools"},{"source":"packs/shared/academic/index","target":"packs/shared/academic/create-academic-mentor"},{"source":"packs/shared/academic/index","target":"packs/shared/academic/study-card-bank"},{"source":"packs/shared/academic/index","target":"packs/shared/academic/tools"},{"source":"packs/shared/academic/index","target":"packs/shared/academic/profile-loader"},{"source":"packs/shared/academic/index","target":"packs/shared/academic/evaluator"},{"source":"packs/shared/academic/index","target":"packs/shared/academic/state"},{"source":"packs/shared/academic/profile-loader","target":"core/types"},{"source":"packs/shared/academic/router-config","target":"core/router/index"},{"source":"packs/shared/academic/router-config","target":"core/types"},{"source":"packs/shared/academic/router-config","target":"packs/shared/academic/state"},{"source":"packs/shared/academic/snapshot-extension","target":"core/types"},{"source":"packs/shared/academic/snapshot-extension","target":"packs/shared/academic/state"},{"source":"packs/shared/academic/snapshot-extension","target":"packs/shared/academic/study-card-bank"},{"source":"packs/shared/academic/state","target":"core/types"},{"source":"packs/shared/academic/study-card-bank","target":"core/types"},{"source":"packs/shared/academic/tools","target":"core/types"},{"source":"packs/shared/academic/tools","target":"packs/shared/academic/evaluator"},{"source":"packs/shared/academic/tools","target":"packs/shared/academic/state"},{"source":"packs/shared/academic/tools","target":"packs/shared/academic/study-card-bank"}]};
+
+var stageEl = document.getElementById('stage');
+var tooltipEl = document.getElementById('tooltip');
+var searchEl = document.getElementById('search');
+var legendListEl = document.getElementById('legend-list');
+var panelEl = document.getElementById('panel');
+var errorEl = document.getElementById('error');
+
+var nodeById = new Map(GRAPH_DATA.nodes.map(function (n) { return [n.id, n]; }));
+var outDegree = new Map();
+var inDegree = new Map();
+GRAPH_DATA.nodes.forEach(function (n) { outDegree.set(n.id, 0); inDegree.set(n.id, 0); });
+GRAPH_DATA.links.forEach(function (l) {
+  outDegree.set(l.source, (outDegree.get(l.source) || 0) + 1);
+  inDegree.set(l.target, (inDegree.get(l.target) || 0) + 1);
+});
+
+var colorByGroup = new Map();
+GRAPH_DATA.groups.forEach(function (g, i) {
+  colorByGroup.set(g, 'hsl(' + Math.round(i * 360 / GRAPH_DATA.groups.length) + ', 55%, 62%)');
+});
+function colorFor(group) { return colorByGroup.get(group) || '#8a93a5'; }
+// force-graph resolves link source/target ids into node objects; normalize back to ids.
+function linkEndId(end) { return typeof end === 'object' && end !== null ? end.id : end; }
+function linkKey(l) { return linkEndId(l.source) + '|' + linkEndId(l.target); }
+
+// View state: legend layer focus, search query, hover/selection neighborhood.
+var focusedGroups = new Set();
+var query = '';
+var hoverId = null;
+var selectedId = null;
+var neighborNodes = new Set();
+var neighborLinks = new Set();
+
+var mouseX = 0;
+var mouseY = 0;
+
+function matchesQuery(n) {
+  return query === '' || n.id.indexOf(query) !== -1 || n.name.indexOf(query) !== -1;
+}
+function visible(n) {
+  if (focusedGroups.size && !focusedGroups.has(n.group)) return false;
+  return matchesQuery(n);
+}
+function nodeColor(n) {
+  if (n.id === selectedId) return '#ffd166';
+  if (neighborNodes.size && !neighborNodes.has(n.id)) return 'rgba(122,128,142,0.15)';
+  if (!visible(n)) return 'rgba(122,128,142,0.06)';
+  return colorFor(n.group);
+}
+function linkColor(l) {
+  return neighborLinks.has(linkKey(l)) ? 'rgba(255,209,102,0.75)' : 'rgba(150,160,180,0.16)';
+}
+function linkWidth(l) { return neighborLinks.has(linkKey(l)) ? 1.8 : 0.6; }
+function linkParticles(l) { return neighborLinks.has(linkKey(l)) ? 2 : 0; }
+
+function recomputeNeighbors() {
+  neighborNodes.clear();
+  neighborLinks.clear();
+  var centerId = hoverId || selectedId;
+  if (!centerId) return;
+  neighborNodes.add(centerId);
+  GRAPH_DATA.links.forEach(function (l) {
+    if (l.source === centerId || l.target === centerId) {
+      neighborLinks.add(linkKey(l));
+      neighborNodes.add(l.source);
+      neighborNodes.add(l.target);
+    }
+  });
+}
+
+var graph = null;
+function repaint() {
+  if (!graph) return;
+  graph.nodeColor(graph.nodeColor());
+  graph.linkColor(graph.linkColor());
+  graph.linkWidth(graph.linkWidth());
+  graph.linkDirectionalParticles(graph.linkDirectionalParticles());
+}
+
+function positionTooltip() {
+  var w = tooltipEl.offsetWidth;
+  var h = tooltipEl.offsetHeight;
+  var x = mouseX + 14;
+  var y = mouseY + 14;
+  if (x + w > window.innerWidth - 8) x = mouseX - w - 14;
+  if (y + h > window.innerHeight - 8) y = mouseY - h - 14;
+  tooltipEl.style.left = x + 'px';
+  tooltipEl.style.top = y + 'px';
+}
+function updateTooltip(node) {
+  if (!node) { tooltipEl.classList.add('hidden'); return; }
+  tooltipEl.innerHTML =
+    '<div class="tt-name">' + node.id + '</div>' +
+    '<div class="tt-group"><span class="swatch" style="background:' + colorFor(node.group) + '"></span>' + node.group + '</div>' +
+    '<div class="tt-stats">imports ' + outDegree.get(node.id) + ' · imported by ' + inDegree.get(node.id) + '</div>';
+  tooltipEl.classList.remove('hidden');
+  positionTooltip();
+}
+
+function chip(id) {
+  return '<button class="chip" data-focus="' + id + '">' + id + '</button>';
+}
+function renderPanel() {
+  if (!selectedId) { panelEl.classList.add('hidden'); return; }
+  var n = nodeById.get(selectedId);
+  var deps = GRAPH_DATA.links.filter(function (l) { return l.source === n.id; }).map(function (l) { return l.target; }).sort();
+  var dependents = GRAPH_DATA.links.filter(function (l) { return l.target === n.id; }).map(function (l) { return l.source; }).sort();
+  panelEl.innerHTML =
+    '<div class="p-close" title="Close">×</div>' +
+    '<h2>' + n.id + '</h2>' +
+    '<div class="p-name">src/' + n.rel + '</div>' +
+    '<div class="p-row"><span class="swatch" style="background:' + colorFor(n.group) + '"></span>' + n.group + '</div>' +
+    '<div class="p-links"><a href="https://github.com/jdhnsu/PiloreAi/blob/main/src/' + n.rel + '" target="_blank" rel="noopener">view on GitHub ↗</a> · ' +
+    '<a href="../src/' + n.rel + '" target="_blank" rel="noopener">local file</a></div>' +
+    '<h3>Imports (' + deps.length + ')</h3>' +
+    '<div class="p-chips">' + (deps.length ? deps.map(chip).join('') : '<span class="muted">—</span>') + '</div>' +
+    '<h3>Imported by (' + dependents.length + ')</h3>' +
+    '<div class="p-chips">' + (dependents.length ? dependents.map(chip).join('') : '<span class="muted">—</span>') + '</div>';
+  panelEl.classList.remove('hidden');
+}
+
+function selectNode(node) {
+  selectedId = node ? node.id : null;
+  recomputeNeighbors();
+  repaint();
+  renderPanel();
+}
+function focusNode(id) {
+  selectedId = id;
+  hoverId = null;
+  recomputeNeighbors();
+  repaint();
+  renderPanel();
+  var n = nodeById.get(id);
+  if (n && typeof n.x === 'number') {
+    graph.centerAt(n.x, n.y, 600);
+    graph.zoom(2.2, 600);
+  }
+}
+
+function renderLegend() {
+  var html = '';
+  GRAPH_DATA.groups.forEach(function (g) {
+    var count = GRAPH_DATA.nodes.filter(function (n) { return n.group === g; }).length;
+    html += '<button class="lg" data-group="' + g + '">' +
+      '<span class="swatch" style="background:' + colorFor(g) + '"></span>' +
+      '<span class="lg-name">' + g + '</span>' +
+      '<span class="lg-count">' + count + '</span></button>';
+  });
+  legendListEl.innerHTML = html;
+  legendListEl.querySelectorAll('.lg').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var g = btn.getAttribute('data-group');
+      if (focusedGroups.has(g)) focusedGroups.delete(g); else focusedGroups.add(g);
+      btn.classList.toggle('active', focusedGroups.has(g));
+      repaint();
+    });
+  });
+}
+
+function resetView() {
+  focusedGroups.clear();
+  query = '';
+  searchEl.value = '';
+  selectedId = null;
+  hoverId = null;
+  recomputeNeighbors();
+  repaint();
+  renderPanel();
+  legendListEl.querySelectorAll('.lg').forEach(function (b) { b.classList.remove('active'); });
+  graph.zoomToFit(600, 80);
+}
+
+function init() {
+  // Hand force-graph its own link records so it can resolve ids into node
+  // references without mutating GRAPH_DATA.links (which stays id-based).
+  var linksForGraph = GRAPH_DATA.links.map(function (l) { return { source: l.source, target: l.target }; });
+  graph = ForceGraph()(stageEl)
+    .graphData({ nodes: GRAPH_DATA.nodes, links: linksForGraph })
+    .nodeId('id')
+    .nodeVal(function (n) { return Math.max(2, (outDegree.get(n.id) || 0) + (inDegree.get(n.id) || 0)); })
+    .nodeColor(nodeColor)
+    .linkColor(linkColor)
+    .linkWidth(linkWidth)
+    .linkDirectionalArrowLength(4)
+    .linkDirectionalArrowRelPos(1)
+    .linkDirectionalParticles(linkParticles)
+    .linkDirectionalParticleWidth(1.3)
+    .onNodeHover(function (node) {
+      hoverId = node ? node.id : null;
+      recomputeNeighbors();
+      repaint();
+      updateTooltip(node);
+    })
+    .onNodeClick(selectNode)
+    .onBackgroundClick(function () { selectNode(null); })
+    .onNodeDragEnd(function (n) { n.fx = n.x; n.fy = n.y; });
+  graph.d3Force('charge').strength(-110);
+  graph.d3Force('link').distance(42);
+
+  function size() { graph.width(window.innerWidth).height(window.innerHeight); }
+  window.addEventListener('resize', size);
+  size();
+
+  stageEl.addEventListener('mousemove', function (e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    if (!tooltipEl.classList.contains('hidden')) positionTooltip();
+  });
+
+  panelEl.addEventListener('click', function (e) {
+    var target = e.target;
+    if (!target || typeof target.closest !== 'function') return;
+    var chipEl = target.closest('[data-focus]');
+    if (chipEl) { focusNode(chipEl.getAttribute('data-focus')); return; }
+    if (target.closest('.p-close')) selectNode(null);
+  });
+
+  searchEl.addEventListener('input', function () {
+    query = searchEl.value.trim().toLowerCase();
+    repaint();
+  });
+  searchEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      var m = GRAPH_DATA.nodes.find(function (n) { return matchesQuery(n); });
+      if (m) focusNode(m.id);
+    } else if (e.key === 'Escape') {
+      resetView();
+    }
+  });
+  document.getElementById('reset').addEventListener('click', resetView);
+
+  renderLegend();
+}
+
+function loadFailed() {
+  errorEl.innerHTML = 'The <code>force-graph</code> library failed to load from the CDN.<br>' +
+    'Check your internet connection and reload, or fetch it manually and serve it beside this page.';
+  errorEl.classList.remove('hidden');
+}
+
+(function loadLibrary() {
+  var urls = [
+    'https://cdn.jsdelivr.net/npm/force-graph@1.43.4/dist/force-graph.min.js',
+    'https://unpkg.com/force-graph@1.43.4/dist/force-graph.min.js',
+  ];
+  var i = 0;
+  function next() {
+    if (typeof ForceGraph !== 'undefined') { init(); return; }
+    if (i >= urls.length) { loadFailed(); return; }
+    var s = document.createElement('script');
+    s.src = urls[i++];
+    s.onload = next;
+    s.onerror = next;
+    document.head.appendChild(s);
+  }
+  next();
+})();
+</script>
+</body>
+</html>
