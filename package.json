@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "PiLore — 可扩展的多领域教学 Agent Core 与 Domain Packs",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "mock": "tsx mock/exec-server.ts",
     "chat": "tsx src/adapters/cli/index.ts",

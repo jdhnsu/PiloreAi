@@ -61,7 +61,7 @@ npm run chat:math
 npm run chat:physics
 npm run chat:history
 #
-# EXEC_API_BASE 默认指向真实执行后端 http://192.168.172.134:1313。
+# EXEC_API_BASE 默认指向真实执行后端 http://localhost:1313。
 # 离线环境可改用本地 mock：npm run mock + EXEC_API_BASE=http://localhost:1313
 #（若 1313 被 Windows Hyper-V 保留端口占用: PORT=13131 npm run mock，并同步改 EXEC_API_BASE）
 ```
@@ -301,7 +301,7 @@ const store = createPostgresSessionStore({
 | `LONGCAT_API_KEY` | LongCat key（https://api.longcat.chat/openai），provider id 为 `longcat`，文档见 <https://longcat.chat/platform/docs/zh/> |
 | `MODEL_ID` | 模型 ID，默认按 provider 取（deepseek → `deepseek-v4-pro`，longcat → `LongCat-2.0`），以 `npm run list-models` 为准 |
 | `THINKING_LEVEL` | 推理级别 `off`~`max`，默认 `off` |
-| `EXEC_API_BASE` | 执行服务地址，默认 `http://192.168.172.134:1313`（真实沙箱） |
+| `EXEC_API_BASE` | 执行服务地址，默认 `http://localhost:1313`（真实沙箱） |
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | PostgreSQL 连接参数；核心不会自动读取，由宿主构造 `pg.Pool` 后注入 |
 
 ## 执行后端协议（替换真实沙箱）
@@ -332,3 +332,12 @@ POST {EXEC_API_BASE}/v1/exec
 - moonshot provider 的模块路径是 `@earendil-works/pi-ai/providers/moonshotai-cn`（provider id `moonshotai-cn`），不存在 `providers/moonshot`
 - `Type`（TypeBox）从 `@earendil-works/pi-ai` 导出，`@earendil-works/pi-agent-core` 不导出 `Type`
 - `AgentTool.execute` 返回的 `AgentToolResult` 必须包含 `details` 字段
+
+## 许可证
+
+本项目采用仓库根目录中的 `LICENSE`（PiLore Source-Available License, Non-Commercial）。
+
+- 允许学习、研究、非商业场景下使用、修改与分发
+- 禁止任何商业使用，除非事先取得版权所有者书面授权
+
+如需商业授权，请联系仓库维护者。

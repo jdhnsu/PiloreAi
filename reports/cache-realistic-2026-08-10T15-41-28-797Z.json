@@ -8,7 +8,7 @@
   "roundCap": 70,
   "minRounds": 56,
   "turnsPerPrompt": 6,
-  "execBase": "http://192.168.172.134:1313",
+  "execBase": "http://localhost:1313",
   "stoppedEarly": false,
   "personaSwitchCount": 17,
   "naturalPersonaSwitches": 10,

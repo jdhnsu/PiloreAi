@@ -567,7 +567,7 @@
   <h2>研究方法</h2>
   <p>
     驱动 <code>createEduSession</code>（Agent 核心会话层），注入默认老师集合与真实沙箱
-    <code>http://192.168.172.134:1313</code>。每轮模拟一种真实用法：写代码跑码（write_file + run_code）、
+    <code>http://localhost:1313</code>。每轮模拟一种真实用法：写代码跑码（write_file + run_code）、
     贴学习材料要求讲解、概念问答、贴 bug 代码要求修复并验证。每 3 轮按
     Oris → Feynman → Socrates → 自动路由 的节奏切换角色；<code>maxTurns</code> 设为 6 给工具链留足回合。
     上下文度量口径为「最后一回合 LLM 调用的 input + cacheRead + cacheWrite」，达到 512K 目标即停。
@@ -752,7 +752,7 @@ for r in range(rounds):
   <p><strong>commonPrefixMessages</strong>：当前请求与上次请求共享的完整历史消息条数。</p>
 
   <h2>C. 测试条件</h2>
-  <p><strong>模型</strong>：deepseek-v4-flash · thinking off；<strong>执行后端</strong>：192.168.172.134:1313（真实沙箱）；
+  <p><strong>模型</strong>：deepseek-v4-flash · thinking off；<strong>执行后端</strong>：localhost:1313（真实沙箱）；
   <strong>上下文目标</strong>：~512K tokens；<strong>单轮护栏</strong>：maxTurns=6；<strong>角色节奏</strong>：每 3 轮切换一次。</p>
 </section>
 
