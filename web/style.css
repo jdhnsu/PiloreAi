@@ -1970,7 +1970,7 @@ body.ws-resizing {
 }
 
 .trajectory-detail-pre {
-	background: #fff;
+	background: var(--card);
 	border: 1px solid var(--border);
 	border-radius: 4px;
 	padding: 8px;
