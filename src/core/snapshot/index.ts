@@ -61,7 +61,7 @@ function validateContextSummary(value: Record<string, unknown>, path: string): v
 	assertTimestamp(value.timestamp, `${path}.timestamp`);
 }
 
-/** Validate the durable subset of @earendil-works/pi-ai Message plus PiLore context messages. */
+/** Validate the durable subset of @pilore/pi-ai Message plus PiLore context messages. */
 export function validateSnapshotMessages(messages: unknown): unknown[] {
 	if (!Array.isArray(messages)) throw new Error("snapshot.messages 必须是数组");
 	for (const [index, raw] of messages.entries()) {

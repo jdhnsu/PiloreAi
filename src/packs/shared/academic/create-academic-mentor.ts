@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model, MutableModels } from "@earendil-works/pi-ai";
+import type { ThinkingLevel } from "@pilore/pi-agent-core";
+import type { Model, MutableModels } from "@pilore/pi-ai";
 import { createRuntime, type Runtime } from "../../../core/runtime/index.js";
 import { createSession, type Session } from "../../../core/session/index.js";
 import type { ContextPolicy, DomainPack, ProfileDefinition, SessionSnapshot, ToolManifest } from "../../../core/types.js";

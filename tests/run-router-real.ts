@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { ThinkingLevel } from "@pilore/pi-agent-core";
 import {
 	DEFAULT_MODEL_IDS,
 	getProviderDefinition,

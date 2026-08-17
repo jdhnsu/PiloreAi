@@ -1,4 +1,4 @@
-import type { MutableModels } from "@earendil-works/pi-ai";
+import type { MutableModels } from "@pilore/pi-ai";
 
 /** 模型 provider 的可插拔注册单元：pi-ai provider 工厂 + PiLore 侧元数据。 */
 export interface ProviderDefinition {

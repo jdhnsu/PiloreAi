@@ -8,8 +8,8 @@ import {
 	type MutableModels,
 	type StopReason,
 	type Usage,
-} from "@earendil-works/pi-ai";
-import type { StreamFn } from "@earendil-works/pi-agent-core";
+} from "@pilore/pi-ai";
+import type { StreamFn } from "@pilore/pi-agent-core";
 
 interface PromptHashes {
 	systemPromptHash: string;

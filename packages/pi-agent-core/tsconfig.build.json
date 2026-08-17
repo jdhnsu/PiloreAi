@@ -1,0 +1,14 @@
+{
+	"extends": "../../tsconfig.runtime.json",
+	"compilerOptions": {
+		"outDir": "./dist",
+		"paths": {
+			"@pilore/pi-telemetry": ["../pi-telemetry/dist/index.d.ts"],
+			"@pilore/pi-ai": ["../pi-ai/dist/index.d.ts"],
+			"@pilore/pi-ai/*": ["../pi-ai/dist/*.d.ts", "../pi-ai/dist/providers/*.d.ts"]
+		},
+		"rootDir": "./src"
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist", "**/*.d.ts", "src/**/*.d.ts"]
+}

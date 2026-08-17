@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { ThinkingLevel } from "@pilore/pi-agent-core";
 import {
 	createCodeMentorSession,
 	createModelCollection,

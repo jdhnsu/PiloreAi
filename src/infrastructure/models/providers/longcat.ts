@@ -1,5 +1,5 @@
-import { createProvider, envApiKeyAuth, type Model, type MutableModels, type Provider } from "@earendil-works/pi-ai";
-import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { createProvider, envApiKeyAuth, type Model, type MutableModels, type Provider } from "@pilore/pi-ai";
+import { openAICompletionsApi } from "@pilore/pi-ai/api/openai-completions.lazy";
 import type { ProviderDefinition } from "../types.js";
 
 /**

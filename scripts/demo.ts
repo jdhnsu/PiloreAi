@@ -1,6 +1,6 @@
 import "dotenv/config";
 import type { AddressInfo } from "node:net";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@pilore/pi-ai";
 import { createCodeMentorSession, type SessionEvent } from "../src/index.js";
 import { createMockExecServer } from "../mock/exec-server.js";
 

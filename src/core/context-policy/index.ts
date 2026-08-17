@@ -1,5 +1,5 @@
-import { contentText, type Context, type Model, type MutableModels } from "@earendil-works/pi-ai";
-import type { AgentMessage, AgentTool, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { contentText, type Context, type Model, type MutableModels } from "@pilore/pi-ai";
+import type { AgentMessage, AgentTool, ThinkingLevel } from "@pilore/pi-agent-core";
 
 /** Controls how a session stays within the active model's usable context budget. */
 export interface ContextPolicy {
@@ -32,7 +32,7 @@ export interface ContextSummaryMessage {
 	timestamp: number;
 }
 
-declare module "@earendil-works/pi-agent-core" {
+declare module "@pilore/pi-agent-core" {
 	interface CustomAgentMessages {
 		piloreContextSummary: ContextSummaryMessage;
 	}

@@ -1,5 +1,5 @@
-import type { AgentTool, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model, MutableModels } from "@earendil-works/pi-ai";
+import type { AgentTool, ThinkingLevel } from "@pilore/pi-agent-core";
+import type { Model, MutableModels } from "@pilore/pi-ai";
 import type { ProfileContextMessage } from "./router/index.js";
 import type { ContextPolicy } from "./context-policy/index.js";
 

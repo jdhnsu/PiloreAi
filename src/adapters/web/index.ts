@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type MutableModels } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type MutableModels } from "@pilore/pi-ai";
 import { simulate } from "../../../mock/exec-server.js";
 import {
 	applyPostgresMigrations,

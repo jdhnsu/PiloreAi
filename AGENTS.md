@@ -6,7 +6,7 @@ PiLore 是可嵌入的多领域教学 Agent。当前实现由领域无关 Core�
 
 分层目录 `core/`、`packs/`、`infrastructure/`、`adapters/` 的 import 边界如下（上层可依赖下层；`src/index.ts` 是唯一聚合入口，仓库消费者不得绕过）：
 
-- `src/core/`：通用 Runtime、Session、State、Snapshot、Profile Router、动态 Tool Runtime 与事件协议。只允许依赖 `@earendil-works/*`、Node 内置与 `infrastructure/telemetry`（遥测 streamFn 包装属 Runtime 机制，受控例外）。不得导入任何 Pack、VFS、ExecClient 或领域术语。
+- `src/core/`：通用 Runtime、Session、State、Snapshot、Profile Router、动态 Tool Runtime 与事件协议。只允许依赖 `@pilore/pi-agent-core`、`@pilore/pi-ai`、Node 内置与 `infrastructure/telemetry`（遥测 streamFn 包装属 Runtime 机制，受控例外）。不得导入任何 Pack、VFS、ExecClient 或领域术语。
 - `src/packs/code/`：编程导师设定、Profiles、进度、VFS、执行器、评估器和代码工具。
 - `src/packs/english/`：英语导师设定、Profiles、词汇、练习、评估器和领域工具。
 - `src/packs/math/`：大学数学导师设定、Profiles、学科卡片、练习与评估器。
@@ -14,7 +14,8 @@ PiLore 是可嵌入的多领域教学 Agent。当前实现由领域无关 Core�
 - `src/packs/history/`：大学历史导师设定、Profiles、学科卡片、练习与评估器。
 - `src/packs/shared/academic/`：三个大学学科 Pack 共用的本地状态、卡片、练习、快照与可选评估接口。
 - `src/packs/`（各 Pack）：可依赖 `core/` 与 `infrastructure/models`、`infrastructure/telemetry`（仅类型）；不得依赖 Adapter。数学/物理/历史 Pack 可共享 `src/packs/shared/academic/`。
-- `src/infrastructure/`：模型注册、遥测和持久化。可依赖 `@earendil-works/*`、Node 内置、`pg` 与 `core/`（仅 `core/types`、`core/snapshot`，供持久化使用）；不得依赖 Pack。
+- `src/infrastructure/`：模型注册、遥测和持久化。可依赖 `@pilore/pi-ai`、`@pilore/pi-telemetry`、Node 内置、`pg` 与 `core/`（仅 `core/types`、`core/snapshot`，供持久化使用）；不得依赖 Pack。
+- `packages/`：PiLore 维护的底层运行时源码工作区，依赖顺序固定为 `pi-telemetry` → `pi-ai` → `pi-agent-core`；不得反向依赖 `src/`。
 - `src/adapters/cli/`、`src/adapters/web/`：产品入口，只通过 `src/index.ts` 消费公开 API，不得新增深层导入；web 的 faux demo 是唯一例外（引用 `mock/exec-server.ts`）。
 - `src/index.ts`：唯一公开入口。仓库消费者不得新增深层导入。
 

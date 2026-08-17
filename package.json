@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "description": "PiLore — 可扩展的多领域教学 Agent Core 与 Domain Packs",
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
@@ -22,7 +25,13 @@
     "example:embed": "tsx examples/embed-minimal.ts",
     "gen:module-graph": "tsx scripts/gen-module-graph.ts",
     "verify:module-graph": "tsx scripts/gen-module-graph.ts --check",
+    "build:runtime": "npm run build --workspace=@pilore/pi-telemetry && npm run build:offline --workspace=@pilore/pi-ai && npm run build --workspace=@pilore/pi-agent-core",
+    "verify:runtime-source": "node scripts/verify-runtime-source.mjs",
+    "export:runtime-mirrors": "node scripts/export-runtime-mirrors.mjs",
+    "test:runtime": "npm run build:runtime && npm run test:offline --workspace=@pilore/pi-telemetry && npm run test:offline --workspace=@pilore/pi-ai && npm run test:offline --workspace=@pilore/pi-agent-core",
+    "pretypecheck": "npm run build:runtime",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build:runtime",
     "test": "node --import tsx --test tests/unit/*.test.ts",
     "test:postgres": "node --import tsx --test tests/integration/postgres-store.test.ts",
     "test:agent": "node --import tsx --test tests/unit/core.test.ts tests/unit/code-pack.test.ts tests/unit/code-mentor-session.test.ts tests/unit/english-pack.test.ts tests/unit/academic-packs.test.ts",
@@ -31,8 +40,8 @@
     "test:agent:all": "npm test && npm run test:agent:real"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.84.1",
-    "@earendil-works/pi-ai": "^0.84.1",
+    "@pilore/pi-agent-core": "0.84.1-pilore.0",
+    "@pilore/pi-ai": "0.84.1-pilore.0",
     "dotenv": "^17.4.2",
     "pg": "^8.23.0",
     "yaml": "^2.9.0"
@@ -41,6 +50,8 @@
     "@types/node": "^26.1.2",
     "@types/pg": "^8.21.0",
     "tsx": "^4.23.10",
-    "typescript": "^7.0.2"
+    "shx": "0.4.0",
+    "typescript": "^7.0.2",
+    "vitest": "4.1.9"
   }
 }

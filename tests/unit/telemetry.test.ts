@@ -6,7 +6,7 @@ import {
 	fauxAssistantMessage,
 	fauxProvider,
 	type MutableModels,
-} from "@earendil-works/pi-ai";
+} from "@pilore/pi-ai";
 import { createObservedStreamFn, type LlmTelemetryEvent } from "../../src/index.js";
 
 test("telemetry 记录逻辑调用、每次 HTTP attempt、usage 与脱敏哈希", async () => {

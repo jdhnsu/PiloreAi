@@ -20,6 +20,7 @@ PiLore 由领域无关的 Core，以及 Code、English、大学数学、大学�
 
 - 使用或嵌入： [架构总览](docs/architecture.md)、[嵌入与 Session API](docs/embedding.md)、[Adapters 与 HTTP API](docs/adapters.md)
 - 理解通用运行机制： [Core](docs/core.md)、[持久化与 PostgreSQL](docs/persistence.md)、[模型与遥测](docs/models-and-telemetry.md)
+- 维护底层运行时： [Pi 运行时源码分叉](docs/runtime-source-fork.md)
 - 开发或扩展领域： [Packs](docs/packs.md)、[开发新的 Pack](docs/pack-development.md)、[大学学科 Packs](docs/academic-packs.md)
 
 **亮点**
@@ -129,7 +130,7 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 数据流（一次对话）：
 
 1. CLI / Web Adapter 收到用户输入 → `session.prompt(text)`
-2. Agent loop（`@earendil-works/pi-agent-core` 的 `Agent`）通过 `streamFn`（`models.streamSimple`）请求 LLM
+2. Agent loop（`@pilore/pi-agent-core` 的 `Agent`）通过 `streamFn`（`models.streamSimple`）请求 LLM
 3. LLM 先用 `activate_toolset` 动态加载工具组，再调用 Pack 工具
 4. `SessionEvent` 由 Adapter 实时渲染：流式文本、Profile、工具组与工具结果
 5. LLM 基于工具结果继续下一轮，直到产出讲解文本并结束
@@ -138,8 +139,8 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 
 ### 依赖说明
 
-- [`@earendil-works/pi-ai`](https://www.npmjs.com/package/@earendil-works/pi-ai)：统一 LLM API（models 集合、provider、流式事件协议）
-- [`@earendil-works/pi-agent-core`](https://www.npmjs.com/package/@earendil-works/pi-agent-core)：agent loop / 工具调度 / 事件流
+- [`@pilore/pi-ai`](packages/pi-ai/README.md)：统一 LLM API（models 集合、provider、流式事件协议）
+- [`@pilore/pi-agent-core`](packages/pi-agent-core/README.md)：agent loop / 工具调度 / 事件流
 - [`yaml`](https://www.npmjs.com/package/yaml)：老师设计文档 frontmatter 元数据解析
 - 不引入 `@earendil-works/pi-coding-agent`：其内置工具面向本地 fs / 进程，与本项目"内存 VFS + 远程沙箱"的模型不符
 
@@ -329,8 +330,8 @@ POST {EXEC_API_BASE}/v1/exec
 
 实现基于对安装包 `.d.ts` 的实际核对，与任务描述的两处差异如下：
 
-- moonshot provider 的模块路径是 `@earendil-works/pi-ai/providers/moonshotai-cn`（provider id `moonshotai-cn`），不存在 `providers/moonshot`
-- `Type`（TypeBox）从 `@earendil-works/pi-ai` 导出，`@earendil-works/pi-agent-core` 不导出 `Type`
+- moonshot provider 的模块路径是 `@pilore/pi-ai/providers/moonshotai-cn`（provider id `moonshotai-cn`），不存在 `providers/moonshot`
+- `Type`（TypeBox）从 `@pilore/pi-ai` 导出，`@pilore/pi-agent-core` 不导出 `Type`
 - `AgentTool.execute` 返回的 `AgentToolResult` 必须包含 `details` 字段
 
 ## 许可证

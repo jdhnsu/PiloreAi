@@ -1,5 +1,5 @@
-import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
-import type { MutableModels } from "@earendil-works/pi-ai";
+import { deepseekProvider } from "@pilore/pi-ai/providers/deepseek";
+import type { MutableModels } from "@pilore/pi-ai";
 import type { ProviderDefinition } from "../types.js";
 
 export const DEEPSEEK_DOCS_URL = "https://platform.deepseek.com/";

@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentMessage } from "@pilore/pi-agent-core";
 import { appendProfileContext, convertProfileMessages, createProfileContext } from "../router/index.js";
 import { createRuntime, type Runtime } from "../runtime/index.js";
 import { cloneCoreSnapshot, validateCoreSnapshot } from "../snapshot/index.js";

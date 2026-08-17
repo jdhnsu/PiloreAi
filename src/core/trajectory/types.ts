@@ -1,4 +1,4 @@
-import type { Usage } from "@earendil-works/pi-ai";
+import type { Usage } from "@pilore/pi-ai";
 import type { ProfileChangeSource } from "../events/index.js";
 
 /** Model-visible tool schema captured at call time. */
