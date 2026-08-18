@@ -57,9 +57,10 @@ services:
     ports:
       - "9600:9600"
     volumes:
-      - ../data:/app/data:rw
+      - pilore-data:/app/data
       - ../migrations:/app/migrations:ro
     command: ["node", "dist/src/adapters/web/index.js"]
 
 volumes:
   postgres-data:
+  pilore-data:

@@ -16,3 +16,4 @@ desktop.ini
 docs/trajectory.md
 .artifacts/
 packages/*/dist/
+out/
