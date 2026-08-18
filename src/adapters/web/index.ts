@@ -1,6 +1,7 @@
 import "dotenv/config";
 import http from "node:http";
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,8 +75,12 @@ import {
  */
 
 const FAUX_DEMO = process.env.FAUX_DEMO === "1";
-// path.resolve 去掉 fileURLToPath 目录 URL 的尾部斜杠，保证前缀守卫一致
-const WEB_ROOT = path.resolve(fileURLToPath(new URL("../../../web/", import.meta.url)));
+// 运行时可能在 src/ 或 dist/ 下执行；两种路径都兼容，避免 Docker 产物里静态资源 404。
+const WEB_ROOT_CANDIDATES = [
+	path.resolve(fileURLToPath(new URL("../../../web/", import.meta.url))),
+	path.resolve(fileURLToPath(new URL("../../../../web/", import.meta.url))),
+];
+const WEB_ROOT = WEB_ROOT_CANDIDATES.find((candidate) => existsSync(path.join(candidate, "index.html"))) ?? WEB_ROOT_CANDIDATES[0];
 const DEFAULT_REGISTRY_PATH = path.resolve(fileURLToPath(new URL("../../../data/beta-users.json", import.meta.url)));
 const MIME: Record<string, string> = {
 	".html": "text/html; charset=utf-8",

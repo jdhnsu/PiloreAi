@@ -1,0 +1,14 @@
+{
+	"extends": "./tsconfig.runtime.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"outDir": "dist",
+		"declaration": false,
+		"declarationMap": false,
+		"sourceMap": false,
+		"inlineSourceMap": false,
+		"inlineSources": false,
+		"erasableSyntaxOnly": false
+	},
+	"include": ["src/**/*", "mock/**/*"]
+}

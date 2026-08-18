@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+data/beta-users.json
+.git
+*.log
+.artifacts
+reports
+tests
+docs
+examples
+scripts
+AGENTS.md
+DESIGN.md
+README.md
+THIRD_PARTY_NOTICES.md
+LICENSE

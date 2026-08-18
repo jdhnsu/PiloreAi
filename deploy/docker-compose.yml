@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: pilore-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pilore
+      POSTGRES_USER: pilore
+      POSTGRES_PASSWORD: pilorepass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pilore -d pilore"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  codapi-dind:
+    image: codapi-dind:latest
+    container_name: codapi-dind
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "1313:1313"
+    environment:
+      CODAPI_HOST: 0.0.0.0
+      CODAPI_PORT: 1313
+
+  pilore:
+    image: pilore-edu-agent:latest
+    container_name: pilore
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      codapi-dind:
+        condition: service_started
+    env_file:
+      - ../.env
+    environment:
+      FAUX_DEMO: "0"
+      WEB_PORT: "9600"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: pilore
+      DB_PASSWORD: pilorepass
+      DB_NAME: pilore
+      SESSION_ENCRYPTION_KEY: "8027db603c796500cd056b1f6b95dd151436b0f6915b2e354a645420ef4538b9"
+      AUTH_SECRET: "9b12d3fe1cc3a4ac2c10f03af87a6184cb06a5361f1a276c7a7ecaa503449105"
+      BETA_USERS_FILE: /app/data/beta-users.json
+      EXEC_API_BASE: http://codapi-dind:1313
+      PILORE_CONTEXT_WINDOW: "128000"
+      PILORE_MAX_INPUT_TOKENS: "12000"
+    ports:
+      - "9600:9600"
+    volumes:
+      - ../data:/app/data:rw
+      - ../migrations:/app/migrations:ro
+    command: ["node", "dist/src/adapters/web/index.js"]
+
+volumes:
+  postgres-data:
