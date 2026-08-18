@@ -78,48 +78,97 @@
 		button:disabled { opacity: 0.6; cursor: default; }
 
 		.error { color: var(--danger); margin-top: 12px; min-height: 1.4em; }
+
+		.mode-switch { display: flex; gap: 4px; margin-bottom: 20px; background: var(--bg); border-radius: 6px; padding: 3px; }
+		.mode-switch button {
+			flex: 1; margin: 0; padding: 7px 0; background: transparent; color: var(--text-secondary);
+			font-weight: 600; border-radius: 4px;
+		}
+		.mode-switch button.active { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+		.field-hidden { display: none; }
 	</style>
 </head>
 <body>
-	<form class="login-card" id="login-form">
+	<form class="login-card" id="auth-form">
 		<div class="brand">
 			<h1><span class="wm-pi">Pi</span>Lore</h1>
 		</div>
 		<p class="subtitle">AI 学习助手 · 内测版</p>
 
-		<label for="code">邀请码</label>
-		<input id="code" name="code" type="text" autocomplete="off" spellcheck="false" required placeholder="pil-XXXX-XXXX-XXXX">
+		<div class="mode-switch" aria-label="登录或注册">
+			<button type="button" id="mode-login" class="active">登录</button>
+			<button type="button" id="mode-register">注册</button>
+		</div>
 
-		<label for="name">昵称 <span class="hint">（可选，方便我们记住你）</span></label>
-		<input id="name" name="name" type="text" autocomplete="nickname" maxlength="40" placeholder="例如：小明">
+		<div id="field-code" class="field-hidden">
+			<label for="code">邀请码 <span class="hint">（一次性，注册后失效）</span></label>
+			<input id="code" name="code" type="text" autocomplete="off" spellcheck="false" placeholder="pil-XXXX-XXXX-XXXX">
+		</div>
+
+		<label for="email">邮箱</label>
+		<input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+
+		<label for="password">密码 <span class="hint" id="password-hint"></span></label>
+		<input id="password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+
+		<div id="field-name" class="field-hidden">
+			<label for="name">昵称 <span class="hint">（可选，方便我们记住你）</span></label>
+			<input id="name" name="name" type="text" autocomplete="nickname" maxlength="40" placeholder="例如：小明">
+		</div>
 
 		<button id="submit" type="submit">进入学习</button>
 		<p class="error" id="error" role="alert"></p>
 	</form>
 
 	<script>
-		const form = document.getElementById("login-form");
+		const form = document.getElementById("auth-form");
 		const errorEl = document.getElementById("error");
 		const submitEl = document.getElementById("submit");
+		const passwordInput = document.getElementById("password");
+		const passwordHint = document.getElementById("password-hint");
+		const modeLoginBtn = document.getElementById("mode-login");
+		const modeRegisterBtn = document.getElementById("mode-register");
+		let mode = "login";
+
+		function setMode(next) {
+			mode = next;
+			errorEl.textContent = "";
+			const isRegister = mode === "register";
+			modeLoginBtn.classList.toggle("active", !isRegister);
+			modeRegisterBtn.classList.toggle("active", isRegister);
+			document.getElementById("field-code").classList.toggle("field-hidden", !isRegister);
+			document.getElementById("field-name").classList.toggle("field-hidden", !isRegister);
+			passwordInput.autocomplete = isRegister ? "new-password" : "current-password";
+			passwordHint.textContent = isRegister ? "（至少 8 位）" : "";
+			submitEl.textContent = isRegister ? "注册并进入" : "进入学习";
+		}
+		modeLoginBtn.addEventListener("click", () => setMode("login"));
+		modeRegisterBtn.addEventListener("click", () => setMode("register"));
+
 		form.addEventListener("submit", async (event) => {
 			event.preventDefault();
 			errorEl.textContent = "";
 			submitEl.disabled = true;
+			const payload = {
+				email: document.getElementById("email").value,
+				password: passwordInput.value,
+			};
+			if (mode === "register") {
+				payload.code = document.getElementById("code").value;
+				payload.name = document.getElementById("name").value.trim();
+			}
 			try {
-				const resp = await fetch("/api/login", {
+				const resp = await fetch(mode === "register" ? "/api/register" : "/api/login", {
 					method: "POST",
 					headers: { "content-type": "application/json" },
-					body: JSON.stringify({
-						code: document.getElementById("code").value,
-						name: document.getElementById("name").value.trim(),
-					}),
+					body: JSON.stringify(payload),
 				});
 				const data = await resp.json().catch(() => ({}));
 				if (resp.ok) {
 					window.location.replace("/");
 					return;
 				}
-				errorEl.textContent = data.error || "登录失败，请重试";
+				errorEl.textContent = data.error || "操作失败，请重试";
 			} catch {
 				errorEl.textContent = "网络错误，请重试";
 			} finally {

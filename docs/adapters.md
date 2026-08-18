@@ -46,9 +46,12 @@ npm run web:demo   # fauxProvider + 进程内 mock；无需 API key
 
 ## 内测登录与会话隔离
 
-真实模式（非 `FAUX_DEMO=1`）强制邀请码登录，`FAUX_DEMO` 演示模式保持免登录：
+真实模式（非 `FAUX_DEMO=1`）要求先用一次性邀请码注册，再用邮箱密码登录；`FAUX_DEMO` 演示模式保持免登录：
 
-- 注册表：`BETA_USERS_FILE`（默认 `data/beta-users.json`，已 gitignore）。用 `npm run gen:beta-codes [count] [prefix]` 生成：明文邀请码只打印一次，文件里只存 SHA-256 哈希。注册表每次登录热重载——删除某行即可即时吊销该用户。
+- 注册表：`BETA_USERS_FILE`（默认 `data/beta-users.json`，已 gitignore）。用 `npm run gen:beta-codes [count] [prefix]` 生成：明文邀请码只打印一次，文件里只存 SHA-256 哈希。邀请码只用于首次注册，成功后写入 `pilore.invite_codes`，不能再次使用。
+- 注册：`POST /api/register { code, email, password, name? }`；密码要求 8-128 个字符，服务端使用 Node `scrypt` 加盐哈希，注册成功后自动登录。
+- 登录：`POST /api/login { email, password }`；邮箱统一转小写，服务端只保存邮箱和密码哈希，不保存明文密码。
+- 吊销：删除 `beta-users.json` 中尚未使用的邀请码；已经注册的用户需要后续增加账户禁用机制，不能通过删除注册表行撤销邮箱密码登录。
 - Cookie 密钥：`AUTH_SECRET`（≥32 字符）。未设置时随机生成并在日志告警（重启后所有用户需重新登录）。
 - Cookie：`pilore_auth`，HMAC-SHA256 签名、`HttpOnly`、`SameSite=Lax`、30 天有效；请求经 `x-forwarded-proto: https`、TLS 直连或显式 `WEB_COOKIE_SECURE=1` 时附加 `Secure`。生产部署在 HTTPS 反代后应显式设置 `WEB_COOKIE_SECURE=1`。
 - 限流：同一来源（反代后取 `X-Forwarded-For` 首跳）每分钟最多 5 次失败登录，超出返回 429。
@@ -78,7 +81,8 @@ WHERE s.user_id = 'beta-01' ORDER BY r.started_at DESC;
 
 | 方法与路径 | 请求 | 响应/行为 |
 | --- | --- | --- |
-| `POST /api/login` | `{ "code", "name?" }` | 校验邀请码，成功设置登录 Cookie 并返回 `{ userId, displayName }`；错误码 401，限流 429 |
+| `POST /api/register` | `{ "code", "email", "password", "name?" }` | 核销一次性邀请码并创建账号，成功设置登录 Cookie；邀请码已使用 409，邮箱已注册 409 |
+| `POST /api/login` | `{ "email", "password" }` | 校验邮箱密码并设置登录 Cookie；错误码 401，限流 429 |
 | `POST /api/logout` | — | 清除登录 Cookie |
 | `GET /api/me` | — | 当前登录用户 `{ userId, displayName }`；未登录 401 |
 | `GET /api/packs` | — | Pack id、名称、提示语、侧栏标题、推荐问题、Profile 目录 |

@@ -1,8 +1,8 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 /**
- * 内测邀请码认证：注册表热重载 + HMAC 签名 Cookie + 登录限流。
+ * 内测认证：一次性邀请码注册表（热重载）+ scrypt 密码哈希 + HMAC 签名 Cookie + 登录限流。
  * 只依赖 Node 内置模块；注册表只存邀请码的 SHA-256 哈希。
  */
 
@@ -23,6 +23,12 @@ export interface BetaAuthOptions {
 
 export interface AuthedUser {
 	userId: string;
+}
+
+/** 注册表校验结果：userId 与对应的邀请码哈希（注册核销用）。 */
+export interface VerifiedInviteCode {
+	userId: string;
+	codeHash: string;
 }
 
 interface RegistryFile {
@@ -51,6 +57,46 @@ export function resolveAuthSecret(raw: string | undefined): Buffer | undefined {
 	if (!value) return undefined;
 	if (value.length < 32) throw new Error("AUTH_SECRET 至少 32 个字符");
 	return Buffer.from(value, "utf8");
+}
+
+/** 邀请码统一大写去空白后参与哈希；与发码脚本保持一致。 */
+export function normalizeInviteCode(code: string): string {
+	return code.trim().toUpperCase();
+}
+
+export function inviteCodeHash(normalizedCode: string): string {
+	return createHash("sha256").update(normalizedCode).digest("hex");
+}
+
+export interface PasswordDigest {
+	algorithm: "scrypt";
+	salt: string;
+	hash: string;
+}
+
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_COST = { N: 16384, r: 8, p: 1 };
+
+export function hashPassword(password: string): PasswordDigest {
+	const salt = randomBytes(16);
+	const hash = scryptSync(Buffer.from(password, "utf8"), salt, SCRYPT_KEYLEN, SCRYPT_COST);
+	return { algorithm: "scrypt", salt: salt.toString("hex"), hash: hash.toString("hex") };
+}
+
+export function verifyPassword(password: string, digest: { salt: string; hash: string }): boolean {
+	const salt = Buffer.from(digest.salt, "hex");
+	const expected = Buffer.from(digest.hash, "hex");
+	if (salt.length === 0 || expected.length === 0) return false;
+	const derived = scryptSync(Buffer.from(password, "utf8"), salt, expected.length, SCRYPT_COST);
+	return timingSafeEqual(derived, expected);
+}
+
+/** 邮箱规范化：去空白转小写 + 基本格式校验；不合法返回 undefined。 */
+export function normalizeEmail(raw: string): string | undefined {
+	const email = raw.trim().toLowerCase();
+	if (!email || email.length > 254) return undefined;
+	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return undefined;
+	return email;
 }
 
 export class BetaAuth {
@@ -87,14 +133,14 @@ export class BetaAuth {
 		return byHash;
 	}
 
-	/** 校验邀请码；成功返回 userId，失败返回 undefined。注册表读不到时抛出（区别于"码错误"）。 */
-	async authenticate(code: string): Promise<AuthedUser | undefined> {
-		const normalized = code.trim().toUpperCase();
+	/** 校验邀请码；成功返回 userId 与码哈希，失败返回 undefined。注册表读不到时抛出（区别于"码错误"）。 */
+	async authenticate(code: string): Promise<VerifiedInviteCode | undefined> {
+		const normalized = normalizeInviteCode(code);
 		if (!normalized) return undefined;
 		const registry = await this.loadRegistry();
-		const hash = createHash("sha256").update(normalized).digest("hex");
+		const hash = inviteCodeHash(normalized);
 		const userId = registry.get(hash);
-		return userId ? { userId } : undefined;
+		return userId ? { userId, codeHash: hash } : undefined;
 	}
 
 	/** 窗口内失败次数已达上限时返回 true（此时不应再尝试验证邀请码）。 */

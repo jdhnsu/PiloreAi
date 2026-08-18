@@ -9,6 +9,7 @@ import {
 	type CompleteRunInput,
 	type CreateStoredSession,
 	type FailRunInput,
+	type NewUserRecord,
 	type RunAuditPayload,
 	type SaveTrajectoryInput,
 	type SessionIdentity,
@@ -16,6 +17,7 @@ import {
 	type SessionSummary,
 	type StoredRun,
 	type StoredSession,
+	type StoredUserCredentials,
 } from "./persistence.js";
 import type { TrajectoryRun } from "../../core/trajectory/types.js";
 import { cloneCoreSnapshot } from "../../core/snapshot/index.js";
@@ -23,6 +25,13 @@ import { cloneCoreSnapshot } from "../../core/snapshot/index.js";
 interface MemoryRun extends StoredRun {
 	audit: RunAuditPayload;
 	errorCode?: string;
+}
+
+interface MemoryUser {
+	displayName?: string;
+	email?: string;
+	passwordSalt?: string;
+	passwordHash?: string;
 }
 
 function assertSupportedVersion(snapshot: { version: number }): void {
@@ -39,7 +48,9 @@ export class InMemorySessionStore implements SessionStore {
 	private readonly sessions = new Map<string, StoredSession>();
 	private readonly runs = new Map<string, MemoryRun>();
 	private readonly trajectories = new Map<string, TrajectoryRun>();
-	private readonly displayNames = new Map<string, string>();
+	private readonly users = new Map<string, MemoryUser>();
+	/** 已核销的一次性邀请码哈希；注册即写入，防止重复使用。 */
+	private readonly redeemedCodes = new Set<string>();
 
 	async create(input: CreateStoredSession): Promise<StoredSession> {
 		const id = input.id ?? randomUUID();
@@ -166,11 +177,37 @@ export class InMemorySessionStore implements SessionStore {
 	}
 
 	async upsertUser(userId: string, displayName: string | null): Promise<void> {
-		if (displayName !== null) this.displayNames.set(userId, displayName);
+		if (displayName === null) return;
+		const user = this.users.get(userId) ?? {};
+		user.displayName = displayName;
+		this.users.set(userId, user);
 	}
 
 	async getUserDisplayName(userId: string): Promise<string | null> {
-		return this.displayNames.get(userId) ?? null;
+		return this.users.get(userId)?.displayName ?? null;
+	}
+
+	async registerUser(input: NewUserRecord): Promise<void> {
+		if (this.redeemedCodes.has(input.inviteCodeHash)) throw new SessionStoreError("邀请码已被使用", "INVITE_CODE_REDEEMED");
+		for (const user of this.users.values()) {
+			if (user.email === input.email) throw new SessionStoreError("邮箱已注册", "EMAIL_TAKEN");
+		}
+		this.redeemedCodes.add(input.inviteCodeHash);
+		const user = this.users.get(input.userId) ?? {};
+		user.email = input.email;
+		user.passwordSalt = input.passwordSalt;
+		user.passwordHash = input.passwordHash;
+		if (input.displayName !== null) user.displayName = input.displayName;
+		this.users.set(input.userId, user);
+	}
+
+	async findUserByEmail(email: string): Promise<StoredUserCredentials | undefined> {
+		for (const [userId, user] of this.users) {
+			if (user.email === email && user.passwordSalt && user.passwordHash) {
+				return { userId, displayName: user.displayName ?? null, passwordSalt: user.passwordSalt, passwordHash: user.passwordHash };
+			}
+		}
+		return undefined;
 	}
 
 	private cloneStored(stored: StoredSession): StoredSession {

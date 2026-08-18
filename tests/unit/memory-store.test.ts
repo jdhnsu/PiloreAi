@@ -79,3 +79,22 @@ test("InMemorySessionStore upsertUser/getUserDisplayName 记录登录昵称", as
 	await store.upsertUser("beta-01", "阿明");
 	assert.equal(await store.getUserDisplayName("beta-01"), "阿明");
 });
+
+test("InMemorySessionStore 注册：一次性邀请码核销与邮箱唯一", async () => {
+	const store = createInMemorySessionStore();
+	const base = { userId: "beta-01", displayName: "小明", passwordSalt: "aa", passwordHash: "bb" };
+	await store.registerUser({ ...base, email: "a@x.com", inviteCodeHash: "c".repeat(64) });
+	const found = await store.findUserByEmail("a@x.com");
+	assert.equal(found?.userId, "beta-01");
+	assert.equal(found?.displayName, "小明");
+	assert.equal(found?.passwordHash, "bb");
+	assert.equal(await store.findUserByEmail("nobody@x.com"), undefined);
+	await assert.rejects(
+		store.registerUser({ ...base, userId: "beta-02", email: "b@x.com", inviteCodeHash: "c".repeat(64) }),
+		/邀请码已被使用/,
+	);
+	await assert.rejects(
+		store.registerUser({ ...base, userId: "beta-02", email: "a@x.com", inviteCodeHash: "d".repeat(64) }),
+		/邮箱已注册/,
+	);
+});

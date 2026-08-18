@@ -248,3 +248,27 @@ test("PostgreSQL upsertUser/getUserDisplayName 记录登录昵称（migration 00
 	assert.ok(row.rows[0].first_login_at instanceof Date);
 	assert.ok(row.rows[0].last_login_at instanceof Date);
 });
+
+test("PostgreSQL 注册：一次性邀请码核销、邮箱唯一、按邮箱查凭据（migration 004）", { skip: !databaseConfig }, async () => {
+	const codeHashA = "a".repeat(64);
+	const codeHashB = "b".repeat(64);
+	await store.registerUser({ userId: "reg-01", displayName: "甲", email: "reg01@x.com", passwordSalt: "s1", passwordHash: "h1", inviteCodeHash: codeHashA });
+	const found = await store.findUserByEmail("reg01@x.com");
+	assert.equal(found?.userId, "reg-01");
+	assert.equal(found?.displayName, "甲");
+	assert.equal(found?.passwordSalt, "s1");
+	assert.equal(await store.findUserByEmail("missing@x.com"), undefined);
+
+	await assert.rejects(
+		store.registerUser({ userId: "reg-02", displayName: "乙", email: "reg02@x.com", passwordSalt: "s2", passwordHash: "h2", inviteCodeHash: codeHashA }),
+		(err: unknown) => err instanceof SessionStoreError && err.code === "INVITE_CODE_REDEEMED",
+		"同一邀请码不能二次核销",
+	);
+	await assert.rejects(
+		store.registerUser({ userId: "reg-02", displayName: "乙", email: "reg01@x.com", passwordSalt: "s2", passwordHash: "h2", inviteCodeHash: codeHashB }),
+		(err: unknown) => err instanceof SessionStoreError && err.code === "EMAIL_TAKEN",
+		"邮箱已被占用",
+	);
+	const redeemed = await pool.query<{ user_id: string }>(`SELECT user_id FROM "${schema}".invite_codes WHERE code_hash = $1`, [codeHashA]);
+	assert.equal(redeemed.rows[0].user_id, "reg-01");
+});

@@ -4,7 +4,16 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { BetaAuth, parseCookies, resolveAuthSecret, generateAuthSecret } from "../../src/adapters/web/auth.js";
+import {
+	BetaAuth,
+	generateAuthSecret,
+	hashPassword,
+	inviteCodeHash,
+	normalizeEmail,
+	parseCookies,
+	resolveAuthSecret,
+	verifyPassword,
+} from "../../src/adapters/web/auth.js";
 
 const secret = Buffer.from(generateAuthSecret(), "hex");
 
@@ -24,10 +33,11 @@ async function withRegistry(users: Array<{ userId: string; code: string }>, fn: 
 	}
 }
 
-test("邀请码登录：正确码映射 userId，大小写与空白容错，错误码拒绝", async () => {
+test("邀请码校验：正确码映射 userId 与哈希，大小写与空白容错，错误码拒绝", async () => {
 	await withRegistry([{ userId: "beta-01", code: "PIL-ABCD-EFGH-JKMN" }], async (auth) => {
-		assert.deepEqual(await auth.authenticate("PIL-ABCD-EFGH-JKMN"), { userId: "beta-01" });
-		assert.deepEqual(await auth.authenticate("  pil-abcd-efgh-jkmn "), { userId: "beta-01" });
+		const expected = { userId: "beta-01", codeHash: inviteCodeHash("PIL-ABCD-EFGH-JKMN") };
+		assert.deepEqual(await auth.authenticate("PIL-ABCD-EFGH-JKMN"), expected);
+		assert.deepEqual(await auth.authenticate("  pil-abcd-efgh-jkmn "), expected);
 		assert.equal(await auth.authenticate("PIL-XXXX-XXXX-XXXX"), undefined);
 		assert.equal(await auth.authenticate(""), undefined);
 	});
@@ -40,11 +50,11 @@ test("注册表热重载：删除用户行后该邀请码立即失效", async ()
 			{ userId: "beta-02", code: "PIL-DDDD-EEEE-FFFF" },
 		],
 		async (auth, registryPath) => {
-			assert.deepEqual(await auth.authenticate("PIL-AAAA-BBBB-CCCC"), { userId: "beta-01" });
+			assert.equal((await auth.authenticate("PIL-AAAA-BBBB-CCCC"))?.userId, "beta-01");
 			const revoked = { users: [{ userId: "beta-02", codeHash: sha256Hex("PIL-DDDD-EEEE-FFFF") }] };
 			await writeFile(registryPath, JSON.stringify(revoked), "utf8");
 			assert.equal(await auth.authenticate("PIL-AAAA-BBBB-CCCC"), undefined);
-			assert.deepEqual(await auth.authenticate("PIL-DDDD-EEEE-FFFF"), { userId: "beta-02" });
+			assert.equal((await auth.authenticate("PIL-DDDD-EEEE-FFFF"))?.userId, "beta-02");
 		},
 	);
 });
@@ -62,7 +72,7 @@ test("注册表忽略非法条目（userId/哈希格式不合法）", async () =
 	await writeFile(registryPath, JSON.stringify(registry), "utf8");
 	try {
 		const auth = new BetaAuth({ registryPath, secret });
-		assert.deepEqual(await auth.authenticate("PIL-OKOK-OKOK-OKOK"), { userId: "ok-1" });
+		assert.equal((await auth.authenticate("PIL-OKOK-OKOK-OKOK"))?.userId, "ok-1");
 		assert.equal(await auth.authenticate("PIL-BAD1"), undefined);
 	} finally {
 		await rm(dir, { recursive: true, force: true });
@@ -130,4 +140,26 @@ test("resolveAuthSecret 校验长度并拒绝过短密钥", () => {
 	assert.throws(() => resolveAuthSecret("too-short"), /32/);
 	const ok = resolveAuthSecret("x".repeat(32));
 	assert.equal(ok?.length, 32);
+});
+
+test("scrypt 密码哈希：往返成功，错误密码与篡改拒绝，盐随机", () => {
+	const digest = hashPassword("correct-horse-battery-9");
+	assert.equal(digest.algorithm, "scrypt");
+	assert.equal(digest.salt.length, 32, "16 字节盐的 hex");
+	assert.equal(digest.hash.length, 128, "64 字节哈希的 hex");
+	assert.equal(verifyPassword("correct-horse-battery-9", digest), true);
+	assert.equal(verifyPassword("correct-horse-battery-8", digest), false);
+	const other = hashPassword("correct-horse-battery-9");
+	assert.notEqual(other.salt, digest.salt, "每次加盐随机");
+	assert.equal(verifyPassword("correct-horse-battery-9", other), true);
+	assert.equal(verifyPassword("x", { salt: "", hash: digest.hash }), false, "空盐拒绝");
+});
+
+test("normalizeEmail 规范化与格式校验", () => {
+	assert.equal(normalizeEmail("  Alice@Example.COM "), "alice@example.com");
+	assert.equal(normalizeEmail("bad"), undefined);
+	assert.equal(normalizeEmail("a@b"), undefined);
+	assert.equal(normalizeEmail(""), undefined);
+	assert.equal(normalizeEmail("a b@example.com"), undefined);
+	assert.equal(normalizeEmail(`${"x".repeat(250)}@e.com`), undefined, "超长拒绝");
 });

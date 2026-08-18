@@ -13,9 +13,10 @@ interface SessionStore {
   completeRun(input: CompleteRunInput): Promise<StoredSession>;
   failRun(input: FailRunInput): Promise<void>;
   delete(sessionId: string): Promise<void>;
-  // 登录用户显示名（内测归因）；displayName 为 null 时保留原值
   upsertUser(userId: string, displayName: string | null): Promise<void>;
   getUserDisplayName(userId: string): Promise<string | null>;
+  registerUser(input: NewUserRecord): Promise<void>;
+  findUserByEmail(email: string): Promise<StoredUserCredentials | undefined>;
 }
 ```
 
@@ -95,7 +96,7 @@ const store = createPostgresSessionStore({
 
 ### 表结构
 
-迁移定义以 `POSTGRES_MIGRATION_001/002/003` 常量随代码发布（`migrations/001_session_persistence.sql` 是 001 的参考副本），由 `applyPostgresMigrations()` 按版本顺序应用。当前包含：
+迁移定义以 `POSTGRES_MIGRATION_001/002/003/004` 常量随代码发布（`migrations/001_session_persistence.sql` 是 001 的参考副本），由 `applyPostgresMigrations()` 按版本顺序应用。当前包含：
 
 | 表 | 作用 |
 | --- | --- |
@@ -103,7 +104,8 @@ const store = createPostgresSessionStore({
 | `pilore.sessions` | 身份、标题、revision、加密 Snapshot、活动运行、时间戳 |
 | `pilore.runs` | 每轮 provider/model/Profile、加密审计、指标、失败码和时间戳 |
 | `pilore.trajectory_runs` | 每轮运行轨迹（加密），级联删除 |
-| `pilore.users` | 登录用户显示名与首末次登录时间（内测归因，migration 003） |
+| `pilore.users` | 登录用户邮箱、scrypt 密码哈希、显示名与首末次登录时间（migration 003/004） |
+| `pilore.invite_codes` | 已核销的一次性邀请码哈希与归属用户（migration 004） |
 
 `sessions_identity_idx (tenant_id, user_id, course_id)` 支持按身份列会话；`runs_session_started_idx (session_id, started_at DESC)` 支持会话运行历史。
 

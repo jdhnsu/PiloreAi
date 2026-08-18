@@ -11,6 +11,7 @@ import {
 	type CompleteRunInput,
 	type CreateStoredSession,
 	type FailRunInput,
+	type NewUserRecord,
 	type RunAuditPayload,
 	type SaveTrajectoryInput,
 	type SessionIdentity,
@@ -18,6 +19,7 @@ import {
 	type SessionSummary,
 	type StoredRun,
 	type StoredSession,
+	type StoredUserCredentials,
 } from "./persistence.js";
 import type { TrajectoryRun } from "../../core/trajectory/types.js";
 import type { StoredSnapshot } from "./persistence.js";
@@ -99,11 +101,26 @@ CREATE TABLE IF NOT EXISTS pilore.users (
 );
 `;
 
+export const POSTGRES_MIGRATION_004 = `
+ALTER TABLE pilore.users ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE pilore.users ADD COLUMN IF NOT EXISTS password_salt text;
+ALTER TABLE pilore.users ADD COLUMN IF NOT EXISTS password_hash text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON pilore.users (email) WHERE email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS pilore.invite_codes (
+  code_hash text PRIMARY KEY,
+  user_id text NOT NULL,
+  redeemed_at timestamptz NOT NULL DEFAULT now()
+);
+`;
+
 /** 迁移列表按版本升序追加；已应用的版本记录在 schema_migrations。 */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
 	{ version: 1, sql: POSTGRES_MIGRATION_001 },
 	{ version: 2, sql: POSTGRES_MIGRATION_002 },
 	{ version: 3, sql: POSTGRES_MIGRATION_003 },
+	{ version: 4, sql: POSTGRES_MIGRATION_004 },
 ];
 
 function schemaSql(sql: string, schema: string): string {
@@ -115,6 +132,10 @@ function schemaSql(sql: string, schema: string): string {
 function resolveSchema(schema = "pilore"): string {
 	if (!/^[a-z_][a-z0-9_]*$/i.test(schema)) throw new SessionStoreError(`非法 PostgreSQL schema: ${schema}`, "INVALID_SCHEMA");
 	return `"${schema}"`;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+	return !!err && typeof err === "object" && (err as { code?: unknown }).code === "23505";
 }
 
 export async function applyPostgresMigrations(pool: Pool, options: { schema?: string } = {}): Promise<void> {
@@ -517,6 +538,54 @@ export class PostgresSessionStore implements SessionStore {
 			[userId],
 		);
 		return result.rows[0]?.display_name ?? null;
+	}
+
+	async registerUser(input: NewUserRecord): Promise<void> {
+		const client = await this.options.pool.connect();
+		try {
+			await client.query("BEGIN");
+			try {
+				await client.query(`INSERT INTO ${this.schema}.invite_codes (code_hash, user_id) VALUES ($1, $2)`, [
+					input.inviteCodeHash,
+					input.userId,
+				]);
+			} catch (err) {
+				if (isUniqueViolation(err)) throw new SessionStoreError("邀请码已被使用", "INVITE_CODE_REDEEMED", { cause: err });
+				throw err;
+			}
+			try {
+				await client.query(
+					`INSERT INTO ${this.schema}.users (user_id, display_name, email, password_salt, password_hash, first_login_at, last_login_at)
+					 VALUES ($1, $2, $3, $4, $5, now(), now())
+					 ON CONFLICT (user_id) DO UPDATE
+					 SET display_name = COALESCE(EXCLUDED.display_name, ${this.schema}.users.display_name),
+					     email = EXCLUDED.email,
+					     password_salt = EXCLUDED.password_salt,
+					     password_hash = EXCLUDED.password_hash,
+					     last_login_at = now()`,
+					[input.userId, input.displayName, input.email, input.passwordSalt, input.passwordHash],
+				);
+			} catch (err) {
+				if (isUniqueViolation(err)) throw new SessionStoreError("邮箱已注册", "EMAIL_TAKEN", { cause: err });
+				throw err;
+			}
+			await client.query("COMMIT");
+		} catch (err) {
+			await client.query("ROLLBACK").catch(() => {});
+			throw err;
+		} finally {
+			client.release();
+		}
+	}
+
+	async findUserByEmail(email: string): Promise<StoredUserCredentials | undefined> {
+		const result = await this.options.pool.query<{ user_id: string; display_name: string | null; password_salt: string | null; password_hash: string | null }>(
+			`SELECT user_id, display_name, password_salt, password_hash FROM ${this.schema}.users WHERE email = $1`,
+			[email],
+		);
+		const row = result.rows[0];
+		if (!row || !row.password_salt || !row.password_hash) return undefined;
+		return { userId: row.user_id, displayName: row.display_name ?? null, passwordSalt: row.password_salt, passwordHash: row.password_hash };
 	}
 
 	private mapRun(row: RunRow): StoredRun {

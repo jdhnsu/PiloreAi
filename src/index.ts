@@ -102,12 +102,15 @@ export {
 	type CompleteRunInput,
 	type FailRunInput,
 	type SaveTrajectoryInput,
+	type NewUserRecord,
+	type StoredUserCredentials,
 } from "./infrastructure/persistence/persistence.js";
 export { InMemorySessionStore, createInMemorySessionStore } from "./infrastructure/persistence/memory-store.js";
 export {
 	POSTGRES_MIGRATION_001,
 	POSTGRES_MIGRATION_002,
 	POSTGRES_MIGRATION_003,
+	POSTGRES_MIGRATION_004,
 	applyPostgresMigrations,
 	PostgresSessionStore,
 	createPostgresSessionStore,

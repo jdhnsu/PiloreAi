@@ -96,6 +96,23 @@ export interface SaveTrajectoryInput {
 	run: TrajectoryRun;
 }
 
+/** 一次性邀请码注册所需的用户凭据（密码哈希由调用方完成）。 */
+export interface NewUserRecord {
+	userId: string;
+	displayName: string | null;
+	email: string;
+	passwordSalt: string;
+	passwordHash: string;
+	inviteCodeHash: string;
+}
+
+export interface StoredUserCredentials {
+	userId: string;
+	displayName: string | null;
+	passwordSalt: string;
+	passwordHash: string;
+}
+
 export interface SessionStore {
 	create(input: CreateStoredSession): Promise<StoredSession>;
 	load(sessionId: string): Promise<StoredSession | undefined>;
@@ -113,6 +130,10 @@ export interface SessionStore {
 	upsertUser(userId: string, displayName: string | null): Promise<void>;
 	/** 读取用户显示名；不存在返回 null。 */
 	getUserDisplayName(userId: string): Promise<string | null>;
+	/** 一次性邀请码注册；邀请码已核销抛 INVITE_CODE_REDEEMED，邮箱已注册抛 EMAIL_TAKEN。 */
+	registerUser(input: NewUserRecord): Promise<void>;
+	/** 按邮箱查找登录凭据；不存在或无密码返回 undefined。 */
+	findUserByEmail(email: string): Promise<StoredUserCredentials | undefined>;
 }
 
 /** 从快照的首条用户消息派生会话标题（空白折叠、截断到 maxLength）。 */

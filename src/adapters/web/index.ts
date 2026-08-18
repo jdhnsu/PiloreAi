@@ -1,12 +1,13 @@
 import "dotenv/config";
 import http from "node:http";
+import { randomBytes } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type MutableModels } from "@pilore/pi-ai";
 import { simulate } from "../../../mock/exec-server.js";
-import { BetaAuth, generateAuthSecret, resolveAuthSecret, type AuthedUser } from "./auth.js";
+import { BetaAuth, generateAuthSecret, hashPassword, normalizeEmail, resolveAuthSecret, verifyPassword, type AuthedUser, type VerifiedInviteCode } from "./auth.js";
 import {
 	applyPostgresMigrations,
 	createAes256GcmCryptoProvider,
@@ -26,6 +27,7 @@ import {
 	SessionBusyError,
 	SessionNotFoundError,
 	SessionRevisionConflictError,
+	SessionStoreError,
 	type AcademicMentorSession,
 	type CodeMentorSession,
 	type EnglishMentorSession,
@@ -58,14 +60,16 @@ import {
  *   POST   /api/profile           { sessionId, profile: key | null } 设置老师（profile）
  *   POST   /api/abort             { sessionId } 中止当前运行
  *   POST   /api/context/compact   { sessionId } 经用户确认后压缩早期上下文并持久化
- *   POST   /api/login             { code, name? } 邀请码登录，Set-Cookie 签名会话
+ *   POST   /api/register          { code, email, password, name? } 一次性邀请码注册，成功后直接登录
+ *   POST   /api/login             { email, password } 邮箱密码登录，Set-Cookie 签名会话
  *   POST   /api/logout            清除登录 Cookie
  *   GET    /api/me                当前登录用户（userId/昵称）
  * 存储：配置 DB_* 且提供 SESSION_ENCRYPTION_KEY（64 位 hex）时走 PostgreSQL 加密持久化，
  * 否则回退进程内存储（重启丢失）。FAUX_DEMO=1 时无需 API key 且固定用内存存储。
- * 认证：非演示模式要求邀请码登录。注册表 BETA_USERS_FILE（默认 data/beta-users.json，
- * 由 npm run gen:beta-codes 生成），Cookie 密钥 AUTH_SECRET（≥32 字符；缺省时随机生成，
- * 重启后已登录用户需重新登录）。会话 identity.userId = 登录用户，跨用户访问一律 404。
+ * 认证：非演示模式先用一次性邀请码注册（设置邮箱+密码，码即核销），之后邮箱密码登录。
+ * 注册表 BETA_USERS_FILE（默认 data/beta-users.json，由 npm run gen:beta-codes 生成），
+ * Cookie 密钥 AUTH_SECRET（≥32 字符；缺省时随机生成，重启后已登录用户需重新登录）。
+ * 会话 identity.userId = 登录用户，跨用户访问一律 404。
  * 会话按 pack 分桶：identity.courseId = pack id，恢复时据此选择 pack 工厂。
  */
 
@@ -523,6 +527,9 @@ async function main(): Promise<void> {
 		console.log(`[web] 邀请码登录已启用（注册表: ${registryPath}）`);
 	}
 
+	// 邮箱不存在时用它做等时长密码校验，避免按响应时间枚举邮箱
+	const dummyDigest = hashPassword(randomBytes(16).toString("hex"));
+
 	// 已加载会话的进程内缓存；未命中时从存储解密恢复
 	const entries = new Map<string, SessionEntry>();
 
@@ -551,7 +558,41 @@ async function main(): Promise<void> {
 			json(res, 400, { error: "当前模式无需登录" });
 			return;
 		}
-		const source = clientIp(req);
+		const source = `login:${clientIp(req)}`;
+		if (auth.isBlocked(source)) {
+			json(res, 429, { error: "尝试次数过多，请稍后再试" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readJsonBody(req);
+		} catch {
+			json(res, 400, { error: "请求无效" });
+			return;
+		}
+		const email = normalizeEmail(typeof body.email === "string" ? body.email : "");
+		const password = typeof body.password === "string" ? body.password : "";
+		const credentials = email ? await store.findUserByEmail(email).catch(() => undefined) : undefined;
+		// 邮箱不存在时也做一次等时长校验，避免通过响应时间枚举邮箱
+		const digest = credentials ? { salt: credentials.passwordSalt, hash: credentials.passwordHash } : dummyDigest;
+		const ok = verifyPassword(password, digest);
+		if (!email || !credentials || !ok) {
+			auth.recordFailedAttempt(source);
+			json(res, 401, { error: "邮箱或密码不正确" });
+			return;
+		}
+		await store.upsertUser(credentials.userId, null).catch((err) => console.warn("[web] 用户信息写入失败:", err instanceof Error ? err.message : err));
+		const displayName = credentials.displayName || credentials.userId;
+		res.setHeader("set-cookie", auth.authCookieHeader(credentials.userId, isSecureRequest(req)));
+		json(res, 200, { userId: credentials.userId, displayName });
+	}
+
+	async function handleRegister(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+		if (!auth) {
+			json(res, 400, { error: "当前模式无需注册" });
+			return;
+		}
+		const source = `register:${clientIp(req)}`;
 		if (auth.isBlocked(source)) {
 			json(res, 429, { error: "尝试次数过多，请稍后再试" });
 			return;
@@ -564,8 +605,18 @@ async function main(): Promise<void> {
 			return;
 		}
 		const code = typeof body.code === "string" ? body.code : "";
+		const email = normalizeEmail(typeof body.email === "string" ? body.email : "");
+		const password = typeof body.password === "string" ? body.password : "";
 		const name = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
-		let found: AuthedUser | undefined;
+		if (!email) {
+			json(res, 400, { error: "请填写有效邮箱" });
+			return;
+		}
+		if (password.length < 8 || password.length > 128) {
+			json(res, 400, { error: "密码需为 8-128 个字符" });
+			return;
+		}
+		let found: VerifiedInviteCode | undefined;
 		try {
 			found = await auth.authenticate(code);
 		} catch (err) {
@@ -577,11 +628,30 @@ async function main(): Promise<void> {
 			json(res, 401, { error: "邀请码不正确" });
 			return;
 		}
-		// 昵称落库供管理员归因；失败不阻断登录
-		await store.upsertUser(found.userId, name || null).catch((err) => console.warn("[web] 用户信息写入失败:", err instanceof Error ? err.message : err));
-		const displayName = name || (await store.getUserDisplayName(found.userId).catch(() => null)) || found.userId;
+		const digest = hashPassword(password);
+		try {
+			await store.registerUser({
+				userId: found.userId,
+				displayName: name || null,
+				email,
+				passwordSalt: digest.salt,
+				passwordHash: digest.hash,
+				inviteCodeHash: found.codeHash,
+			});
+		} catch (err) {
+			if (err instanceof SessionStoreError && err.code === "INVITE_CODE_REDEEMED") {
+				json(res, 409, { error: "该邀请码已被使用" });
+				return;
+			}
+			if (err instanceof SessionStoreError && err.code === "EMAIL_TAKEN") {
+				json(res, 409, { error: "该邮箱已注册，请直接登录" });
+				return;
+			}
+			json(res, 500, { error: err instanceof Error ? err.message : String(err) });
+			return;
+		}
 		res.setHeader("set-cookie", auth.authCookieHeader(found.userId, isSecureRequest(req)));
-		json(res, 200, { userId: found.userId, displayName });
+		json(res, 200, { userId: found.userId, displayName: name || found.userId });
 	}
 
 	const handler = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
@@ -595,6 +665,10 @@ async function main(): Promise<void> {
 			} else {
 				if (req.method === "POST" && url.pathname === "/api/login") {
 					await handleLogin(req, res);
+					return;
+				}
+				if (req.method === "POST" && url.pathname === "/api/register") {
+					await handleRegister(req, res);
 					return;
 				}
 				if (req.method === "POST" && url.pathname === "/api/logout") {

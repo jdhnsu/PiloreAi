@@ -170,19 +170,20 @@ HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消�
 | `POST /api/context/compact` | `{ sessionId }` → 用户确认后压缩早期历史并持久化；`/api/chat` 超限时返回 `409 CONTEXT_COMPACTION_REQUIRED` |
 | `POST /api/profile` | `{ sessionId, profile }` 手动切换 Profile |
 | `POST /api/abort` | 中止指定会话的当前运行 |
-| `POST /api/login` | `{ code, name? }` 邀请码登录（仅真实模式；演示模式免登录） |
+| `POST /api/register` | `{ code, email, password, name? }` 一次性邀请码注册 |
+| `POST /api/login` | `{ email, password }` 邮箱密码登录（仅真实模式；演示模式免登录） |
 | `POST /api/logout` / `GET /api/me` | 清除登录 Cookie / 当前登录用户 |
 
 ### 内测登录（邀请码）
 
-真实模式下 Web 界面强制邀请码登录，并把登录用户映射为会话身份，实现多用户会话隔离（跨用户访问一律 404）：
+真实模式下 Web 界面要求先用一次性邀请码注册邮箱和密码，再把登录用户映射为会话身份，实现多用户会话隔离（跨用户访问一律 404）：
 
 ```bash
 npm run gen:beta-codes        # 生成 data/beta-users.json（只存哈希）并打印 15 个明文邀请码
 AUTH_SECRET=$(openssl rand -hex 32) npm run web
 ```
 
-要点：邀请码只存 SHA-256 哈希、登录签发 HMAC 签名 Cookie（HttpOnly + SameSite=Lax）；部署在 HTTPS 反代后设 `WEB_COOKIE_SECURE=1`；注册表热重载，删除某行即可吊销该用户；同来源每分钟最多 5 次失败登录。详见 [docs/adapters.md](docs/adapters.md) 与 [docs/persistence.md](docs/persistence.md)。
+要点：邀请码只存 SHA-256 哈希，首次注册后永久核销；密码使用 scrypt 加盐哈希；登录签发 HMAC 签名 Cookie（HttpOnly + SameSite=Lax）；部署在 HTTPS 反代后设 `WEB_COOKIE_SECURE=1`；同来源每分钟最多 5 次失败登录。详见 [docs/adapters.md](docs/adapters.md) 与 [docs/persistence.md](docs/persistence.md)。
 
 ## 老师设计文档与元数据（按需加载）
 
