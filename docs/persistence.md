@@ -13,10 +13,13 @@ interface SessionStore {
   completeRun(input: CompleteRunInput): Promise<StoredSession>;
   failRun(input: FailRunInput): Promise<void>;
   delete(sessionId: string): Promise<void>;
+  // 登录用户显示名（内测归因）；displayName 为 null 时保留原值
+  upsertUser(userId: string, displayName: string | null): Promise<void>;
+  getUserDisplayName(userId: string): Promise<string | null>;
 }
 ```
 
-身份由 `{ tenantId, userId, courseId? }` 构成。Web Adapter 使用固定的 `tenantId: "web"`、`userId: "local"`，并以 Pack id 作为 `courseId`，使不同 Pack 的会话列表天然分桶。生产宿主应映射为自己的多租户与用户身份，避免把未校验的客户端标识直接写入存储。
+身份由 `{ tenantId, userId, courseId? }` 构成。Web Adapter 将登录用户映射为 `{ tenantId: "web", userId: <登录用户>, courseId: packId }`（演示模式固定 `userId: "local"`），使不同用户、不同 Pack 的会话列表天然隔离。生产宿主应映射为自己的多租户与用户身份，避免把未校验的客户端标识直接写入存储。
 
 ## 运行与 revision 语义
 
@@ -92,13 +95,15 @@ const store = createPostgresSessionStore({
 
 ### 表结构
 
-迁移定义位于 `migrations/001_session_persistence.sql` 和导出的 `POSTGRES_MIGRATION_001`。当前包含：
+迁移定义以 `POSTGRES_MIGRATION_001/002/003` 常量随代码发布（`migrations/001_session_persistence.sql` 是 001 的参考副本），由 `applyPostgresMigrations()` 按版本顺序应用。当前包含：
 
 | 表 | 作用 |
 | --- | --- |
 | `pilore.schema_migrations` | 已执行迁移版本 |
 | `pilore.sessions` | 身份、标题、revision、加密 Snapshot、活动运行、时间戳 |
 | `pilore.runs` | 每轮 provider/model/Profile、加密审计、指标、失败码和时间戳 |
+| `pilore.trajectory_runs` | 每轮运行轨迹（加密），级联删除 |
+| `pilore.users` | 登录用户显示名与首末次登录时间（内测归因，migration 003） |
 
 `sessions_identity_idx (tenant_id, user_id, course_id)` 支持按身份列会话；`runs_session_started_idx (session_id, started_at DESC)` 支持会话运行历史。
 

@@ -1,11 +1,12 @@
 import "dotenv/config";
 import http from "node:http";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type MutableModels } from "@pilore/pi-ai";
 import { simulate } from "../../../mock/exec-server.js";
+import { BetaAuth, generateAuthSecret, resolveAuthSecret, type AuthedUser } from "./auth.js";
 import {
 	applyPostgresMigrations,
 	createAes256GcmCryptoProvider,
@@ -57,14 +58,21 @@ import {
  *   POST   /api/profile           { sessionId, profile: key | null } 设置老师（profile）
  *   POST   /api/abort             { sessionId } 中止当前运行
  *   POST   /api/context/compact   { sessionId } 经用户确认后压缩早期上下文并持久化
+ *   POST   /api/login             { code, name? } 邀请码登录，Set-Cookie 签名会话
+ *   POST   /api/logout            清除登录 Cookie
+ *   GET    /api/me                当前登录用户（userId/昵称）
  * 存储：配置 DB_* 且提供 SESSION_ENCRYPTION_KEY（64 位 hex）时走 PostgreSQL 加密持久化，
  * 否则回退进程内存储（重启丢失）。FAUX_DEMO=1 时无需 API key 且固定用内存存储。
+ * 认证：非演示模式要求邀请码登录。注册表 BETA_USERS_FILE（默认 data/beta-users.json，
+ * 由 npm run gen:beta-codes 生成），Cookie 密钥 AUTH_SECRET（≥32 字符；缺省时随机生成，
+ * 重启后已登录用户需重新登录）。会话 identity.userId = 登录用户，跨用户访问一律 404。
  * 会话按 pack 分桶：identity.courseId = pack id，恢复时据此选择 pack 工厂。
  */
 
 const FAUX_DEMO = process.env.FAUX_DEMO === "1";
 // path.resolve 去掉 fileURLToPath 目录 URL 的尾部斜杠，保证前缀守卫一致
 const WEB_ROOT = path.resolve(fileURLToPath(new URL("../../../web/", import.meta.url)));
+const DEFAULT_REGISTRY_PATH = path.resolve(fileURLToPath(new URL("../../../data/beta-users.json", import.meta.url)));
 const MIME: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
 	".js": "text/javascript; charset=utf-8",
@@ -339,14 +347,16 @@ function getPack(id: string): WebPack {
 
 /* ---------- 会话存储：Postgres（加密）优先，缺配置/不可用时回退进程内 ---------- */
 
-/** Web 演示适配层是单用户场景，身份固定；courseId 用来按 pack 分桶。 */
-function identityFor(packId: string): SessionIdentity {
-	return { tenantId: "web", userId: "local", courseId: packId };
+/** 身份来自登录用户（演示模式固定 local）；courseId 用来按 pack 分桶。 */
+function identityFor(user: AuthedUser, packId: string): SessionIdentity {
+	return { tenantId: "web", userId: user.userId, courseId: packId };
 }
 
 interface SessionEntry {
 	session: PackSession;
 	pack: WebPack;
+	/** 会话属主 userId；跨用户访问直接按不存在处理。 */
+	ownerId: string;
 	/** 与存储一致的 revision；beginRun/completeRun 的乐观锁基准。 */
 	revision: number;
 }
@@ -428,6 +438,22 @@ async function serveStatic(res: http.ServerResponse, pathname: string): Promise<
 	}
 }
 
+/** 限流来源：反代后取 X-Forwarded-For 首跳，否则用 TCP 远端地址。 */
+function clientIp(req: http.IncomingMessage): string {
+	const forwarded = req.headers["x-forwarded-for"];
+	if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0].trim();
+	return req.socket.remoteAddress ?? "unknown";
+}
+
+/** Cookie 是否加 Secure：生产部署在 HTTPS 反代后应显式 WEB_COOKIE_SECURE=1。 */
+function isSecureRequest(req: http.IncomingMessage): boolean {
+	if (process.env.WEB_COOKIE_SECURE === "1") return true;
+	if (process.env.WEB_COOKIE_SECURE === "0") return false;
+	const proto = req.headers["x-forwarded-proto"];
+	if (typeof proto === "string") return proto.split(",")[0].trim() === "https";
+	return !!(req.socket as { encrypted?: boolean }).encrypted;
+}
+
 /** 每个候选端口用独立的 server 实例：Windows 上同一 server 连续 listen 会复用旧的 listening 回调（产生假成功日志）。 */
 function startServer(
 	handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,
@@ -478,28 +504,129 @@ async function main(): Promise<void> {
 	const { store, backend } = await createSessionStore(FAUX_DEMO);
 	console.log(`[web] 会话持久化: ${backend === "postgres" ? "PostgreSQL（AES-256-GCM）" : "进程内存（重启后丢失）"}`);
 
+	// 非演示模式强制邀请码登录；注册表或密钥缺失直接启动失败，避免"无认证裸奔"
+	const registryPath = process.env.BETA_USERS_FILE?.trim() || DEFAULT_REGISTRY_PATH;
+	let auth: BetaAuth | undefined;
+	if (!FAUX_DEMO) {
+		try {
+			await access(registryPath);
+		} catch {
+			console.error(`[web] 未找到内测用户注册表 ${registryPath}。先运行 npm run gen:beta-codes，或以 FAUX_DEMO=1 启动演示模式。`);
+			process.exit(1);
+		}
+		let secret = resolveAuthSecret(process.env.AUTH_SECRET);
+		if (!secret) {
+			secret = Buffer.from(generateAuthSecret(), "hex");
+			console.warn("[web] 未设置 AUTH_SECRET，已随机生成；重启后所有用户需重新登录");
+		}
+		auth = new BetaAuth({ registryPath, secret });
+		console.log(`[web] 邀请码登录已启用（注册表: ${registryPath}）`);
+	}
+
 	// 已加载会话的进程内缓存；未命中时从存储解密恢复
 	const entries = new Map<string, SessionEntry>();
 
-	async function getEntry(sessionId: string): Promise<SessionEntry> {
+	async function getEntry(sessionId: string, ownerId: string): Promise<SessionEntry> {
 		const cached = entries.get(sessionId);
-		if (cached) return cached;
+		if (cached) {
+			if (cached.ownerId !== ownerId) throw new SessionNotFoundError(sessionId);
+			return cached;
+		}
 		const stored = await store.load(sessionId);
-		if (!stored) throw new SessionNotFoundError(sessionId);
+		// 属主不匹配与不存在同样按 404 处理，不泄露会话存在性
+		if (!stored || stored.tenantId !== "web" || stored.userId !== ownerId) throw new SessionNotFoundError(sessionId);
 		const pack = getPack(stored.courseId ?? "code");
 		const entry: SessionEntry = {
 			session: pack.create({ ...optionsFor(pack), snapshot: stored.snapshot as SessionSnapshotV1 }),
 			pack,
+			ownerId: stored.userId,
 			revision: stored.revision,
 		};
 		entries.set(sessionId, entry);
 		return entry;
 	}
 
+	async function handleLogin(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+		if (!auth) {
+			json(res, 400, { error: "当前模式无需登录" });
+			return;
+		}
+		const source = clientIp(req);
+		if (auth.isBlocked(source)) {
+			json(res, 429, { error: "尝试次数过多，请稍后再试" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readJsonBody(req);
+		} catch {
+			json(res, 400, { error: "请求无效" });
+			return;
+		}
+		const code = typeof body.code === "string" ? body.code : "";
+		const name = typeof body.name === "string" ? body.name.trim().slice(0, 40) : "";
+		let found: AuthedUser | undefined;
+		try {
+			found = await auth.authenticate(code);
+		} catch (err) {
+			json(res, 500, { error: `用户注册表读取失败: ${err instanceof Error ? err.message : String(err)}` });
+			return;
+		}
+		if (!found) {
+			auth.recordFailedAttempt(source);
+			json(res, 401, { error: "邀请码不正确" });
+			return;
+		}
+		// 昵称落库供管理员归因；失败不阻断登录
+		await store.upsertUser(found.userId, name || null).catch((err) => console.warn("[web] 用户信息写入失败:", err instanceof Error ? err.message : err));
+		const displayName = name || (await store.getUserDisplayName(found.userId).catch(() => null)) || found.userId;
+		res.setHeader("set-cookie", auth.authCookieHeader(found.userId, isSecureRequest(req)));
+		json(res, 200, { userId: found.userId, displayName });
+	}
+
 	const handler = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
 		const url = new URL(req.url ?? "/", "http://localhost");
 		const sessionIdParam = url.searchParams.get("id") ?? "";
 		try {
+			// 演示模式保持单用户免登录；正式模式所有 /api 与页面都要求邀请码登录
+			let user: AuthedUser;
+			if (!auth) {
+				user = { userId: "local" };
+			} else {
+				if (req.method === "POST" && url.pathname === "/api/login") {
+					await handleLogin(req, res);
+					return;
+				}
+				if (req.method === "POST" && url.pathname === "/api/logout") {
+					res.setHeader("set-cookie", auth.clearCookieHeader());
+					json(res, 200, { ok: true });
+					return;
+				}
+				const cookieUser = auth.verifyCookieHeader(req.headers.cookie);
+				if (!cookieUser) {
+					if (url.pathname.startsWith("/api/")) {
+						json(res, 401, { error: "未登录" });
+						return;
+					}
+					if (req.method === "GET") {
+						if (url.pathname === "/login.html") {
+							await serveStatic(res, "/login.html");
+							return;
+						}
+						res.writeHead(302, { location: "/login.html" });
+						res.end();
+						return;
+					}
+					json(res, 405, { error: "method not allowed" });
+					return;
+				}
+				user = cookieUser;
+				if (req.method === "GET" && url.pathname === "/api/me") {
+					const displayName = (await store.getUserDisplayName(user.userId).catch(() => null)) || user.userId;
+					json(res, 200, { userId: user.userId, displayName });
+					return;
+				}
+			}
 			if (req.method === "GET" && url.pathname === "/api/packs") {
 				json(res, 200, {
 					packs: WEB_PACKS.map((pack) => ({
@@ -516,7 +643,7 @@ async function main(): Promise<void> {
 			if (req.method === "GET" && url.pathname === "/api/sessions") {
 				const packId = url.searchParams.get("pack") ?? "code";
 				const pack = getPack(packId);
-				const summaries = await store.list(identityFor(packId));
+				const summaries = await store.list(identityFor(user, packId));
 				json(res, 200, {
 					storage: backend,
 					pack: pack.id,
@@ -536,8 +663,8 @@ async function main(): Promise<void> {
 				const packId = typeof body.pack === "string" && body.pack ? body.pack : "code";
 				const pack = getPack(packId);
 				const empty: SessionSnapshotV1 = { version: 1, revision: 0, activeProfileKey: null, activeToolsetKeys: [], messages: [], extensions: {} };
-				const created = await store.create({ identity: identityFor(packId), snapshot: empty });
-				entries.set(created.id, { session: pack.create({ ...optionsFor(pack), snapshot: created.snapshot as SessionSnapshotV1 }), pack, revision: 0 });
+				const created = await store.create({ identity: identityFor(user, packId), snapshot: empty });
+				entries.set(created.id, { session: pack.create({ ...optionsFor(pack), snapshot: created.snapshot as SessionSnapshotV1 }), pack, ownerId: user.userId, revision: 0 });
 				json(res, 200, { sessionId: created.id, pack: packId });
 				return;
 			}
@@ -546,8 +673,14 @@ async function main(): Promise<void> {
 					json(res, 400, { error: "missing sessionId" });
 					return;
 				}
-				const entry = entries.get(sessionIdParam);
-				if (entry?.session.busy) {
+				let entry: SessionEntry;
+				try {
+					entry = await getEntry(sessionIdParam, user.userId);
+				} catch (err) {
+					storeErrorResponse(res, err);
+					return;
+				}
+				if (entry.session.busy) {
 					json(res, 409, { error: "会话正在运行，先中止再删除" });
 					return;
 				}
@@ -563,7 +696,7 @@ async function main(): Promise<void> {
 				}
 				let entry: SessionEntry;
 				try {
-					entry = await getEntry(sessionIdParam);
+					entry = await getEntry(sessionIdParam, user.userId);
 				} catch (err) {
 					storeErrorResponse(res, err);
 					return;
@@ -586,7 +719,7 @@ async function main(): Promise<void> {
 				}
 				let entry: SessionEntry;
 				try {
-					entry = await getEntry(sessionIdParam);
+					entry = await getEntry(sessionIdParam, user.userId);
 				} catch (err) {
 					storeErrorResponse(res, err);
 					return;
@@ -612,7 +745,7 @@ async function main(): Promise<void> {
 				}
 				let entry: SessionEntry;
 				try {
-					entry = await getEntry(sessionIdParam);
+					entry = await getEntry(sessionIdParam, user.userId);
 				} catch (err) {
 					storeErrorResponse(res, err);
 					return;
@@ -627,7 +760,7 @@ async function main(): Promise<void> {
 				}
 				let entry: SessionEntry;
 				try {
-					entry = await getEntry(sessionIdParam);
+					entry = await getEntry(sessionIdParam, user.userId);
 				} catch (err) {
 					storeErrorResponse(res, err);
 					return;
@@ -643,7 +776,14 @@ async function main(): Promise<void> {
 					json(res, 400, { error: "missing sessionId" });
 					return;
 				}
-				entries.get(sessionId)?.session.abort();
+				let entry: SessionEntry;
+				try {
+					entry = await getEntry(sessionId, user.userId);
+				} catch (err) {
+					storeErrorResponse(res, err);
+					return;
+				}
+				entry.session.abort();
 				json(res, 200, { ok: true });
 				return;
 			}
@@ -656,7 +796,7 @@ async function main(): Promise<void> {
 				}
 				let entry: SessionEntry;
 				try {
-					entry = await getEntry(sessionId);
+					entry = await getEntry(sessionId, user.userId);
 				} catch (err) {
 					storeErrorResponse(res, err);
 					return;
@@ -683,7 +823,7 @@ async function main(): Promise<void> {
 				}
 				let entry: SessionEntry;
 				try {
-					entry = await getEntry(sessionId);
+					entry = await getEntry(sessionId, user.userId);
 				} catch (err) {
 					storeErrorResponse(res, err);
 					return;
@@ -748,7 +888,7 @@ async function main(): Promise<void> {
 				}
 				let entry: SessionEntry;
 				try {
-					entry = await getEntry(sessionId);
+					entry = await getEntry(sessionId, user.userId);
 				} catch (err) {
 					storeErrorResponse(res, err);
 					return;

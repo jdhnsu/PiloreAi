@@ -90,10 +90,20 @@ CREATE INDEX IF NOT EXISTS trajectory_runs_session_idx
   ON pilore.trajectory_runs (session_id, created_at DESC);
 `;
 
+export const POSTGRES_MIGRATION_003 = `
+CREATE TABLE IF NOT EXISTS pilore.users (
+  user_id text PRIMARY KEY,
+  display_name text,
+  first_login_at timestamptz,
+  last_login_at timestamptz
+);
+`;
+
 /** 迁移列表按版本升序追加；已应用的版本记录在 schema_migrations。 */
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
 	{ version: 1, sql: POSTGRES_MIGRATION_001 },
 	{ version: 2, sql: POSTGRES_MIGRATION_002 },
+	{ version: 3, sql: POSTGRES_MIGRATION_003 },
 ];
 
 function schemaSql(sql: string, schema: string): string {
@@ -488,6 +498,25 @@ export class PostgresSessionStore implements SessionStore {
 
 	async delete(sessionId: string): Promise<void> {
 		await this.options.pool.query(`DELETE FROM ${this.schema}.sessions WHERE id = $1`, [sessionId]);
+	}
+
+	async upsertUser(userId: string, displayName: string | null): Promise<void> {
+		await this.options.pool.query(
+			`INSERT INTO ${this.schema}.users (user_id, display_name, first_login_at, last_login_at)
+			 VALUES ($1, $2, now(), now())
+			 ON CONFLICT (user_id) DO UPDATE
+			 SET display_name = COALESCE(EXCLUDED.display_name, ${this.schema}.users.display_name),
+			     last_login_at = now()`,
+			[userId, displayName],
+		);
+	}
+
+	async getUserDisplayName(userId: string): Promise<string | null> {
+		const result = await this.options.pool.query<{ display_name: string | null }>(
+			`SELECT display_name FROM ${this.schema}.users WHERE user_id = $1`,
+			[userId],
+		);
+		return result.rows[0]?.display_name ?? null;
 	}
 
 	private mapRun(row: RunRow): StoredRun {

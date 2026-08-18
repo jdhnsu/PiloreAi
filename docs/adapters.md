@@ -44,7 +44,33 @@ npm run web:demo   # fauxProvider + 进程内 mock；无需 API key
 3. 在演示模式下总是使用内存存储，且按 Pack 注入无网络的脚本化 faux 模型；
 4. 默认尝试端口 9600 起的 20 个端口；显式设置 `WEB_PORT` 时只使用该端口。
 
-所有 Web 会话固定映射到 `{ tenantId: "web", userId: "local", courseId: packId }`。这是 demo / 本地单用户边界；多用户产品应替换为经过认证的真实身份。
+## 内测登录与会话隔离
+
+真实模式（非 `FAUX_DEMO=1`）强制邀请码登录，`FAUX_DEMO` 演示模式保持免登录：
+
+- 注册表：`BETA_USERS_FILE`（默认 `data/beta-users.json`，已 gitignore）。用 `npm run gen:beta-codes [count] [prefix]` 生成：明文邀请码只打印一次，文件里只存 SHA-256 哈希。注册表每次登录热重载——删除某行即可即时吊销该用户。
+- Cookie 密钥：`AUTH_SECRET`（≥32 字符）。未设置时随机生成并在日志告警（重启后所有用户需重新登录）。
+- Cookie：`pilore_auth`，HMAC-SHA256 签名、`HttpOnly`、`SameSite=Lax`、30 天有效；请求经 `x-forwarded-proto: https`、TLS 直连或显式 `WEB_COOKIE_SECURE=1` 时附加 `Secure`。生产部署在 HTTPS 反代后应显式设置 `WEB_COOKIE_SECURE=1`。
+- 限流：同一来源（反代后取 `X-Forwarded-For` 首跳）每分钟最多 5 次失败登录，超出返回 429。
+- 门禁：未认证访问 `/api/*` 返回 401，访问页面 302 到 `/login.html`（登录页自包含，不依赖其他静态资源）。
+
+会话身份映射为 `{ tenantId: "web", userId: <登录用户>, courseId: packId }`（演示模式固定 `userId: "local"`）。所有按 sessionId 访问的端点都会校验会话属主，跨用户访问一律按 404 处理（不泄露会话存在性）；`GET /api/sessions` 天然只列出自己的会话。
+
+用户首次登录可自填昵称，存入 `pilore.users` 表（见[持久化](persistence.md)）。管理员归因查询示例：
+
+```sql
+-- 每个内测用户的会话数与最近活跃
+SELECT s.user_id, u.display_name, COUNT(*) AS sessions, MAX(s.updated_at) AS last_active
+FROM pilore.sessions s LEFT JOIN pilore.users u ON u.user_id = s.user_id
+GROUP BY s.user_id, u.display_name ORDER BY last_active DESC;
+
+-- 某个用户的每轮对话审计（run 按会话关联）
+SELECT r.started_at, r.provider_id, r.model_id, r.status
+FROM pilore.runs r JOIN pilore.sessions s ON s.id = r.session_id
+WHERE s.user_id = 'beta-01' ORDER BY r.started_at DESC;
+```
+
+单会话的运行轨迹也可用 `GET /api/trajectory?id=<sessionId>` 逐会话查看。
 
 ## HTTP API
 
@@ -52,6 +78,9 @@ npm run web:demo   # fauxProvider + 进程内 mock；无需 API key
 
 | 方法与路径 | 请求 | 响应/行为 |
 | --- | --- | --- |
+| `POST /api/login` | `{ "code", "name?" }` | 校验邀请码，成功设置登录 Cookie 并返回 `{ userId, displayName }`；错误码 401，限流 429 |
+| `POST /api/logout` | — | 清除登录 Cookie |
+| `GET /api/me` | — | 当前登录用户 `{ userId, displayName }`；未登录 401 |
 | `GET /api/packs` | — | Pack id、名称、提示语、侧栏标题、推荐问题、Profile 目录 |
 | `GET /api/sessions?pack=<id>` | — | 某 Pack 的会话摘要与存储类型 |
 | `POST /api/sessions` | `{ "pack": "math" }` | 创建空会话；默认 `code` |

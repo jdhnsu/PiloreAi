@@ -107,6 +107,7 @@ export { InMemorySessionStore, createInMemorySessionStore } from "./infrastructu
 export {
 	POSTGRES_MIGRATION_001,
 	POSTGRES_MIGRATION_002,
+	POSTGRES_MIGRATION_003,
 	applyPostgresMigrations,
 	PostgresSessionStore,
 	createPostgresSessionStore,

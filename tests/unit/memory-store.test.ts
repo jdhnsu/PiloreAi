@@ -68,3 +68,14 @@ test("InMemorySessionStore.list filters identity and sorts by update time", asyn
 	await store.completeRun({ runId: run.id, sessionId: b.id, expectedRevision: 0, snapshot: snapshot(), audit: { input: "x" } });
 	assert.deepEqual((await store.list({ tenantId: "t", userId: "u" })).map((item) => item.id), [b.id, a.id]);
 });
+
+test("InMemorySessionStore upsertUser/getUserDisplayName 记录登录昵称", async () => {
+	const store = createInMemorySessionStore();
+	assert.equal(await store.getUserDisplayName("beta-01"), null);
+	await store.upsertUser("beta-01", "小明");
+	assert.equal(await store.getUserDisplayName("beta-01"), "小明");
+	await store.upsertUser("beta-01", null);
+	assert.equal(await store.getUserDisplayName("beta-01"), "小明", "displayName 为 null 时保留原值");
+	await store.upsertUser("beta-01", "阿明");
+	assert.equal(await store.getUserDisplayName("beta-01"), "阿明");
+});

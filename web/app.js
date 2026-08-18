@@ -1,5 +1,17 @@
 "use strict";
 
+// 登录态失效守卫：任何 /api 返回 401 都跳回登录页（登录接口本身除外）
+const rawFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+	const resp = await rawFetch(...args);
+	const target = typeof args[0] === "string" ? args[0] : "";
+	if (resp.status === 401 && !target.startsWith("/api/login")) {
+		window.location.replace("/login.html");
+		throw new Error("unauthorized");
+	}
+	return resp;
+};
+
 const $ = (sel) => document.querySelector(sel);
 const messagesEl = $("#messages");
 const inputEl = $("#input");
@@ -45,6 +57,32 @@ themeToggle.onclick = () => {
 	localStorage.setItem("pilore-theme", next);
 	applyTheme(next);
 };
+
+/* ---------- 登录态：顶栏显示昵称与退出（免登录模式无 /api/me，组件保持隐藏） ---------- */
+const userChipEl = $("#user-chip");
+const userNameEl = $("#user-name");
+const logoutBtn = $("#logout-btn");
+if (userChipEl && userNameEl && logoutBtn) {
+	logoutBtn.onclick = async () => {
+		try {
+			await fetch("/api/logout", { method: "POST" });
+		} finally {
+			window.location.replace("/login.html");
+		}
+	};
+	(async () => {
+		try {
+			const resp = await rawFetch("/api/me");
+			if (!resp.ok) return;
+			const me = await resp.json();
+			userNameEl.textContent = me.displayName || me.userId;
+			userChipEl.classList.remove("hidden");
+		} catch {
+			/* 未登录或免登录模式：不显示 */
+		}
+	})();
+}
+
 let packs = []; // 可用学习包：{ id, name, tagline, suggestions, profiles }
 let currentPack = "code"; // 当前学习包 id
 let currentProfileKey = null; // 当前 profile key；null = 自动路由

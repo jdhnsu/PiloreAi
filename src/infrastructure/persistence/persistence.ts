@@ -109,6 +109,10 @@ export interface SessionStore {
 	/** 读取某会话的轨迹记录，按运行开始时间升序。 */
 	loadTrajectory(sessionId: string): Promise<TrajectoryRun[]>;
 	delete(sessionId: string): Promise<void>;
+	/** 记录登录用户及其显示名（displayName 为 null 时保留原值），用于内测归因。 */
+	upsertUser(userId: string, displayName: string | null): Promise<void>;
+	/** 读取用户显示名；不存在返回 null。 */
+	getUserDisplayName(userId: string): Promise<string | null>;
 }
 
 /** 从快照的首条用户消息派生会话标题（空白折叠、截断到 maxLength）。 */

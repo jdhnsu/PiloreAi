@@ -20,6 +20,7 @@
     "web:demo": "tsx scripts/web-demo.ts",
     "demo": "tsx scripts/demo.ts",
     "list-models": "tsx scripts/list-models.ts",
+    "gen:beta-codes": "tsx scripts/gen-beta-codes.ts",
     "cache:warmup": "tsx scripts/cache-warmup.ts",
     "cache:realistic": "tsx scripts/cache-realistic.ts",
     "example:embed": "tsx examples/embed-minimal.ts",

@@ -1,5 +1,7 @@
 node_modules/
 .env
+# 内测用户注册表（含邀请码哈希，禁止入库）
+data/
 *.log
 design/
 .pi/

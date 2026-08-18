@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>PiLore · 登录</title>
+	<style>
+		:root {
+			--accent: #0067c0;
+			--accent-hover: #1975c5;
+			--bg: #f3f3f3;
+			--card: #ffffff;
+			--text: #1a1a1a;
+			--text-secondary: #616161;
+			--border: #e5e5e5;
+			--danger: #c42b1c;
+			--radius: 8px;
+			--shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+		}
+
+		* { box-sizing: border-box; margin: 0; padding: 0; }
+
+		body {
+			font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+			background: var(--bg);
+			color: var(--text);
+			font-size: 14px;
+			line-height: 1.6;
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 24px;
+		}
+
+		.login-card {
+			background: var(--card);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			box-shadow: var(--shadow);
+			width: 100%;
+			max-width: 380px;
+			padding: 32px 28px;
+		}
+
+		.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+		.brand h1 { font-size: 20px; font-weight: 600; }
+		.brand h1 .wm-pi { color: var(--accent); }
+		.subtitle { color: var(--text-secondary); margin-bottom: 24px; }
+
+		label { display: block; font-weight: 600; margin: 14px 0 6px; }
+		.hint { color: var(--text-secondary); font-weight: 400; font-size: 12px; }
+
+		input {
+			width: 100%;
+			padding: 8px 10px;
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			font: inherit;
+			background: #fff;
+			color: var(--text);
+		}
+		input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+
+		button {
+			margin-top: 20px;
+			width: 100%;
+			padding: 9px 12px;
+			border: none;
+			border-radius: 6px;
+			background: var(--accent);
+			color: #fff;
+			font: inherit;
+			font-weight: 600;
+			cursor: pointer;
+		}
+		button:hover { background: var(--accent-hover); }
+		button:disabled { opacity: 0.6; cursor: default; }
+
+		.error { color: var(--danger); margin-top: 12px; min-height: 1.4em; }
+	</style>
+</head>
+<body>
+	<form class="login-card" id="login-form">
+		<div class="brand">
+			<h1><span class="wm-pi">Pi</span>Lore</h1>
+		</div>
+		<p class="subtitle">AI 学习助手 · 内测版</p>
+
+		<label for="code">邀请码</label>
+		<input id="code" name="code" type="text" autocomplete="off" spellcheck="false" required placeholder="pil-XXXX-XXXX-XXXX">
+
+		<label for="name">昵称 <span class="hint">（可选，方便我们记住你）</span></label>
+		<input id="name" name="name" type="text" autocomplete="nickname" maxlength="40" placeholder="例如：小明">
+
+		<button id="submit" type="submit">进入学习</button>
+		<p class="error" id="error" role="alert"></p>
+	</form>
+
+	<script>
+		const form = document.getElementById("login-form");
+		const errorEl = document.getElementById("error");
+		const submitEl = document.getElementById("submit");
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			errorEl.textContent = "";
+			submitEl.disabled = true;
+			try {
+				const resp = await fetch("/api/login", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						code: document.getElementById("code").value,
+						name: document.getElementById("name").value.trim(),
+					}),
+				});
+				const data = await resp.json().catch(() => ({}));
+				if (resp.ok) {
+					window.location.replace("/");
+					return;
+				}
+				errorEl.textContent = data.error || "登录失败，请重试";
+			} catch {
+				errorEl.textContent = "网络错误，请重试";
+			} finally {
+				submitEl.disabled = false;
+			}
+		});
+	</script>
+</body>
+</html>

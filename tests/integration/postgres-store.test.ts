@@ -232,3 +232,19 @@ test("PostgreSQL trajectory 校验会话与 run 存在", { skip: !databaseConfig
 	);
 	await assert.rejects(store.loadTrajectory(missingRun), SessionNotFoundError);
 });
+
+test("PostgreSQL upsertUser/getUserDisplayName 记录登录昵称（migration 003）", { skip: !databaseConfig }, async () => {
+	assert.equal(await store.getUserDisplayName("beta-01"), null);
+	await store.upsertUser("beta-01", "小明");
+	assert.equal(await store.getUserDisplayName("beta-01"), "小明");
+	await store.upsertUser("beta-01", null);
+	assert.equal(await store.getUserDisplayName("beta-01"), "小明", "displayName 为 null 时保留原值");
+	await store.upsertUser("beta-01", "阿明");
+	assert.equal(await store.getUserDisplayName("beta-01"), "阿明");
+	const row = await pool.query<{ first_login_at: Date; last_login_at: Date }>(
+		`SELECT first_login_at, last_login_at FROM "${schema}".users WHERE user_id = $1`,
+		["beta-01"],
+	);
+	assert.ok(row.rows[0].first_login_at instanceof Date);
+	assert.ok(row.rows[0].last_login_at instanceof Date);
+});

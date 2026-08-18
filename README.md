@@ -170,6 +170,19 @@ HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消�
 | `POST /api/context/compact` | `{ sessionId }` → 用户确认后压缩早期历史并持久化；`/api/chat` 超限时返回 `409 CONTEXT_COMPACTION_REQUIRED` |
 | `POST /api/profile` | `{ sessionId, profile }` 手动切换 Profile |
 | `POST /api/abort` | 中止指定会话的当前运行 |
+| `POST /api/login` | `{ code, name? }` 邀请码登录（仅真实模式；演示模式免登录） |
+| `POST /api/logout` / `GET /api/me` | 清除登录 Cookie / 当前登录用户 |
+
+### 内测登录（邀请码）
+
+真实模式下 Web 界面强制邀请码登录，并把登录用户映射为会话身份，实现多用户会话隔离（跨用户访问一律 404）：
+
+```bash
+npm run gen:beta-codes        # 生成 data/beta-users.json（只存哈希）并打印 15 个明文邀请码
+AUTH_SECRET=$(openssl rand -hex 32) npm run web
+```
+
+要点：邀请码只存 SHA-256 哈希、登录签发 HMAC 签名 Cookie（HttpOnly + SameSite=Lax）；部署在 HTTPS 反代后设 `WEB_COOKIE_SECURE=1`；注册表热重载，删除某行即可吊销该用户；同来源每分钟最多 5 次失败登录。详见 [docs/adapters.md](docs/adapters.md) 与 [docs/persistence.md](docs/persistence.md)。
 
 ## 老师设计文档与元数据（按需加载）
 
@@ -304,6 +317,9 @@ const store = createPostgresSessionStore({
 | `THINKING_LEVEL` | 推理级别 `off`~`max`，默认 `off` |
 | `EXEC_API_BASE` | 执行服务地址，默认 `http://localhost:1313`（真实沙箱） |
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | PostgreSQL 连接参数；核心不会自动读取，由宿主构造 `pg.Pool` 后注入 |
+| `AUTH_SECRET` | Web 内测登录 Cookie HMAC 密钥（≥32 字符）；未设置时随机生成，重启后用户需重新登录 |
+| `BETA_USERS_FILE` | 内测用户注册表路径，默认 `data/beta-users.json`（`npm run gen:beta-codes` 生成） |
+| `WEB_COOKIE_SECURE` | `1` 强制登录 Cookie 附加 `Secure`（HTTPS 反代部署建议开启） |
 
 ## 执行后端协议（替换真实沙箱）
 

@@ -39,6 +39,7 @@ export class InMemorySessionStore implements SessionStore {
 	private readonly sessions = new Map<string, StoredSession>();
 	private readonly runs = new Map<string, MemoryRun>();
 	private readonly trajectories = new Map<string, TrajectoryRun>();
+	private readonly displayNames = new Map<string, string>();
 
 	async create(input: CreateStoredSession): Promise<StoredSession> {
 		const id = input.id ?? randomUUID();
@@ -162,6 +163,14 @@ export class InMemorySessionStore implements SessionStore {
 				this.trajectories.delete(runId);
 			}
 		}
+	}
+
+	async upsertUser(userId: string, displayName: string | null): Promise<void> {
+		if (displayName !== null) this.displayNames.set(userId, displayName);
+	}
+
+	async getUserDisplayName(userId: string): Promise<string | null> {
+		return this.displayNames.get(userId) ?? null;
 	}
 
 	private cloneStored(stored: StoredSession): StoredSession {
