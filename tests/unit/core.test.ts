@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText } from "@pilore/pi-ai";
 import { ContextPolicyError, createSession, createRuntime, resolveContextPolicy, validateCoreSnapshot, CORE_SESSION_SNAPSHOT_VERSION } from "../../src/index.js";
 
 test("Core session works without a Domain Pack", async () => {

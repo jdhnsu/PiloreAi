@@ -5,10 +5,10 @@ import {
 	type MutableModels,
 	type Provider,
 	type ProviderStreams,
-} from "@earendil-works/pi-ai";
-import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
-import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
-import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
+} from "@pilore/pi-ai";
+import { anthropicMessagesApi } from "@pilore/pi-ai/api/anthropic-messages.lazy";
+import { openAICompletionsApi } from "@pilore/pi-ai/api/openai-completions.lazy";
+import { openAIResponsesApi } from "@pilore/pi-ai/api/openai-responses.lazy";
 
 export const CUSTOM_MODEL_PROVIDER_ID = "custom";
 

@@ -1,4 +1,4 @@
-import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentTool } from "@pilore/pi-agent-core";
 import { createObservedStreamFn } from "../../infrastructure/telemetry/index.js";
 import { appendProfileContext, convertProfileMessages, createRouterTool, createUpdateProfileStateTool, type ProfileContextMessage } from "../router/index.js";
 import { CoreState } from "../state/index.js";

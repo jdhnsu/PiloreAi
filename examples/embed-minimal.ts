@@ -1,5 +1,5 @@
 /** 无网络、无默认 Profile 目录依赖的最小 Code Pack 嵌入示例。 */
-import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@pilore/pi-ai";
 import {
 	createCodeMentorSession,
 	parseCodeProfile,

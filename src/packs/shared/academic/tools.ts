@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@pilore/pi-agent-core";
+import { Type } from "@pilore/pi-ai";
 import type { ToolManifest } from "../../../core/types.js";
 import type { AcademicEvaluator } from "./evaluator.js";
 import type { AcademicMentorState, AcademicPracticeItem, AcademicPracticeRecord } from "./state.js";

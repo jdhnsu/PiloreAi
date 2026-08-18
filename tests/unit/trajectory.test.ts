@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Agent } from "@earendil-works/pi-agent-core";
-import { Type, createAssistantMessageEventStream, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { Agent } from "@pilore/pi-agent-core";
+import { Type, createAssistantMessageEventStream, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@pilore/pi-ai";
 import { CoreState, createSession, createTrajectoryRecorder } from "../../src/index.js";
 
 test("Session records one trajectory run with turns, tools, text, and usage", async () => {

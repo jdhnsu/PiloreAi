@@ -22,7 +22,7 @@ import "dotenv/config";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
-import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { AgentMessage, ThinkingLevel } from "@pilore/pi-agent-core";
 import {
 	createCodeMentorSession,
 	createModelCollection,

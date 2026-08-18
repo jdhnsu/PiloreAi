@@ -1,5 +1,5 @@
-import { Type } from "@earendil-works/pi-ai";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@pilore/pi-ai";
+import type { AgentTool } from "@pilore/pi-agent-core";
 import type { VirtualFS } from "../vfs.js";
 import type { CodeEvaluator } from "../evaluator.js";
 export function createEvaluationTools(vfs: VirtualFS, evaluator?: CodeEvaluator): AgentTool<any>[] {

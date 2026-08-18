@@ -1,5 +1,5 @@
-import { Type } from "@earendil-works/pi-ai";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@pilore/pi-ai";
+import type { AgentTool } from "@pilore/pi-agent-core";
 import type { VocabBank, WordEntry } from "../vocab.js";
 function format(entry: WordEntry): string { const head = [entry.word, entry.phonetic ? `/${entry.phonetic}/` : "", entry.pos ? `[${entry.pos}]` : ""].filter(Boolean).join(" "); return `- ${head}：${entry.meaning}${entry.example ? `\n  例：${entry.example}` : ""}`; }
 export function createVocabularyTools(bank: VocabBank): AgentTool<any>[] {

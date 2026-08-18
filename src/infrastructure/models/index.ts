@@ -1,4 +1,4 @@
-import { createModels, type MutableModels } from "@earendil-works/pi-ai";
+import { createModels, type MutableModels } from "@pilore/pi-ai";
 import { PROVIDERS } from "./registry.js";
 import type { ProviderDefinition } from "./types.js";
 

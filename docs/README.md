@@ -10,6 +10,7 @@ PiLore 是可嵌入的多领域教学 Agent：领域无关的 Core 处理 Agent 
 - [模块依赖关系图（交互式）](module-graph.html)：`src/` 内部模块导入关系的力导向图，浏览器直接打开即可探索。
 - [嵌入与 Session API](embedding.md)：在 Node.js 应用中创建 Pack Session、接收事件、恢复快照。
 - [Core](core.md)：Runtime、Session、Profile Router、Tool Runtime、Snapshot 协议。
+- [Pi 运行时源码分叉](runtime-source-fork.md)：`@pilore/*` 工作区、上游溯源和三仓镜像发布流程。
 - [Packs](packs.md)：五个现有 Pack 的能力、状态和公共约定。
 - [开发新的 Pack](pack-development.md)：从设计 Profile 到公开导出、测试与 Adapter 接入的完整步骤。
 - [持久化与 PostgreSQL](persistence.md)：SessionStore 契约、并发语义、加密快照、表结构和迁移。

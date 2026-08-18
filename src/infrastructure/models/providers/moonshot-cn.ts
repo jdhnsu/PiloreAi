@@ -1,5 +1,5 @@
-import { moonshotaiCnProvider } from "@earendil-works/pi-ai/providers/moonshotai-cn";
-import type { MutableModels } from "@earendil-works/pi-ai";
+import { moonshotaiCnProvider } from "@pilore/pi-ai/providers/moonshotai-cn";
+import type { MutableModels } from "@pilore/pi-ai";
 import type { ProviderDefinition } from "../types.js";
 
 export const MOONSHOT_CN_DOCS_URL = "https://platform.moonshot.cn/docs/intro";

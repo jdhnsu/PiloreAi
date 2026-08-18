@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { Type, type Message, type UserMessage } from "@earendil-works/pi-ai";
-import type { AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
+import { Type, type Message, type UserMessage } from "@pilore/pi-ai";
+import type { AgentMessage, AgentTool } from "@pilore/pi-agent-core";
 import type { CoreState } from "../state/index.js";
 import { isContextSummary } from "../context-policy/index.js";
 import type { JsonValue, ProfileDefinition, RouterConfig } from "../types.js";
@@ -15,7 +15,7 @@ export interface ProfileContextMessage {
 	timestamp: number;
 }
 
-declare module "@earendil-works/pi-agent-core" { interface CustomAgentMessages { piloreProfileContext: ProfileContextMessage } }
+declare module "@pilore/pi-agent-core" { interface CustomAgentMessages { piloreProfileContext: ProfileContextMessage } }
 
 export function hashProfile(profile: ProfileDefinition): string {
 	return createHash("sha256").update(JSON.stringify({ key: profile.key, name: profile.name, methodology: profile.methodology })).digest("hex");

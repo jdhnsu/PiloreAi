@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModels, fauxProvider } from "@earendil-works/pi-ai";
+import { createModels, fauxProvider } from "@pilore/pi-ai";
 import { createCodeMentorSession, getDefaultCodeProfiles } from "../../src/index.js";
 import { evaluateRouterTurn, type RouterTurnEvidence } from "../harness/router-real-driver.js";
 

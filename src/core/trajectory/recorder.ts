@@ -1,5 +1,5 @@
-import type { Agent, AgentEvent, AgentTool } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, TextContent, Usage } from "@earendil-works/pi-ai";
+import type { Agent, AgentEvent, AgentTool } from "@pilore/pi-agent-core";
+import type { AssistantMessage, TextContent, Usage } from "@pilore/pi-ai";
 import { INTERNAL_TOOL_NAMES } from "../tool-runtime/index.js";
 import type { CoreState } from "../state/index.js";
 import type { ProfileChangeSource } from "../events/index.js";

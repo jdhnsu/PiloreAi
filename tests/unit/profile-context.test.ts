@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@pilore/pi-ai";
+import type { AgentMessage } from "@pilore/pi-agent-core";
 import {
 	CoreState,
 	convertProfileMessages,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@pilore/pi-ai";
 import { CoreState, createEnglishToolManifest, createEnglishMentorSession, getDefaultEnglishProfiles, toolsForState, VocabBank } from "../../src/index.js";
 
 test("English Pack owns its three default profiles", () => {

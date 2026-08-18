@@ -12,3 +12,5 @@ pdf-verify-1.png
 desktop.ini
 .fold11_icon.ico
 docs/trajectory.md
+.artifacts/
+packages/*/dist/

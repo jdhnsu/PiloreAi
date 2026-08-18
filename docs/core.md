@@ -31,7 +31,7 @@ interface RuntimeConfig {
 
 ## Runtime
 
-`createRuntime(config)` 创建 `@earendil-works/pi-agent-core` 的 `Agent` 与 `CoreState`。它负责：
+`createRuntime(config)` 创建 `@pilore/pi-agent-core` 的 `Agent` 与 `CoreState`。它负责：
 
 - 以 `systemPrompt ?? domain.basePrompt` 初始化 Agent。
 - 将 `models.streamSimple` 包装为可选的遥测 stream function。
