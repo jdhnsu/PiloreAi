@@ -36,5 +36,5 @@ export interface RuntimeConfig {
 }
 export interface SessionSnapshotV1 { version: 1; revision: number; activeProfileKey: string | null; activeToolsetKeys: string[]; messages: unknown[]; extensions: Record<string, JsonValue> }
 export type SessionSnapshot = SessionSnapshotV1;
-export type { SessionEvent } from "./events/index.js";
+export type { SessionEvent, SessionEventJsonValue } from "./events/index.js";
 export type { ContextPolicy } from "./context-policy/index.js";

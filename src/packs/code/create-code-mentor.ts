@@ -16,7 +16,6 @@ import { buildCodeMentorPrompt } from "./agent-design/base-prompt.js";
 import { getDefaultCodeProfiles } from "./agent-design/profiles.js";
 import type { CodeEvaluator } from "./evaluator.js";
 import { createHttpExecClient, type ExecClient } from "./exec-client.js";
-import { createHttpGoJudgeClient, type GoJudgeClient } from "./go-judge-client.js";
 import { createCodeRouterConfig } from "./router-config.js";
 import { createCodeSnapshotExtension } from "./snapshot-extension.js";
 import { createCodeMentorState, type CodeMentorState } from "./state.js";
@@ -35,10 +34,6 @@ export interface CodeMentorConfig {
 	profiles?: ProfileDefinition[];
 	vfs?: VirtualFS;
 	exec?: ExecClient;
-	/** go-judge 默认启用；传 false 可禁用该工具组，传客户端可接管语言与请求策略。 */
-	goJudge?: GoJudgeClient | false;
-	/** 未注入 goJudge 客户端时使用；默认读取 GO_JUDGE_API_BASE，回退到 http://127.0.0.1:5050。 */
-	goJudgeBaseUrl?: string;
 	evaluator?: CodeEvaluator;
 	snapshot?: SessionSnapshot;
 	maxTurns?: number;
@@ -60,10 +55,7 @@ function resolveCodeMentor(config: CodeMentorConfig): ResolvedCodeMentor {
 	const profiles = config.profiles ?? getDefaultCodeProfiles();
 	const vfs = config.vfs ?? new VirtualFS();
 	const state = createCodeMentorState();
-	const goJudge = config.goJudge === false
-		? undefined
-		: config.goJudge ?? createHttpGoJudgeClient({ baseUrl: config.goJudgeBaseUrl, fetch: config.fetch });
-	const manifest = createCodeToolManifest(vfs, config.exec ?? createHttpExecClient(), config.evaluator, goJudge);
+	const manifest = createCodeToolManifest(vfs, config.exec ?? createHttpExecClient(), config.evaluator);
 	const router = createCodeRouterConfig(profiles, state);
 	const extension = createCodeSnapshotExtension(state, vfs, profiles.map((profile) => profile.key));
 	const customModel = config.customModel ?? (config.useEnvCustomModel === false ? undefined : resolveCustomModelConfig());

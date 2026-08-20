@@ -32,7 +32,7 @@ PiLore 由领域无关的 Core，以及 Code、English、大学数学、大学�
 - **嵌入友好**：每个 Pack 都提供 `create*MentorSession(config)` 工厂；Core 也可不加载 Pack 独立运行
 - Fluent（微软）风格 Web 界面：流式回答、工具调用卡片、实时工作区侧栏
 - 可替换执行后端：实现 `ExecClient` 接口，或用兼容 codapi 风格 `POST /v1/exec` 协议的服务，改一个环境变量即可切换
-- go-judge 判题：按需加载 `go_judge` 工具组，可编译/运行单文件、查看完整指标，并用 1–20 个测试用例逐例判定
+- 独立 Judge Pack：Judge 教练先用 go-judge 验证参考解答与隐藏用例，再发布结构化题目卡；用户提交后先真实判题再讲解
 
 ## 快速开始
 
@@ -56,7 +56,7 @@ cp .env.example .env   # 填入 DEEPSEEK_API_KEY（首选）、MOONSHOT_API_KEY 
 npm run web            # 真实模型
 npm run web:demo       # 无需 API key（fauxProvider 脚本化 + 进程内 mock 执行服务）
 
-# CLI（支持 code / english / math / physics / history pack）：
+# CLI（支持 code / judge / english / math / physics / history pack）：
 npm run chat
 npm run chat:english
 npm run chat:math
@@ -108,6 +108,7 @@ CLI 内命令：`/quit` 退出、`/abort` 中断当前运行、`/help` 帮助。
 │  ├─ core/           # runtime / session / state / snapshot / router / tool-runtime / events
 │  ├─ packs/
 │  │  ├─ code/        # 编程导师设定、Profiles、VFS、ExecClient、代码工具与快照扩展
+│  │  ├─ judge/       # go-judge、题目自验证、题目卡、提交判定与讲题状态
 │  │  ├─ english/     # 英语导师设定、Profiles、词汇/练习工具与快照扩展
 │  │  ├─ math/        # 大学数学 Profiles、学科工具与 math 快照扩展
 │  │  ├─ physics/     # 大学物理 Profiles、学科工具与 physics 快照扩展
@@ -167,8 +168,10 @@ HTTP 接口（适配层与组件的边界，任何前端/其它服务都可消�
 | `GET /` | 静态页面（web/） |
 | `GET /api/packs` | 可用 Pack 与 Profile 目录 |
 | `GET /api/state?id=...` | 当前会话的 Pack / Profile / busy / model |
-| `GET /api/panel?id=...` | Code 文件、English 词汇或学科学习卡片侧栏 |
+| `GET /api/panel?id=...` | Code 文件、Judge 公开题目/最近提交/语言、English 词汇或学科学习卡片侧栏 |
 | `POST /api/chat` | `{ sessionId, message }` → SSE `SessionEvent` |
+| `POST /api/judge/run` | `{ sessionId, sourceCode, language, stdin? }` → 自定义输入真实运行结果 |
+| `POST /api/judge/submit` | `{ sessionId, sourceCode, language }` → 当前题目脱敏判题结果 |
 | `POST /api/context/compact` | `{ sessionId }` → 用户确认后压缩早期历史并持久化；`/api/chat` 超限时返回 `409 CONTEXT_COMPACTION_REQUIRED` |
 | `POST /api/profile` | `{ sessionId, profile }` 手动切换 Profile |
 | `POST /api/abort` | 中止指定会话的当前运行 |
@@ -338,15 +341,16 @@ POST {EXEC_API_BASE}/v1/exec
 
 实现 `ExecClient` 后注入 `createCodeMentorSession({ exec })`，或配置 `EXEC_API_BASE` 指向兼容服务。mock 仅用于离线演示。
 
-### go-judge 判题
+### Judge Pack 与 go-judge
 
-Code Pack 默认启用延迟加载的 `go_judge` 工具组：
+Judge Pack 使用两个动态工具组：
 
-- `list_go_judge_languages`：检查服务并列出客户端配置的语言 ID；
-- `run_go_judge_code`：编译并运行 VFS 单文件，可带 stdin/expected output，返回状态、stdout/stderr、编译输出、CPU/墙上时间、内存、退出码与运行 ID；
-- `judge_go_judge_code`：执行 1–20 个测试用例，编译型语言只编译一次，逐例返回实际/期望结果并汇总通过率。
+- `judge`：`list_judge_languages`、`run_judge_code`、`judge_code`、`submit_problem_solution`；
+- `problem_cards`：`verify_problem` 先运行参考解答、示例和隐藏测试，成功后由 `publish_problem_card` 向前端发送不含参考答案/隐藏用例的结构化题目卡。
 
-配置 `GO_JUDGE_API_BASE` 指向 go-judge REST API 根地址。默认语言配置与本地镜像一致：C (`gcc`)、C++ (`g++`) 和 Python 3；go-judge 本身不提供语言目录，增加语言时需先在镜像安装运行时，再通过 `createHttpGoJudgeClient({ languages })` 注入命令配置。编译产物通过 `/file` 缓存复用于各测试用例，并在判题后删除。宿主也可以注入 `createCodeMentorSession({ goJudge })`，或传 `goJudge: false` 禁用。
+配置 `GO_JUDGE_API_BASE` 指向 go-judge REST API 根地址。默认语言配置与本地镜像一致：C (`gcc`)、C++ (`g++`) 和 Python 3；增加语言时需先在镜像安装运行时，再通过 `createHttpGoJudgeClient({ languages })` 注入命令配置。编译产物通过 `/file` 缓存复用于各测试用例，并在判题后删除。
+
+Web 切换到 `judge` 后加载独立三栏工作台：可折叠/调宽的题目卡、Monaco Editor + 可调高测试结果区、Judge 教练对话。面板尺寸、折叠状态和每题代码草稿保存在浏览器本地；窄屏使用可恢复的题目/教练抽屉。编辑器“提交判题”先调用服务端 Judge，再把可信结果交给教练讲解。
 
 ## 下一步：接 HTTP / UI
 

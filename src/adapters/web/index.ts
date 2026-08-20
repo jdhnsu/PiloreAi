@@ -14,15 +14,18 @@ import {
 	createAes256GcmCryptoProvider,
 	createCodeMentorSession,
 	ContextPolicyError,
+	DEFAULT_GO_JUDGE_LANGUAGES,
 	createEnglishMentorSession,
 	createHistoryMentorSession,
 	createInMemorySessionStore,
+	createJudgeMentorSession,
 	createMathMentorSession,
 	createPhysicsMentorSession,
 	createPostgresSessionStore,
 	getDefaultCodeProfiles,
 	getDefaultEnglishProfiles,
 	getDefaultHistoryProfiles,
+	getDefaultJudgeProfiles,
 	getDefaultMathProfiles,
 	getDefaultPhysicsProfiles,
 	SessionBusyError,
@@ -33,6 +36,11 @@ import {
 	type CodeMentorSession,
 	type EnglishMentorSession,
 	type ExecClient,
+	type GoJudgeClient,
+	type GoJudgeExecutionResult,
+	type JudgeMentorSession,
+	type JudgeProblemCard,
+	type JudgeSubmission,
 	type ProfileDefinition,
 	type RunMetrics,
 	type Session,
@@ -143,13 +151,15 @@ interface SessionCreateConfig {
 	useEnvCustomModel?: boolean;
 	snapshot?: SessionSnapshotV1;
 	exec?: ExecClient;
+	goJudge?: GoJudgeClient;
 }
 
 /** 工作区侧栏数据由 Pack 决定。 */
 type SidebarPanel =
 	| { kind: "files"; files: Array<{ path: string; content: string }> }
 	| { kind: "vocabulary"; words: WordEntry[] }
-	| { kind: "study_cards"; cards: StudyCard[] };
+	| { kind: "study_cards"; cards: StudyCard[] }
+	| { kind: "judge"; problem: JudgeProblemCard | null; submission: JudgeSubmission | null; languages: Array<{ id: string; name: string }> };
 
 interface WebPack {
 	id: string;
@@ -159,7 +169,7 @@ interface WebPack {
 	suggestions: string[];
 	profiles: ProfileDefinition[];
 	create(config: SessionCreateConfig): PackSession;
-	panel(session: PackSession): SidebarPanel;
+	panel(session: PackSession): SidebarPanel | Promise<SidebarPanel>;
 }
 
 function createFauxModels(script: () => ReturnType<typeof fauxAssistantMessage>): MutableModels {
@@ -176,6 +186,35 @@ const demoExec: ExecClient = {
 		const { stdout, stderr } = simulate(request.files ?? {});
 		return { id: `mock:${Date.now()}`, ok: true, duration: 120 + Math.floor(Math.random() * 100), stdout, stderr };
 	},
+};
+
+function demoJudgeResult(sourceCode: string, languageId: string, stdin = ""): GoJudgeExecutionResult {
+	const language = DEFAULT_GO_JUDGE_LANGUAGES.find((item) => item.id === languageId) ?? DEFAULT_GO_JUDGE_LANGUAGES[0]!;
+	const numeric = Number(stdin.trim());
+	const stdout = Number.isFinite(numeric) && /\*\s*2/.test(sourceCode) ? `${numeric * 2}\n` : stdin;
+	return {
+		id: `demo:${randomBytes(8).toString("hex")}`,
+		language: structuredClone(language),
+		phase: "run",
+		status: "Accepted",
+		sandboxStatus: "Accepted",
+		stdout,
+		stderr: "",
+		compileOutput: null,
+		error: null,
+		timeSeconds: 0.001,
+		wallTimeSeconds: 0.002,
+		memoryKilobytes: 1024,
+		exitCode: 0,
+		processPeak: 1,
+		compilation: null,
+	};
+}
+
+const demoGoJudge: GoJudgeClient = {
+	listLanguages: async () => DEFAULT_GO_JUDGE_LANGUAGES.map((language) => structuredClone(language)),
+	run: async (input) => demoJudgeResult(input.sourceCode, input.language, input.stdin ?? ""),
+	runCases: async (input, cases) => cases.map((item) => demoJudgeResult(input.sourceCode, input.language, item.stdin)),
 };
 
 let codeDemoStep = 0;
@@ -241,6 +280,33 @@ const nextEnglishDemoStep = () => {
 	);
 };
 
+let judgeDemoStep = 0;
+const nextJudgeDemoStep = () => {
+	const phase = (judgeDemoStep++ % 5) + 1;
+	if (phase === 1) return fauxAssistantMessage([fauxText("我会先在沙箱验证题目和参考解答：\n"), fauxToolCall("activate_toolset", { toolset: "judge" })], { stopReason: "toolUse" });
+	if (phase === 2) return fauxAssistantMessage([fauxToolCall("activate_toolset", { toolset: "problem_cards" })], { stopReason: "toolUse" });
+	if (phase === 3) {
+		return fauxAssistantMessage([fauxToolCall("verify_problem", {
+			title: "数字翻倍",
+			difficulty: "easy",
+			description: "给定一个整数 n，请输出它的两倍。",
+			input_format: "一行一个整数 n。",
+			output_format: "输出整数 2 × n。",
+			constraints: ["-1000000 <= n <= 1000000"],
+			examples: [{ input: "2\n", output: "4\n", explanation: "2 的两倍是 4。" }],
+			language: "python",
+			starter_code: "n = int(input())\n# 在这里输出答案\n",
+			reference_solution: "n = int(input())\nprint(n * 2)\n",
+			hidden_tests: [
+				{ name: "零", input: "0\n", expected_output: "0\n" },
+				{ name: "负数", input: "-3\n", expected_output: "-6\n" },
+			],
+		})], { stopReason: "toolUse" });
+	}
+	if (phase === 4) return fauxAssistantMessage([fauxToolCall("publish_problem_card", { verification_id: "latest" })], { stopReason: "toolUse" });
+	return fauxAssistantMessage("题目已经通过参考解答和边界用例验证。请在编辑器完成代码，运行示例后再提交。", { stopReason: "stop" });
+};
+
 const ACADEMIC_DEMO: Record<string, { subject: string; kind: string; title: string; summary: string; practice: string }> = {
 	math: { subject: "大学数学", kind: "definition", title: "导数", summary: "函数在一点的瞬时变化率，也是切线斜率。", practice: "concept" },
 	physics: { subject: "大学物理", kind: "law", title: "动量守恒", summary: "孤立系统总动量保持不变；使用前先明确系统边界。", practice: "calculation" },
@@ -285,6 +351,29 @@ const WEB_PACKS: WebPack[] = [
 		panel: (session) => {
 			const s = session as CodeMentorSession;
 			return { kind: "files", files: s.listFiles().map((p) => ({ path: p, content: s.readFile(p) ?? "" })) };
+		},
+	},
+	{
+		id: "judge",
+		name: "编程判题",
+		tagline: "由 Judge 教练验证后出题，在真实沙箱结果上讲解你的提交。",
+		panelTitle: "题目与判题",
+		suggestions: [
+			"给我出一道 Python 入门题，先自己验证后再发布",
+			"给我出一道 C++ 中等难度的数组题",
+			"根据我刚才的提交结果给我一个递进提示",
+		],
+		profiles: getDefaultJudgeProfiles(),
+		create: (config) => createJudgeMentorSession(config),
+		panel: async (session) => {
+			const s = session as JudgeMentorSession;
+			const languages = await s.listJudgeLanguages();
+			return {
+				kind: "judge",
+				problem: s.getProblem(),
+				submission: s.getLastSubmission(),
+				languages: languages.map((language) => ({ id: language.id, name: language.name })),
+			};
 		},
 	},
 	{
@@ -501,6 +590,8 @@ async function main(): Promise<void> {
 		let options: SessionCreateConfig;
 		if (pack.id === "code") {
 			options = { models: createFauxModels(nextCodeDemoStep), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false, exec: demoExec };
+		} else if (pack.id === "judge") {
+			options = { models: createFauxModels(nextJudgeDemoStep), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false, goJudge: demoGoJudge };
 		} else if (pack.id === "english") {
 			options = { models: createFauxModels(nextEnglishDemoStep), providerId: "faux", modelId: "faux-1", useEnvCustomModel: false };
 		} else {
@@ -556,6 +647,37 @@ async function main(): Promise<void> {
 		};
 		entries.set(sessionId, entry);
 		return entry;
+	}
+
+	async function executeJudgeAction<T>(entry: SessionEntry, sessionId: string, auditInput: string, action: () => Promise<T>): Promise<T> {
+		if (entry.pack.id !== "judge") throw new Error("该接口仅适用于 judge pack");
+		if (entry.session.busy) throw new SessionBusyError(sessionId);
+		const [providerId = "", modelId = ""] = entry.session.modelInfo.split("/");
+		const run = await store.beginRun({
+			sessionId,
+			expectedRevision: entry.revision,
+			providerId,
+			modelId,
+			profileKey: entry.session.profile ?? undefined,
+			audit: { input: auditInput },
+		});
+		try {
+			const value = await action();
+			const output = JSON.stringify(value).slice(0, 8_000);
+			const updated = await store.completeRun({
+				runId: run.id,
+				sessionId,
+				expectedRevision: entry.revision,
+				snapshot: entry.session.exportSnapshot(entry.revision),
+				audit: { input: auditInput, output },
+				metrics: runMetrics(null, run.startedAt),
+			});
+			entry.revision = updated.revision;
+			return value;
+		} catch (error) {
+			await store.failRun({ runId: run.id, sessionId, errorCode: "JUDGE_ACTION_ERROR", audit: { input: auditInput } }).catch(() => {});
+			throw error;
+		}
 	}
 
 	async function handleLogin(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -829,7 +951,57 @@ async function main(): Promise<void> {
 					storeErrorResponse(res, err);
 					return;
 				}
-				json(res, 200, { pack: entry.pack.id, ...entry.pack.panel(entry.session) });
+				json(res, 200, { pack: entry.pack.id, ...await entry.pack.panel(entry.session) });
+				return;
+			}
+			if (req.method === "POST" && (url.pathname === "/api/judge/run" || url.pathname === "/api/judge/submit")) {
+				const body = await readJsonBody(req);
+				const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
+				const sourceCode = typeof body.sourceCode === "string" ? body.sourceCode : "";
+				const language = typeof body.language === "string" ? body.language : "";
+				const stdin = typeof body.stdin === "string" ? body.stdin : "";
+				if (!sessionId) {
+					json(res, 400, { error: "missing sessionId" });
+					return;
+				}
+				if (!sourceCode.trim() || sourceCode.length > 200_000 || !language) {
+					json(res, 400, { error: "sourceCode 必须为 1–200000 字符，且 language 不能为空" });
+					return;
+				}
+				let entry: SessionEntry;
+				try {
+					entry = await getEntry(sessionId, user.userId);
+				} catch (err) {
+					storeErrorResponse(res, err);
+					return;
+				}
+				if (entry.pack.id !== "judge") {
+					json(res, 400, { error: "该接口仅适用于 judge pack" });
+					return;
+				}
+				const judgeSession = entry.session as JudgeMentorSession;
+				try {
+					if (url.pathname === "/api/judge/run") {
+						const result = await executeJudgeAction(
+							entry,
+							sessionId,
+							`[judge_run] language=${language} sourceLength=${sourceCode.length}`,
+							() => judgeSession.runJudgeCode({ sourceCode, language, stdin }),
+						);
+						json(res, 200, { result, revision: entry.revision });
+					} else {
+						const submission = await executeJudgeAction(
+							entry,
+							sessionId,
+							`[judge_submit] language=${language} sourceLength=${sourceCode.length}`,
+							() => judgeSession.submitJudgeSolution(sourceCode, language),
+						);
+						json(res, 200, { submission, revision: entry.revision });
+					}
+				} catch (err) {
+					if (err instanceof SessionStoreError) storeErrorResponse(res, err);
+					else json(res, 422, { error: err instanceof Error ? err.message : String(err) });
+				}
 				return;
 			}
 			if (req.method === "GET" && url.pathname === "/api/trajectory") {

@@ -5,7 +5,8 @@
 `npm test` 覆盖：
 
 - Core：无 Domain Pack 的纯对话、Snapshot 校验、架构依赖边界。
-- Code Pack：默认 Profiles、动态工具组、VFS、Profile 状态、Snapshot 恢复，以及 go-judge 编译缓存、运行指标、缓存清理和多用例判定。
+- Code Pack：默认 Profiles、动态工具组、VFS、Profile 状态与 Snapshot 恢复。
+- Judge Pack：独立 Profile/工具组、题目自验证、发布前门禁、私有测试脱敏、结构化题目卡事件、提交判定、Snapshot 恢复，以及 go-judge 编译缓存清理。
 - English Pack：默认 Profiles、词汇/练习工具、评估记录、Snapshot 恢复。
 - Academic Packs：大学数学、大学物理、大学历史的默认 Profiles、动态卡片/练习工具、学科感知评估与独立 Snapshot namespace。
 - Infrastructure：AES-256-GCM、内存 SessionStore、Telemetry。

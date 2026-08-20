@@ -70,12 +70,69 @@
 				</button>
 			</nav>
 
+			<section id="judge-problem" class="judge-problem card hidden" aria-label="编程题目">
+				<div id="judge-problem-resize" class="judge-split-handle" role="separator" aria-orientation="vertical" tabindex="0"
+					aria-label="题目面板宽度（左右方向键调整，Enter 收起，Home 复位）" aria-valuemin="260" aria-valuenow="360"></div>
+				<div class="judge-pane-head">
+					<div>
+						<span class="judge-eyebrow">CURRENT PROBLEM</span>
+						<h2 id="judge-problem-title">等待 Judge 教练出题</h2>
+					</div>
+					<div class="judge-pane-actions">
+						<span id="judge-difficulty" class="judge-difficulty hidden"></span>
+						<button id="judge-problem-collapse" class="icon-btn" type="button" title="收起题目" aria-expanded="true">«</button>
+					</div>
+				</div>
+				<div id="judge-problem-body" class="judge-problem-body">
+					<div class="judge-empty-state">
+						<strong>还没有题目</strong>
+						<p>在右侧让 Judge 教练出题；题目会先通过参考解答和隐藏用例验证。</p>
+					</div>
+				</div>
+			</section>
+
+			<section id="judge-code" class="judge-code card hidden" aria-label="代码编辑与判题">
+				<div class="judge-code-toolbar">
+					<div class="judge-editor-tab">
+						<button id="judge-problem-open" class="judge-toolbar-btn hidden" type="button" title="展开题目面板">📖 显示题目</button>
+						<span aria-hidden="true">⌘</span><strong id="judge-file-name">solution.py</strong>
+					</div>
+					<div class="judge-code-actions">
+						<button id="judge-chat-open" class="judge-toolbar-btn hidden" type="button" title="展开 Judge 教练">💬 显示教练</button>
+						<label class="judge-language-label">语言
+							<select id="judge-language" aria-label="提交语言"></select>
+						</label>
+						<button id="judge-run" class="btn-secondary" type="button">▶ 运行</button>
+						<button id="judge-submit" class="btn-primary" type="button">提交判题</button>
+					</div>
+				</div>
+				<div class="judge-editor-wrap">
+					<div id="judge-editor" aria-label="Monaco 代码编辑器"></div>
+					<textarea id="judge-editor-fallback" class="judge-editor-fallback hidden" spellcheck="false" aria-label="代码编辑器备用输入框"></textarea>
+				</div>
+				<div id="judge-console" class="judge-console">
+					<div id="judge-console-resize" class="judge-console-resize" role="separator" aria-orientation="horizontal" tabindex="0"
+						aria-label="测试结果面板高度（上下方向键调整，Enter 收起，Home 复位）" aria-valuemin="120" aria-valuenow="230"></div>
+					<div class="judge-console-head">
+						<div class="judge-console-tabs"><strong>测试结果</strong><span id="judge-result-summary">尚未运行</span></div>
+						<button id="judge-console-toggle" class="icon-btn" type="button" title="收起测试结果" aria-expanded="true">⌄</button>
+					</div>
+					<label class="judge-stdin-label">自定义输入
+						<textarea id="judge-stdin" rows="2" placeholder="运行按钮使用这里的标准输入；提交判题会使用题目的完整测试集"></textarea>
+					</label>
+					<div id="judge-results" class="judge-results"><div class="judge-result-empty">运行或提交后在这里查看真实沙箱结果。</div></div>
+				</div>
+			</section>
+
 			<section class="chat">
+				<div id="judge-chat-resize" class="judge-chat-resize judge-only hidden" role="separator" aria-orientation="vertical" tabindex="0"
+					aria-label="Judge 教练面板宽度（左右方向键调整，Enter 收起，Home 复位）" aria-valuemin="280" aria-valuenow="340"></div>
 				<div class="chat-viewbar">
 					<div class="view-tabs" role="tablist" aria-label="视图切换">
 						<button id="tab-chat" class="view-tab active" type="button" role="tab" aria-selected="true">对话</button>
 						<button id="tab-trajectory" class="view-tab" type="button" role="tab" aria-selected="false">轨迹</button>
 					</div>
+					<button id="judge-chat-collapse" class="icon-btn judge-only hidden" type="button" title="收起 Judge 教练" aria-expanded="true">»</button>
 				</div>
 				<div id="messages" class="messages">
 					<div class="welcome card">
@@ -129,6 +186,7 @@
 
 	<div id="ss-backdrop" class="panel-backdrop" aria-hidden="true"></div>
 	<div id="ws-backdrop" class="panel-backdrop" aria-hidden="true"></div>
+	<div id="judge-backdrop" class="panel-backdrop" aria-hidden="true"></div>
 
 	<div id="code-modal" class="modal hidden">
 		<div class="modal-backdrop"></div>
@@ -148,6 +206,7 @@
 		</div>
 	</div>
 
+	<script defer src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
 	<script defer src="/app.js"></script>
 </body>
 </html>

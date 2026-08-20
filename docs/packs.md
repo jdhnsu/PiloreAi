@@ -7,6 +7,7 @@ Pack 是 PiLore 的领域插件单元。一个 Pack 将教学 Prompt、Profiles�
 | Pack | 工厂 | 主要状态 | 动态工具组 | Snapshot |
 | --- | --- | --- | --- | --- |
 | Code | `createCodeMentorSession()` | VFS、Profile 进度、评估记录 | `workspace`、`execution`、可选 `evaluation` | `code` |
+| Judge | `createJudgeMentorSession()` | 已验证题目、隐藏测试、最近提交与 Profile 进度 | `judge`、`problem_cards` | `judge` |
 | English | `createEnglishMentorSession()` | 词汇本、Profile 进度、练习日志 | `vocabulary`、`practice` | `english` |
 | Math | `createMathMentorSession()` | 学习卡片、Profile 进度、练习日志 | `study_cards`、`practice` | `math` |
 | Physics | `createPhysicsMentorSession()` | 学习卡片、Profile 进度、练习日志 | `study_cards`、`practice` | `physics` |
@@ -60,7 +61,7 @@ capabilities:
 
 Pack 通过 `ToolManifest` 暴露 Tool Group。每个具体工具必须在 `resolveCapability()` 中映射为稳定的能力名，避免在 Profile Markdown 中绑定工具实现细节。
 
-示例：Code Pack 将 `read_file` 映射为 `file.read`，将是否已有路径的 `write_file` 区分为 `file.write` 或 `file.modify`；Academic Pack 将保存/删除卡片映射为 `study_cards.write`，将练习映射为 `practice.run`。
+示例：Code Pack 将 `read_file` 映射为 `file.read`，将是否已有路径的 `write_file` 区分为 `file.write` 或 `file.modify`；Judge Pack 将题目自验证、发布题目卡和用户提交分别映射为 `judge.problem.verify`、`judge.problem.publish`、`judge.submit`；Academic Pack 将保存/删除卡片映射为 `study_cards.write`，将练习映射为 `practice.run`。
 
 Profile 的 capability 只有在该 Profile 激活时生效，Core 会在实际工具执行前检查。工具组本身仍必须先通过 `activate_toolset` 加载。
 
@@ -80,6 +81,7 @@ Profile 的 capability 只有在该 Profile 激活时生效，Core 会在实际�
 Pack 不能假设外部执行器、计算机代数、检索、仿真或判题服务存在。需要时定义一个小型可注入接口：
 
 - Code：`ExecClient` 和 `CodeEvaluator`
+- Judge：`GoJudgeClient`（默认 HTTP 地址由 `GO_JUDGE_API_BASE` 配置）
 - English：`EnglishEvaluator`
 - Academic：`AcademicEvaluator<TSubject>`
 

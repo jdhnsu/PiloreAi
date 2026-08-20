@@ -39,6 +39,7 @@ export type {
 	SnapshotExtension,
 	RuntimeConfig,
 	SessionEvent,
+	SessionEventJsonValue,
 	SessionSnapshot,
 	SessionSnapshotV1,
 } from "./core/types.js";
@@ -63,6 +64,7 @@ export {
 } from "./core/tool-runtime/index.js";
 
 export * from "./packs/code/index.js";
+export * from "./packs/judge/index.js";
 export * from "./packs/english/index.js";
 export * from "./packs/shared/academic/index.js";
 export * from "./packs/math/index.js";

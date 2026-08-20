@@ -40,6 +40,19 @@ const trajectoryEl = $("#trajectory");
 const chatTab = $("#tab-chat");
 const trajTab = $("#tab-trajectory");
 const themeToggle = $("#theme-toggle");
+const layoutRoot = $(".layout");
+const judgeProblemEl = $("#judge-problem");
+const judgeCodeEl = $("#judge-code");
+const judgeProblemTitleEl = $("#judge-problem-title");
+const judgeProblemBodyEl = $("#judge-problem-body");
+const judgeDifficultyEl = $("#judge-difficulty");
+const judgeLanguageEl = $("#judge-language");
+const judgeFileNameEl = $("#judge-file-name");
+const judgeRunBtn = $("#judge-run");
+const judgeSubmitBtn = $("#judge-submit");
+const judgeStdinEl = $("#judge-stdin");
+const judgeResultsEl = $("#judge-results");
+const judgeResultSummaryEl = $("#judge-result-summary");
 
 let busy = false;
 
@@ -49,6 +62,7 @@ function applyTheme(theme) {
 	themeToggle.textContent = dark ? "☀" : "☾";
 	themeToggle.title = dark ? "切换浅色主题" : "切换暗色主题";
 	themeToggle.setAttribute("aria-label", themeToggle.title);
+	if (window.monaco?.editor) window.monaco.editor.setTheme(dark ? "vs-dark" : "vs");
 }
 
 applyTheme(localStorage.getItem("pilore-theme") || "light");
@@ -98,6 +112,12 @@ const TOOL_GLYPHS = {
 	forget_word: "✕",
 	start_practice: "✍",
 	submit_answer: "✓",
+	list_judge_languages: "☰",
+	run_judge_code: "▶",
+	judge_code: "✓",
+	submit_problem_solution: "✓",
+	verify_problem: "◇",
+	publish_problem_card: "▣",
 };
 const TOOL_LABELS = {
 	write_file: "写入",
@@ -109,6 +129,12 @@ const TOOL_LABELS = {
 	forget_word: "移除",
 	start_practice: "发起练习",
 	submit_answer: "提交答案",
+	list_judge_languages: "语言就绪",
+	run_judge_code: "运行完成",
+	judge_code: "判定完成",
+	submit_problem_solution: "提交完成",
+	verify_problem: "验证通过",
+	publish_problem_card: "题目已发布",
 };
 
 function esc(text) {
@@ -612,6 +638,9 @@ function handleEvent(ev, block) {
 				}
 				block.lastTool = null;
 			}
+			if (ev.details?.kind === "judge_languages" && ev.details.languages) setJudgeLanguages(ev.details.languages);
+			if (ev.details?.kind === "judge_problem_card" && ev.details.problem) applyJudgeProblem(ev.details.problem, true);
+			if (ev.details?.kind === "judge_submission" && ev.details.submission) renderJudgeSubmission(ev.details.submission);
 			break;
 		}
 		case "persona":
@@ -664,6 +693,8 @@ function setBusy(value) {
 	abortBtn.classList.toggle("hidden", !value);
 	if (!value) updateSend();
 	inputEl.disabled = false;
+	judgeRunBtn.disabled = value || judgeExecuting;
+	judgeSubmitBtn.disabled = value || judgeExecuting;
 }
 
 /* 上下文接近模型上限时，用户明确选择压缩或改开新会话；不会静默丢弃历史。 */
@@ -728,7 +759,7 @@ function showContextRecovery(message, info = {}) {
 	};
 }
 
-async function send(text) {
+async function send(text, displayText) {
 	const message = (text ?? inputEl.value).trim();
 	if (!message || busy) return;
 	inputEl.value = "";
@@ -738,7 +769,7 @@ async function send(text) {
 
 	const userEl = document.createElement("div");
 	userEl.className = "msg-user";
-	userEl.textContent = message;
+	userEl.textContent = displayText ?? message;
 	messagesEl.appendChild(userEl);
 	scrollToBottom();
 
@@ -1242,11 +1273,325 @@ async function refreshPanel() {
 				return;
 			}
 			for (const card of cards) fileList.appendChild(renderStudyCard(card));
+		} else if (data.kind === "judge") {
+			setJudgeLanguages(data.languages ?? []);
+			applyJudgeProblem(data.problem ?? null, false);
+			if (data.submission) renderJudgeSubmission(data.submission);
+			else resetJudgeResults();
 		}
 	} catch {
 		/* 侧栏刷新失败不影响对话 */
 	}
 }
+
+/* ---------- Judge Pack：题目卡、Monaco、运行与提交 ---------- */
+let currentJudgeProblem = null;
+let currentJudgeSubmission = null;
+let judgeLanguages = [];
+let judgeEditor = null;
+let judgeEditorReady = null;
+let judgeChangingValue = false;
+let judgeExecuting = false;
+
+const JUDGE_STARTERS = {
+	c: '#include <stdio.h>\n\nint main(void) {\n    return 0;\n}\n',
+	cpp: '#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}\n',
+	python: '# 在这里编写答案\n',
+};
+
+function judgeLanguageMode(id) {
+	if (id === "cpp") return "cpp";
+	if (id === "c") return "c";
+	if (id === "python") return "python";
+	return "plaintext";
+}
+
+function judgeFileName(id) {
+	if (id === "cpp") return "solution.cpp";
+	if (id === "c") return "solution.c";
+	if (id === "python") return "solution.py";
+	return "solution.txt";
+}
+
+function judgeDraftKey(problemId = currentJudgeProblem?.id, language = judgeLanguageEl.value) {
+	return problemId && sessionId ? `pilore-judge-draft:${sessionId}:${problemId}:${language}` : null;
+}
+
+function getJudgeSource() {
+	return judgeEditor ? judgeEditor.getValue() : $("#judge-editor-fallback").value;
+}
+
+function setJudgeSource(value) {
+	judgeChangingValue = true;
+	if (judgeEditor) judgeEditor.setValue(value);
+	else $("#judge-editor-fallback").value = value;
+	judgeChangingValue = false;
+}
+
+function saveJudgeDraft() {
+	if (judgeChangingValue) return;
+	const key = judgeDraftKey();
+	if (key) localStorage.setItem(key, getJudgeSource());
+}
+
+function defaultJudgeSource(language) {
+	if (currentJudgeProblem?.language === language && currentJudgeProblem.starterCode) return currentJudgeProblem.starterCode;
+	return JUDGE_STARTERS[language] ?? "";
+}
+
+function loadJudgeDraft(language = judgeLanguageEl.value) {
+	const key = judgeDraftKey(currentJudgeProblem?.id, language);
+	setJudgeSource((key && localStorage.getItem(key)) ?? defaultJudgeSource(language));
+	judgeFileNameEl.textContent = judgeFileName(language);
+	if (judgeEditor && window.monaco?.editor) window.monaco.editor.setModelLanguage(judgeEditor.getModel(), judgeLanguageMode(language));
+}
+
+function showJudgeEditorFallback() {
+	$("#judge-editor").classList.add("hidden");
+	const fallback = $("#judge-editor-fallback");
+	fallback.classList.remove("hidden");
+	fallback.oninput = saveJudgeDraft;
+	loadJudgeDraft();
+}
+
+function ensureJudgeEditor() {
+	if (judgeEditorReady) return judgeEditorReady;
+	judgeEditorReady = new Promise((resolve) => {
+		if (!window.require?.config) {
+			showJudgeEditorFallback();
+			resolve(null);
+			return;
+		}
+		const base = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/";
+		window.MonacoEnvironment = {
+			getWorkerUrl() {
+				const source = `self.MonacoEnvironment={baseUrl:'${base}'};importScripts('${base}vs/base/worker/workerMain.js');`;
+				return `data:text/javascript;charset=utf-8,${encodeURIComponent(source)}`;
+			},
+		};
+		window.require.config({ paths: { vs: `${base}vs` } });
+		window.require(["vs/editor/editor.main"], () => {
+			judgeEditor = window.monaco.editor.create($("#judge-editor"), {
+				value: "",
+				language: judgeLanguageMode(judgeLanguageEl.value),
+				theme: document.documentElement.dataset.theme === "dark" ? "vs-dark" : "vs",
+				automaticLayout: true,
+				fontSize: 13,
+				lineHeight: 22,
+				minimap: { enabled: false },
+				scrollBeyondLastLine: false,
+				padding: { top: 14 },
+				wordWrap: "on",
+			});
+			judgeEditor.onDidChangeModelContent(saveJudgeDraft);
+			loadJudgeDraft();
+			resolve(judgeEditor);
+		}, () => {
+			showJudgeEditorFallback();
+			resolve(null);
+		});
+	});
+	return judgeEditorReady;
+}
+
+function setJudgeLanguages(languages) {
+	judgeLanguages = languages;
+	const previous = judgeLanguageEl.value || currentJudgeProblem?.language || "python";
+	judgeLanguageEl.innerHTML = "";
+	for (const language of languages) {
+		const option = document.createElement("option");
+		option.value = language.id;
+		option.textContent = language.name;
+		judgeLanguageEl.appendChild(option);
+	}
+	const desired = languages.some((language) => language.id === previous)
+		? previous
+		: languages.some((language) => language.id === currentJudgeProblem?.language)
+			? currentJudgeProblem.language
+			: languages[0]?.id ?? "python";
+	judgeLanguageEl.value = desired;
+	judgeFileNameEl.textContent = judgeFileName(desired);
+}
+
+judgeLanguageEl.onchange = () => {
+	saveJudgeDraft();
+	loadJudgeDraft(judgeLanguageEl.value);
+};
+
+function appendJudgeSection(title, content) {
+	const heading = document.createElement("h3");
+	heading.textContent = title;
+	judgeProblemBodyEl.appendChild(heading);
+	judgeProblemBodyEl.appendChild(content);
+}
+
+function applyJudgeProblem(problem, resetEditor) {
+	const changed = (problem?.id ?? null) !== (currentJudgeProblem?.id ?? null);
+	currentJudgeProblem = problem;
+	judgeProblemBodyEl.innerHTML = "";
+	if (!problem) {
+		judgeProblemTitleEl.textContent = "等待 Judge 教练出题";
+		judgeDifficultyEl.className = "judge-difficulty hidden";
+		judgeProblemBodyEl.innerHTML = '<div class="judge-empty-state"><strong>还没有题目</strong><p>在右侧让 Judge 教练出题；题目会先通过参考解答和隐藏用例验证。</p></div>';
+		if (changed || resetEditor) setJudgeSource(JUDGE_STARTERS[judgeLanguageEl.value] ?? "");
+		return;
+	}
+	judgeProblemTitleEl.textContent = problem.title;
+	judgeDifficultyEl.textContent = ({ easy: "简单", medium: "中等", hard: "困难" })[problem.difficulty] ?? problem.difficulty;
+	judgeDifficultyEl.className = `judge-difficulty ${problem.difficulty}`;
+	const description = document.createElement("div");
+	description.className = "judge-problem-description";
+	description.textContent = problem.description;
+	appendJudgeSection("题目描述", description);
+	const input = document.createElement("div");
+	input.className = "judge-problem-description";
+	input.textContent = problem.inputFormat;
+	appendJudgeSection("输入格式", input);
+	const output = document.createElement("div");
+	output.className = "judge-problem-description";
+	output.textContent = problem.outputFormat;
+	appendJudgeSection("输出格式", output);
+	const examples = document.createElement("div");
+	for (const [index, example] of (problem.examples ?? []).entries()) {
+		const card = document.createElement("div");
+		card.className = "judge-example";
+		const name = document.createElement("strong");
+		name.textContent = `示例 ${index + 1}`;
+		const pre = document.createElement("pre");
+		pre.textContent = `输入\n${example.input}\n输出\n${example.output}`;
+		card.append(name, pre);
+		if (example.explanation) {
+			const explanation = document.createElement("p");
+			explanation.textContent = example.explanation;
+			card.appendChild(explanation);
+		}
+		examples.appendChild(card);
+	}
+	appendJudgeSection("示例输入输出", examples);
+	const constraints = document.createElement("ul");
+	constraints.className = "judge-problem-list";
+	for (const text of problem.constraints ?? []) {
+		const item = document.createElement("li");
+		item.textContent = text;
+		constraints.appendChild(item);
+	}
+	appendJudgeSection("约束", constraints);
+	if (!judgeLanguages.some((language) => language.id === problem.language)) setJudgeLanguages([...judgeLanguages, { id: problem.language, name: problem.language }]);
+	judgeLanguageEl.value = problem.language;
+	if (changed || resetEditor) loadJudgeDraft(problem.language);
+}
+
+function resetJudgeResults() {
+	currentJudgeSubmission = null;
+	judgeResultSummaryEl.textContent = "尚未运行";
+	judgeResultSummaryEl.className = "";
+	judgeResultsEl.innerHTML = '<div class="judge-result-empty">运行或提交后在这里查看真实沙箱结果。</div>';
+}
+
+function judgeResultCard(title, className, status, meta) {
+	const card = document.createElement("div");
+	card.className = `judge-result-card ${className}`;
+	const heading = document.createElement("strong");
+	heading.textContent = `${title} · ${status}`;
+	const detail = document.createElement("div");
+	detail.className = "judge-result-meta";
+	detail.textContent = meta;
+	card.append(heading, detail);
+	return card;
+}
+
+function renderJudgeRun(result) {
+	judgeResultsEl.innerHTML = "";
+	const pass = result.status === "Accepted";
+	judgeResultSummaryEl.textContent = pass ? "运行成功" : result.status;
+	judgeResultSummaryEl.className = pass ? "judge-summary-pass" : "judge-summary-fail";
+	const diagnostics = [
+		`CPU ${Number(result.timeSeconds).toFixed(6)}s · 墙上 ${Number(result.wallTimeSeconds).toFixed(6)}s · 内存 ${Number(result.memoryKilobytes).toFixed(0)}KB · 退出码 ${result.exitCode}`,
+		`stdout:\n${result.stdout || "(empty)"}`,
+		result.stderr ? `stderr:\n${result.stderr}` : "",
+		result.compileOutput ? `compile:\n${result.compileOutput}` : "",
+		result.error ? `error:\n${result.error}` : "",
+	].filter(Boolean).join("\n");
+	judgeResultsEl.appendChild(judgeResultCard("自定义运行", pass ? "pass" : "fail", result.status, diagnostics));
+}
+
+function renderJudgeSubmission(submission) {
+	currentJudgeSubmission = submission;
+	judgeResultsEl.innerHTML = "";
+	const accepted = submission.verdict === "accepted";
+	const infra = submission.verdict === "infrastructure_error";
+	judgeResultSummaryEl.textContent = infra ? "基础设施错误" : accepted ? `全部 ${submission.total} 个用例通过` : `${submission.passed}/${submission.total} 通过`;
+	judgeResultSummaryEl.className = accepted ? "judge-summary-pass" : "judge-summary-fail";
+	for (const item of submission.cases ?? []) {
+		const className = item.passed === null ? "infra" : item.passed ? "pass" : "fail";
+		const meta = [
+			`CPU ${Number(item.timeSeconds).toFixed(6)}s · 内存 ${Number(item.memoryKilobytes).toFixed(0)}KB`,
+			item.hidden ? "隐藏用例内容不会公开" : `输入:\n${item.input ?? ""}\n期望:\n${item.expectedOutput ?? ""}\n实际:\n${item.actualOutput ?? ""}`,
+		].join("\n");
+		judgeResultsEl.appendChild(judgeResultCard(item.name, className, item.status, meta));
+	}
+	if (submission.compileOutput || submission.stderr) {
+		judgeResultsEl.appendChild(judgeResultCard("编译/运行诊断", "fail", "Diagnostics", [submission.compileOutput, submission.stderr].filter(Boolean).join("\n")));
+	}
+}
+
+function renderJudgeError(error) {
+	judgeResultSummaryEl.textContent = "请求失败";
+	judgeResultSummaryEl.className = "judge-summary-fail";
+	judgeResultsEl.innerHTML = "";
+	judgeResultsEl.appendChild(judgeResultCard("系统", "infra", "Error", error));
+}
+
+function setJudgeExecuting(value) {
+	judgeExecuting = value;
+	judgeRunBtn.disabled = value;
+	judgeSubmitBtn.disabled = value;
+	judgeRunBtn.textContent = value ? "运行中…" : "▶ 运行";
+	judgeSubmitBtn.textContent = value ? "判题中…" : "提交判题";
+}
+
+judgeRunBtn.onclick = async () => {
+	if (!sessionId || judgeExecuting) return;
+	setJudgeExecuting(true);
+	try {
+		const resp = await fetch("/api/judge/run", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ sessionId, sourceCode: getJudgeSource(), language: judgeLanguageEl.value, stdin: judgeStdinEl.value }),
+		});
+		const data = await resp.json();
+		if (!resp.ok) throw new Error(data.error ?? `HTTP ${resp.status}`);
+		renderJudgeRun(data.result);
+		void refreshSessionList();
+	} catch (error) {
+		renderJudgeError(error.message ?? String(error));
+	} finally {
+		setJudgeExecuting(false);
+	}
+};
+
+judgeSubmitBtn.onclick = async () => {
+	if (!sessionId || judgeExecuting) return;
+	const source = getJudgeSource();
+	setJudgeExecuting(true);
+	try {
+		const resp = await fetch("/api/judge/submit", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ sessionId, sourceCode: source, language: judgeLanguageEl.value }),
+		});
+		const data = await resp.json();
+		if (!resp.ok) throw new Error(data.error ?? `HTTP ${resp.status}`);
+		renderJudgeSubmission(data.submission);
+		await refreshSessionList();
+		const sourceForTutor = source.length <= 50_000 ? source : `${source.slice(0, 50_000)}\n/* 代码过长，后续已截断 */`;
+		await send(`我刚刚通过编辑器提交了 ${judgeLanguageEl.value} 代码，服务端已经先完成可信判题。请严格基于当前状态中的最近判题结果讲解；不要重复提交，也不要泄露隐藏用例。\n\n我的代码：\n\`\`\`${judgeLanguageMode(judgeLanguageEl.value)}\n${sourceForTutor}\n\`\`\``, "请讲解这次提交结果");
+	} catch (error) {
+		renderJudgeError(error.message ?? String(error));
+	} finally {
+		setJudgeExecuting(false);
+	}
+};
 
 /* ---------- 代码弹窗：循环切换工作区文件，支持全屏 ---------- */
 const modal = $("#code-modal");
@@ -1767,6 +2112,10 @@ async function renderHistory() {
 async function enterSession(id) {
 	sessionId = id;
 	localStorage.setItem(`pilore-session-id:${currentPack}`, id);
+	if (currentPack === "judge") {
+		applyJudgeProblem(null, true);
+		resetJudgeResults();
+	}
 	clearMessagesView();
 	const restored = await renderHistory();
 	if (!restored && welcomeEl) messagesEl.appendChild(welcomeEl);
@@ -1922,10 +2271,221 @@ function packInfo() {
 	return packs.find((p) => p.id === currentPack);
 }
 
+/* Judge 三栏工作台：宽度/折叠/结果区高度均可调并持久化。 */
+const judgeWorkspaceMq = window.matchMedia("(max-width: 1100px)");
+const judgeProblemResize = $("#judge-problem-resize");
+const judgeChatResize = $("#judge-chat-resize");
+const judgeConsoleEl = $("#judge-console");
+const judgeConsoleResize = $("#judge-console-resize");
+const judgeProblemCollapseBtn = $("#judge-problem-collapse");
+const judgeProblemOpenBtn = $("#judge-problem-open");
+const judgeChatCollapseBtn = $("#judge-chat-collapse");
+const judgeChatOpenBtn = $("#judge-chat-open");
+const judgeConsoleToggleBtn = $("#judge-console-toggle");
+const judgeBackdrop = $("#judge-backdrop");
+
+function setJudgeProblemCollapsed(on) {
+	layoutRoot.classList.toggle("judge-problem-collapsed", on);
+	document.body.classList.toggle("judge-problem-collapsed", on);
+	judgeProblemCollapseBtn.setAttribute("aria-expanded", String(!on));
+	judgeProblemOpenBtn.setAttribute("aria-expanded", String(on));
+	localStorage.setItem("pilore-judge-problem-collapsed", on ? "1" : "");
+	requestAnimationFrame(() => judgeEditor?.layout());
+}
+
+function setJudgeChatCollapsed(on) {
+	layoutRoot.classList.toggle("judge-chat-collapsed", on);
+	document.body.classList.toggle("judge-chat-collapsed", on);
+	judgeChatCollapseBtn.setAttribute("aria-expanded", String(!on));
+	judgeChatOpenBtn.setAttribute("aria-expanded", String(on));
+	localStorage.setItem("pilore-judge-chat-collapsed", on ? "1" : "");
+	requestAnimationFrame(() => judgeEditor?.layout());
+}
+
+function closeJudgeMobileDrawers() {
+	document.body.classList.remove("judge-problem-mobile-open", "judge-chat-mobile-open");
+}
+
+judgeProblemCollapseBtn.onclick = () => {
+	closeJudgeMobileDrawers();
+	setJudgeProblemCollapsed(true);
+};
+judgeProblemOpenBtn.onclick = () => {
+	setJudgeProblemCollapsed(false);
+	if (judgeWorkspaceMq.matches) {
+		closeJudgeMobileDrawers();
+		document.body.classList.add("judge-problem-mobile-open");
+	}
+};
+judgeChatCollapseBtn.onclick = () => {
+	closeJudgeMobileDrawers();
+	setJudgeChatCollapsed(true);
+};
+judgeChatOpenBtn.onclick = () => {
+	setJudgeChatCollapsed(false);
+	if (judgeWorkspaceMq.matches) {
+		closeJudgeMobileDrawers();
+		document.body.classList.add("judge-chat-mobile-open");
+	}
+};
+judgeBackdrop.onclick = closeJudgeMobileDrawers;
+judgeWorkspaceMq.addEventListener("change", closeJudgeMobileDrawers);
+
+document.addEventListener("keydown", (event) => {
+	if (event.key === "Escape" && (document.body.classList.contains("judge-problem-mobile-open") || document.body.classList.contains("judge-chat-mobile-open"))) {
+		closeJudgeMobileDrawers();
+	}
+});
+
+function bindJudgeHorizontalResize(handle, panel, direction, cssVar, storageKey, min, max) {
+	let resizing = false;
+	const apply = (width) => {
+		const value = Math.min(max(), Math.max(min, Math.round(width)));
+		layoutRoot.style.setProperty(cssVar, `${value}px`);
+		handle.setAttribute("aria-valuenow", String(value));
+		return value;
+	};
+	handle.addEventListener("pointerdown", (event) => {
+		if (event.pointerType === "mouse" && event.button !== 0) return;
+		resizing = true;
+		handle.setPointerCapture(event.pointerId);
+		document.body.classList.add(direction === "right" ? "judge-pane-resizing" : "judge-chat-resizing");
+		event.preventDefault();
+	});
+	handle.addEventListener("pointermove", (event) => {
+		if (!resizing) return;
+		const rect = panel.getBoundingClientRect();
+		apply(direction === "right" ? event.clientX - rect.left : rect.right - event.clientX);
+	});
+	const end = (event) => {
+		if (!resizing) return;
+		resizing = false;
+		document.body.classList.remove("judge-pane-resizing", "judge-chat-resizing");
+		try { handle.releasePointerCapture(event.pointerId); } catch { /* 已释放 */ }
+		const width = apply(panel.getBoundingClientRect().width);
+		localStorage.setItem(storageKey, String(width));
+		requestAnimationFrame(() => judgeEditor?.layout());
+	};
+	handle.addEventListener("pointerup", end);
+	handle.addEventListener("pointercancel", end);
+	handle.addEventListener("dblclick", () => {
+		layoutRoot.style.removeProperty(cssVar);
+		localStorage.removeItem(storageKey);
+		requestAnimationFrame(() => judgeEditor?.layout());
+	});
+	handle.addEventListener("keydown", (event) => {
+		if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+			const delta = event.key === "ArrowRight" ? 24 : -24;
+			const signed = direction === "right" ? delta : -delta;
+			const width = apply(panel.getBoundingClientRect().width + signed);
+			localStorage.setItem(storageKey, String(width));
+			requestAnimationFrame(() => judgeEditor?.layout());
+		} else if (event.key === "Home") {
+			layoutRoot.style.removeProperty(cssVar);
+			localStorage.removeItem(storageKey);
+			requestAnimationFrame(() => judgeEditor?.layout());
+		} else if (event.key === "Enter" || event.key === " ") {
+			if (direction === "right") setJudgeProblemCollapsed(true);
+			else setJudgeChatCollapsed(true);
+		} else return;
+		event.preventDefault();
+	});
+	const saved = Number(localStorage.getItem(storageKey));
+	if (saved >= min) apply(saved);
+}
+
+bindJudgeHorizontalResize(judgeProblemResize, judgeProblemEl, "right", "--judge-problem-w", "pilore-judge-problem-w", 260, () => Math.min(620, layoutRoot.clientWidth * .46));
+bindJudgeHorizontalResize(judgeChatResize, $(".chat"), "left", "--judge-chat-w", "pilore-judge-chat-w", 280, () => Math.min(560, layoutRoot.clientWidth * .42));
+
+let judgeConsoleResizing = false;
+function applyJudgeConsoleHeight(height) {
+	const max = Math.max(180, judgeCodeEl.clientHeight * .58);
+	const value = Math.min(max, Math.max(120, Math.round(height)));
+	layoutRoot.style.setProperty("--judge-console-h", `${value}px`);
+	judgeConsoleResize.setAttribute("aria-valuenow", String(value));
+	return value;
+}
+function setJudgeConsoleCollapsed(on) {
+	judgeConsoleEl.classList.toggle("collapsed", on);
+	judgeConsoleToggleBtn.setAttribute("aria-expanded", String(!on));
+	judgeConsoleToggleBtn.textContent = on ? "⌃" : "⌄";
+	localStorage.setItem("pilore-judge-console-collapsed", on ? "1" : "");
+	requestAnimationFrame(() => judgeEditor?.layout());
+}
+judgeConsoleToggleBtn.onclick = () => setJudgeConsoleCollapsed(!judgeConsoleEl.classList.contains("collapsed"));
+judgeConsoleResize.addEventListener("pointerdown", (event) => {
+	if (event.pointerType === "mouse" && event.button !== 0) return;
+	judgeConsoleResizing = true;
+	judgeConsoleResize.setPointerCapture(event.pointerId);
+	document.body.classList.add("judge-console-resizing");
+	event.preventDefault();
+});
+judgeConsoleResize.addEventListener("pointermove", (event) => {
+	if (!judgeConsoleResizing) return;
+	applyJudgeConsoleHeight(judgeCodeEl.getBoundingClientRect().bottom - event.clientY);
+});
+function endJudgeConsoleResize(event) {
+	if (!judgeConsoleResizing) return;
+	judgeConsoleResizing = false;
+	document.body.classList.remove("judge-console-resizing");
+	try { judgeConsoleResize.releasePointerCapture(event.pointerId); } catch { /* 已释放 */ }
+	const height = applyJudgeConsoleHeight(judgeConsoleEl.getBoundingClientRect().height);
+	localStorage.setItem("pilore-judge-console-h", String(height));
+	requestAnimationFrame(() => judgeEditor?.layout());
+}
+judgeConsoleResize.addEventListener("pointerup", endJudgeConsoleResize);
+judgeConsoleResize.addEventListener("pointercancel", endJudgeConsoleResize);
+judgeConsoleResize.addEventListener("dblclick", () => {
+	layoutRoot.style.removeProperty("--judge-console-h");
+	localStorage.removeItem("pilore-judge-console-h");
+	requestAnimationFrame(() => judgeEditor?.layout());
+});
+judgeConsoleResize.addEventListener("keydown", (event) => {
+	if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+		const height = applyJudgeConsoleHeight(judgeConsoleEl.getBoundingClientRect().height + (event.key === "ArrowUp" ? 24 : -24));
+		localStorage.setItem("pilore-judge-console-h", String(height));
+		requestAnimationFrame(() => judgeEditor?.layout());
+	} else if (event.key === "Home") {
+		layoutRoot.style.removeProperty("--judge-console-h");
+		localStorage.removeItem("pilore-judge-console-h");
+		requestAnimationFrame(() => judgeEditor?.layout());
+	} else if (event.key === "Enter" || event.key === " ") {
+		setJudgeConsoleCollapsed(true);
+	} else return;
+	event.preventDefault();
+});
+const savedJudgeConsoleH = Number(localStorage.getItem("pilore-judge-console-h"));
+if (savedJudgeConsoleH >= 120) applyJudgeConsoleHeight(savedJudgeConsoleH);
+if (localStorage.getItem("pilore-judge-console-collapsed") === "1") setJudgeConsoleCollapsed(true);
+if (localStorage.getItem("pilore-judge-problem-collapsed") === "1") setJudgeProblemCollapsed(true);
+if (localStorage.getItem("pilore-judge-chat-collapsed") === "1") setJudgeChatCollapsed(true);
+
+function setJudgeMode(on) {
+	layoutRoot.classList.toggle("judge-mode", on);
+	document.body.classList.toggle("judge-mode", on);
+	judgeProblemEl.classList.toggle("hidden", !on);
+	judgeCodeEl.classList.toggle("hidden", !on);
+	$("#ss-mobile-toggle").classList.toggle("hidden", on);
+	$("#ws-mobile-toggle").classList.toggle("hidden", on);
+	if (on) {
+		setView("chat");
+		const problemCollapsed = localStorage.getItem("pilore-judge-problem-collapsed") === "1";
+		const chatCollapsed = localStorage.getItem("pilore-judge-chat-collapsed") === "1";
+		setJudgeProblemCollapsed(problemCollapsed);
+		setJudgeChatCollapsed(chatCollapsed);
+		void ensureJudgeEditor().then(() => requestAnimationFrame(() => judgeEditor?.layout()));
+	} else {
+		closeJudgeMobileDrawers();
+		layoutRoot.classList.remove("judge-problem-collapsed", "judge-chat-collapsed");
+		document.body.classList.remove("judge-problem-collapsed", "judge-chat-collapsed");
+	}
+}
+
 /* 按当前 pack 重绘欢迎卡片、老师 chips 与工作区标题 */
 function renderPackChrome() {
 	const pack = packInfo();
 	if (!pack) return;
+	setJudgeMode(pack.id === "judge");
 	welcomeTitle.textContent = `${pack.name} · 开始学习`;
 	welcomeDesc.textContent = pack.tagline;
 	suggestionsEl.innerHTML = "";
@@ -1965,6 +2525,7 @@ async function loadPacks() {
 }
 
 function packIcon(pack) {
+	if (pack.id === "judge") return "✓";
 	if (pack.id === "english") return "A";
 	if (pack.id === "math") return "π";
 	if (pack.id === "physics") return "Φ";

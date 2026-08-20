@@ -11,6 +11,7 @@
   "scripts": {
     "mock": "tsx mock/exec-server.ts",
     "chat": "tsx src/adapters/cli/index.ts",
+    "chat:judge": "tsx src/adapters/cli/index.ts --pack judge",
     "chat:english": "tsx src/adapters/cli/index.ts --pack english",
     "chat:math": "tsx src/adapters/cli/index.ts --pack math",
     "chat:physics": "tsx src/adapters/cli/index.ts --pack physics",

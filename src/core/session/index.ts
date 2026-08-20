@@ -6,7 +6,7 @@ import { INTERNAL_TOOL_NAMES } from "../tool-runtime/index.js";
 import { compactContext, ContextPolicyError, inspectContext, type ContextCompactionResult, type ContextStatus } from "../context-policy/index.js";
 import { createTrajectoryRecorder, type TrajectoryRecorder } from "../trajectory/recorder.js";
 import type { TrajectoryRunDraft } from "../trajectory/types.js";
-import type { ProfileDefinition, RuntimeConfig, SessionEvent, SessionSnapshotV1 } from "../types.js";
+import type { ProfileDefinition, RuntimeConfig, SessionEvent, SessionEventJsonValue, SessionSnapshotV1 } from "../types.js";
 
 export interface SessionConfig extends RuntimeConfig {
 	snapshot?: unknown;
@@ -33,6 +33,17 @@ function toolResultText(result: { content?: Array<{ type: string; text?: string 
 		.map((block) => block.text ?? "")
 		.join("\n")
 		.slice(0, 8000);
+}
+
+function toolResultDetails(result: { details?: unknown } | undefined): SessionEventJsonValue | undefined {
+	if (result?.details === undefined) return undefined;
+	try {
+		const serialized = JSON.stringify(result.details);
+		if (!serialized || serialized.length > 256_000) return undefined;
+		return JSON.parse(serialized) as SessionEventJsonValue;
+	} catch {
+		return undefined;
+	}
 }
 
 export function createSession(config: SessionConfig): Session {
@@ -83,7 +94,8 @@ export function createSession(config: SessionConfig): Session {
 		} else if (event.type === "tool_execution_start" && !INTERNAL_TOOL_NAMES.has(event.toolName)) {
 			emit({ type: "tool_start", toolName: event.toolName, args: event.args });
 		} else if (event.type === "tool_execution_end" && !INTERNAL_TOOL_NAMES.has(event.toolName)) {
-			emit({ type: "tool_end", toolName: event.toolName, isError: event.isError, text: toolResultText(event.result) });
+			const details = toolResultDetails(event.result);
+			emit({ type: "tool_end", toolName: event.toolName, isError: event.isError, text: toolResultText(event.result), ...(details === undefined ? {} : { details }) });
 		}
 	});
 
