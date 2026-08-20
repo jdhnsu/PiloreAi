@@ -8,6 +8,7 @@ import {
 	createJudgeMentorState,
 	createJudgeService,
 	createJudgeToolManifest,
+	deriveSessionTitle,
 	getDefaultJudgeProfiles,
 	toolsForState,
 	type GoJudgeClient,
@@ -157,6 +158,7 @@ test("Judge agent emits a structured problem card only after verification", asyn
 
 	const snapshot = session.exportSnapshot(0);
 	assert.ok(snapshot.extensions.judge);
+	assert.equal(deriveSessionTitle(snapshot as any), "数字翻倍");
 	const restoredFaux = fauxProvider();
 	const restoredModels = createModels();
 	restoredModels.setProvider(restoredFaux.provider);

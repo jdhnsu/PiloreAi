@@ -128,11 +128,20 @@
 				<div id="judge-chat-resize" class="judge-chat-resize judge-only hidden" role="separator" aria-orientation="vertical" tabindex="0"
 					aria-label="Judge 教练面板宽度（左右方向键调整，Enter 收起，Home 复位）" aria-valuemin="280" aria-valuenow="340"></div>
 				<div class="chat-viewbar">
+					<div class="judge-chat-title judge-only hidden">Judge 教练</div>
 					<div class="view-tabs" role="tablist" aria-label="视图切换">
 						<button id="tab-chat" class="view-tab active" type="button" role="tab" aria-selected="true">对话</button>
 						<button id="tab-trajectory" class="view-tab" type="button" role="tab" aria-selected="false">轨迹</button>
 					</div>
-					<button id="judge-chat-collapse" class="icon-btn judge-only hidden" type="button" title="收起 Judge 教练" aria-expanded="true">»</button>
+					<div class="chat-viewbar-actions">
+						<button id="judge-history-toggle" class="icon-text-btn judge-only hidden" type="button" title="消息记录（会话历史）" aria-label="打开消息记录">
+							<span class="btn-icon" aria-hidden="true">🕒</span>
+							<span class="btn-label">消息记录</span>
+							<span id="judge-session-count" class="session-count-badge hidden">0</span>
+						</button>
+						<button id="judge-new-session" class="icon-btn judge-only hidden" type="button" title="新建判题会话" aria-label="新建判题会话">＋</button>
+						<button id="judge-chat-collapse" class="icon-btn judge-only hidden" type="button" title="收起 Judge 教练" aria-expanded="true">»</button>
+					</div>
 				</div>
 				<div id="messages" class="messages">
 					<div class="welcome card">

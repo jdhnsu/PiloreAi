@@ -53,6 +53,11 @@ const judgeSubmitBtn = $("#judge-submit");
 const judgeStdinEl = $("#judge-stdin");
 const judgeResultsEl = $("#judge-results");
 const judgeResultSummaryEl = $("#judge-result-summary");
+const judgeHistoryToggleBtn = $("#judge-history-toggle");
+const judgeSessionCountEl = $("#judge-session-count");
+const judgeNewSessionBtn = $("#judge-new-session");
+const judgeChatTitleEl = $(".judge-chat-title");
+const ssTitleEl = $("#ss-title") || $(".ss-head h2");
 
 let busy = false;
 
@@ -2000,13 +2005,20 @@ function relTime(value) {
 }
 
 function renderSessionList() {
+	if (ssTitleEl) {
+		ssTitleEl.textContent = currentPack === "judge" ? "判题消息记录" : "会话";
+	}
+	if (judgeSessionCountEl) {
+		judgeSessionCountEl.textContent = String(sessionsCache.length);
+		judgeSessionCountEl.classList.toggle("hidden", currentPack !== "judge" || sessionsCache.length === 0);
+	}
 	sessionListEl.innerHTML = "";
 	if (!sessionsCache.length) {
-		sessionListEl.innerHTML = '<li class="empty">暂无会话</li>';
+		sessionListEl.innerHTML = `<li class="empty">${currentPack === "judge" ? "暂无判题记录" : "暂无会话"}</li>`;
 		return;
 	}
 	for (const s of sessionsCache) {
-		const title = s.title || "新会话";
+		const title = s.title || (currentPack === "judge" ? "新判题会话" : "新会话");
 		const li = document.createElement("li");
 		li.className = s.id === sessionId ? "session-item active" : "session-item";
 		const main = document.createElement("button");
@@ -2015,7 +2027,10 @@ function renderSessionList() {
 		main.innerHTML = '<span class="session-title"></span><span class="session-time"></span>';
 		main.querySelector(".session-title").textContent = title;
 		main.querySelector(".session-time").textContent = relTime(s.updatedAt);
-		main.onclick = () => switchSession(s.id);
+		main.onclick = async () => {
+			closeAllSessionDrawers();
+			await switchSession(s.id);
+		};
 		const del = document.createElement("button");
 		del.type = "button";
 		del.className = "icon-btn session-del";
@@ -2139,6 +2154,7 @@ async function switchSession(id) {
 
 async function newSession() {
 	if (busy) return;
+	closeAllSessionDrawers();
 	const id = await createSessionOnServer();
 	await enterSession(id);
 	await refreshSessionList();
@@ -2146,6 +2162,7 @@ async function newSession() {
 }
 
 $("#ss-new").onclick = newSession;
+if (judgeNewSessionBtn) judgeNewSessionBtn.onclick = newSession;
 
 /* 折叠 + 拖拽/键盘调宽（镜像右侧工作区的交互约定），偏好存 localStorage */
 const SS_DEFAULT_W = 240; // 与 CSS var(--ss-w, 240px) 缺省值一致
@@ -2170,7 +2187,7 @@ function setSsCollapsed(on) {
 	ssRailBtn.setAttribute("aria-expanded", String(!on));
 }
 
-/* 窄屏抽屉：顶栏按钮唤出会话历史（左侧覆盖层） */
+/* 窄屏抽屉与 Judge 判题消息记录抽屉（左侧覆盖层） */
 const ssMobileBtn = $("#ss-mobile-toggle");
 const ssBackdrop = $("#ss-backdrop");
 
@@ -2179,13 +2196,39 @@ function setMobileSs(open) {
 	ssMobileBtn.setAttribute("aria-expanded", String(open));
 }
 
+function setJudgeSessionsOpen(open) {
+	document.body.classList.toggle("judge-ss-open", open);
+	judgeHistoryToggleBtn?.setAttribute("aria-expanded", String(open));
+	if (open) void refreshSessionList();
+}
+
+function closeAllSessionDrawers() {
+	setMobileSs(false);
+	setJudgeSessionsOpen(false);
+}
+
+if (judgeHistoryToggleBtn) {
+	judgeHistoryToggleBtn.onclick = () => setJudgeSessionsOpen(!document.body.classList.contains("judge-ss-open"));
+}
+
 ssToggleBtn.onclick = () => {
-	if (mobileMq.matches) setMobileSs(false); // 窄屏下该按钮负责关闭抽屉
-	else setSsCollapsed(true);
+	if (currentPack === "judge") {
+		setJudgeSessionsOpen(false);
+	} else if (mobileMq.matches) {
+		setMobileSs(false);
+	} else {
+		setSsCollapsed(true);
+	}
 };
 ssRailBtn.onclick = () => setSsCollapsed(false);
-ssMobileBtn.onclick = () => setMobileSs(!document.body.classList.contains("ss-mobile-open"));
-ssBackdrop.onclick = () => setMobileSs(false);
+ssMobileBtn.onclick = () => {
+	if (currentPack === "judge") {
+		setJudgeSessionsOpen(!document.body.classList.contains("judge-ss-open"));
+	} else {
+		setMobileSs(!document.body.classList.contains("ss-mobile-open"));
+	}
+};
+ssBackdrop.onclick = closeAllSessionDrawers;
 mobileMq.addEventListener("change", () => {
 	if (!mobileMq.matches) setMobileSs(false);
 	ssToggleBtn.title = mobileMq.matches ? "关闭会话历史" : "收起会话历史";
@@ -2465,10 +2508,12 @@ function setJudgeMode(on) {
 	document.body.classList.toggle("judge-mode", on);
 	judgeProblemEl.classList.toggle("hidden", !on);
 	judgeCodeEl.classList.toggle("hidden", !on);
-	$("#ss-mobile-toggle").classList.toggle("hidden", on);
+	judgeHistoryToggleBtn?.classList.toggle("hidden", !on);
+	judgeNewSessionBtn?.classList.toggle("hidden", !on);
+	judgeChatTitleEl?.classList.toggle("hidden", !on);
+	$("#ss-mobile-toggle").classList.remove("hidden");
 	$("#ws-mobile-toggle").classList.toggle("hidden", on);
 	if (on) {
-		setView("chat");
 		const problemCollapsed = localStorage.getItem("pilore-judge-problem-collapsed") === "1";
 		const chatCollapsed = localStorage.getItem("pilore-judge-chat-collapsed") === "1";
 		setJudgeProblemCollapsed(problemCollapsed);
@@ -2476,6 +2521,7 @@ function setJudgeMode(on) {
 		void ensureJudgeEditor().then(() => requestAnimationFrame(() => judgeEditor?.layout()));
 	} else {
 		closeJudgeMobileDrawers();
+		setJudgeSessionsOpen(false);
 		layoutRoot.classList.remove("judge-problem-collapsed", "judge-chat-collapsed");
 		document.body.classList.remove("judge-problem-collapsed", "judge-chat-collapsed");
 	}
@@ -2594,7 +2640,10 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-	if (event.key === "Escape") closePackMenu();
+	if (event.key === "Escape") {
+		closePackMenu();
+		closeAllSessionDrawers();
+	}
 });
 
 (async function init() {

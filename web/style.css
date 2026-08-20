@@ -1668,9 +1668,52 @@ body.ws-resizing {
 	padding: 10px 12px 12px;
 }
 
-.layout.judge-mode .sessions,
+.layout.judge-mode .sessions {
+	display: none;
+}
+
 .layout.judge-mode .workspace {
 	display: none;
+}
+
+body.judge-ss-open #ss-backdrop {
+	display: block !important;
+	opacity: 1 !important;
+	pointer-events: auto !important;
+}
+
+body.judge-ss-open .layout.judge-mode .sessions {
+	display: flex !important;
+	position: fixed !important;
+	top: 60px !important;
+	bottom: 0 !important;
+	left: 0 !important;
+	width: 290px !important;
+	max-width: 88vw !important;
+	z-index: 120 !important;
+	border-radius: 0 var(--radius-lg) var(--radius-lg) 0 !important;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18) !important;
+	background: var(--card) !important;
+	animation: judge-ss-slide 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.judge-ss-open .sessions .ss-resize {
+	display: none !important;
+}
+
+.layout.judge-mode .ss-rail {
+	display: none !important;
+}
+
+@keyframes judge-ss-slide {
+	from {
+		transform: translateX(-100%);
+		opacity: 0.7;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
 }
 
 .judge-problem,
@@ -2061,7 +2104,7 @@ body.judge-console-resizing .judge-console-resize::after {
 	box-shadow: var(--shadow);
 	padding: 10px;
 }
-}
+
 .judge-chat-resize {
 	position: absolute;
 	top: 0;
@@ -2076,12 +2119,119 @@ body.judge-console-resizing .judge-console-resize::after {
 .judge-chat-resize:hover::after,
 .judge-chat-resize:focus-visible::after,
 body.judge-chat-resizing .judge-chat-resize::after { background: var(--accent); }
-.layout.judge-mode .chat-viewbar { margin: -2px -2px 0; }
-.layout.judge-mode .chat-viewbar::before { content: "Judge 教练"; font-weight: 700; font-size: 13px; margin-right: auto; }
-.layout.judge-mode .view-tabs { display: none; }
-.layout.judge-mode .judge-only { display: flex !important; }
+
+.layout.judge-mode .chat-viewbar {
+	margin: -2px -2px 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	padding: 2px 2px 8px;
+	border-bottom: 1px solid var(--border);
+}
+
+.judge-chat-title {
+	font-weight: 700;
+	font-size: 13px;
+	color: var(--text);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.layout.judge-mode .view-tabs {
+	display: inline-flex;
+	padding: 2px;
+	margin-left: 2px;
+}
+
+.layout.judge-mode .view-tab {
+	padding: 3px 10px;
+	font-size: 12px;
+}
+
+.chat-viewbar-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+}
+
+.layout.judge-mode .judge-only {
+	display: inline-flex !important;
+}
+
 .layout.judge-mode .messages { padding-top: 8px; }
 .layout.judge-mode .composer-toolbar { display: none; }
+
+/* 消息记录与操作按钮 */
+.icon-text-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 28px;
+	padding: 0 9px;
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-secondary);
+	background: var(--surface-muted);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md, 6px);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: all 0.15s ease;
+}
+
+.icon-text-btn:hover {
+	color: var(--accent);
+	background: var(--accent-light);
+	border-color: var(--accent);
+}
+
+.icon-text-btn:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px var(--accent-light);
+	border-color: var(--accent);
+}
+
+.session-count-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 17px;
+	height: 17px;
+	padding: 0 4px;
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--on-accent);
+	background: var(--accent);
+	border-radius: var(--radius-pill, 999px);
+	line-height: 1;
+}
+
+#judge-new-session {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--accent);
+	background: var(--accent-light);
+	border: 1px solid transparent;
+	border-radius: var(--radius-md, 6px);
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+#judge-new-session:hover {
+	background: var(--accent);
+	color: var(--on-accent);
+}
 
 /* ===== Judge 模式折叠与展开按钮 ===== */
 .judge-toolbar-btn {
@@ -2345,6 +2495,10 @@ body.judge-console-resizing { cursor: row-resize; user-select: none; }
 :root[data-theme="dark"] .btn-secondary:hover { background: rgba(16, 185, 129, 0.22); color: #6ee7b7; }
 :root[data-theme="dark"] .judge-toolbar-btn { background: var(--surface-muted); border-color: var(--border); color: var(--text-secondary); }
 :root[data-theme="dark"] .judge-toolbar-btn:hover { background: #28313e; border-color: var(--accent); color: #fff; }
+:root[data-theme="dark"] .icon-text-btn { background: var(--surface-muted); border-color: var(--border); color: var(--text-secondary); }
+:root[data-theme="dark"] .icon-text-btn:hover { background: #203c59; border-color: var(--accent); color: #fff; }
+:root[data-theme="dark"] #judge-new-session { background: #203c59; color: #60a5fa; }
+:root[data-theme="dark"] #judge-new-session:hover { background: var(--accent); color: #fff; }
 :root[data-theme="dark"] .judge-result-card.pass { border-color: #059669; background: rgba(16, 185, 129, 0.12); color: #34d399; }
 :root[data-theme="dark"] .judge-result-card.fail { border-color: #dc2626; background: rgba(239, 68, 68, 0.12); color: #f87171; }
 :root[data-theme="dark"] .judge-result-card.infra { border-color: #ca8a04; background: rgba(234, 179, 8, 0.12); color: #fde047; }

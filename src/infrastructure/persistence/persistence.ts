@@ -136,8 +136,12 @@ export interface SessionStore {
 	findUserByEmail(email: string): Promise<StoredUserCredentials | undefined>;
 }
 
-/** 从快照的首条用户消息派生会话标题（空白折叠、截断到 maxLength）。 */
+/** 从快照的首条用户消息或关联题目派生会话标题（空白折叠、截断到 maxLength）。 */
 export function deriveSessionTitle(snapshot: StoredSnapshot, maxLength = 40): string {
+	const judgeTitle = (snapshot.extensions?.judge as { currentProblem?: { title?: string } } | undefined)?.currentProblem?.title;
+	if (typeof judgeTitle === "string" && judgeTitle.trim()) {
+		return judgeTitle.trim().slice(0, maxLength);
+	}
 	for (const message of snapshot.messages as Array<{ role?: unknown; content?: unknown }>) {
 		if (message.role !== "user") continue;
 		const text =
