@@ -32,6 +32,7 @@ PiLore 由领域无关的 Core，以及 Code、English、大学数学、大学�
 - **嵌入友好**：每个 Pack 都提供 `create*MentorSession(config)` 工厂；Core 也可不加载 Pack 独立运行
 - Fluent（微软）风格 Web 界面：流式回答、工具调用卡片、实时工作区侧栏
 - 可替换执行后端：实现 `ExecClient` 接口，或用兼容 codapi 风格 `POST /v1/exec` 协议的服务，改一个环境变量即可切换
+- go-judge 判题：按需加载 `go_judge` 工具组，可编译/运行单文件、查看完整指标，并用 1–20 个测试用例逐例判定
 
 ## 快速开始
 
@@ -65,6 +66,7 @@ npm run chat:history
 # EXEC_API_BASE 默认指向真实执行后端 http://localhost:1313。
 # 离线环境可改用本地 mock：npm run mock + EXEC_API_BASE=http://localhost:1313
 #（若 1313 被 Windows Hyper-V 保留端口占用: PORT=13131 npm run mock，并同步改 EXEC_API_BASE）
+# go-judge 默认地址为 http://127.0.0.1:5050，可通过 GO_JUDGE_API_BASE 修改。
 ```
 
 其他命令：
@@ -317,6 +319,7 @@ const store = createPostgresSessionStore({
 | `MODEL_ID` | 模型 ID，默认按 provider 取（deepseek → `deepseek-v4-pro`，longcat → `LongCat-2.0`），以 `npm run list-models` 为准 |
 | `THINKING_LEVEL` | 推理级别 `off`~`max`，默认 `off` |
 | `EXEC_API_BASE` | 执行服务地址，默认 `http://localhost:1313`（真实沙箱） |
+| `GO_JUDGE_API_BASE` | go-judge REST API 根地址，默认 `http://127.0.0.1:5050` |
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | PostgreSQL 连接参数；核心不会自动读取，由宿主构造 `pg.Pool` 后注入 |
 | `AUTH_SECRET` | Web 内测登录 Cookie HMAC 密钥（≥32 字符）；未设置时随机生成，重启后用户需重新登录 |
 | `BETA_USERS_FILE` | 内测用户注册表路径，默认 `data/beta-users.json`（`npm run gen:beta-codes` 生成） |
@@ -334,6 +337,16 @@ POST {EXEC_API_BASE}/v1/exec
 ```
 
 实现 `ExecClient` 后注入 `createCodeMentorSession({ exec })`，或配置 `EXEC_API_BASE` 指向兼容服务。mock 仅用于离线演示。
+
+### go-judge 判题
+
+Code Pack 默认启用延迟加载的 `go_judge` 工具组：
+
+- `list_go_judge_languages`：检查服务并列出客户端配置的语言 ID；
+- `run_go_judge_code`：编译并运行 VFS 单文件，可带 stdin/expected output，返回状态、stdout/stderr、编译输出、CPU/墙上时间、内存、退出码与运行 ID；
+- `judge_go_judge_code`：执行 1–20 个测试用例，编译型语言只编译一次，逐例返回实际/期望结果并汇总通过率。
+
+配置 `GO_JUDGE_API_BASE` 指向 go-judge REST API 根地址。默认语言配置与本地镜像一致：C (`gcc`)、C++ (`g++`) 和 Python 3；go-judge 本身不提供语言目录，增加语言时需先在镜像安装运行时，再通过 `createHttpGoJudgeClient({ languages })` 注入命令配置。编译产物通过 `/file` 缓存复用于各测试用例，并在判题后删除。宿主也可以注入 `createCodeMentorSession({ goJudge })`，或传 `goJudge: false` 禁用。
 
 ## 下一步：接 HTTP / UI
 
